@@ -62,15 +62,17 @@ public final class ConfigManager {
     }
 
     public String getVampireSkinName() {
-        return getConfig().getString("vampire.skin-name", "aurinkoari");
+        return getConfig().getString("vampire.skin-name", "bloodmoon_vampire_150ea3e3982a1bd3");
     }
 
     public String getVampireSkinTexture() {
-        return getConfig().getString("vampire.skin-texture", "");
+        return getConfig().getString("vampire.skin-texture",
+            "ewogICJ0aW1lc3RhbXAiIDogMTc2NTIzMzk2OTc2NiwKICAicHJvZmlsZUlkIiA6ICIwNWU0OTczZTk5ZDk0NGY2YjczNjY3ZTEzMzdiY2IzOSIsCiAgInByb2ZpbGVOYW1lIiA6ICJNaW5lX1NraW4iLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNjk4YTliNzdlOWNmM2MxYjE1ZmMzNTlhN2FjZmMxZjYyMWYyYTc1OWVmNzZmYmI5N2I0Nzg3NTQ3MWZkMzI1ZiIsCiAgICAgICJtZXRhZGF0YSIgOiB7CiAgICAgICAgIm1vZGVsIiA6ICJzbGltIgogICAgICB9CiAgICB9CiAgfQp9");
     }
 
     public String getVampireSkinSignature() {
-        return getConfig().getString("vampire.skin-signature", "");
+        return getConfig().getString("vampire.skin-signature",
+            "wYc8PrLfnZyMfsRSHyTBP/CeBQRwzDG66MSQVlsUnghqwxvJdF47pwWlNPcI7yhU1+/Vwi+OYCVF/Ur7Pf+PP/Lx1U9z4x2jm0T50os8MzPh5VbRP54n82Qd727p9iSVJE9YUTrAG+nbqJ5joy0O5JLP9fBjZNA9RLsj6fFwnYccTc4zIV2QVamj0MNuYHihNHYiBh4lWTR8pLi+WH+/qS0Ll5And0QraSLLQdKdpsVl1IPJjghjGmqaRtUlQ+KaOhQBzcYnxxR7Dq4/IEOrkJUyq1/y/BmVuPpQldk9l6iQ8YVBEjJNHd9Ji9vkeplEJw+XxtWkh+yTbDz6XeszGUyIZ5CbY28VIDJYMmRWLMfgg37eK46xTrKzk+N9Yw2/qOrJtGHQ4n2cbbi76OAGv92eGsOWbR7Dw36zVBRHuUdn6+YqKChW3sqL3ES8JqA3KSwgs76GQMkDK/WlxR0LdE/ekaTLRYxKcBxbtverWhqCWt4Mt0zGraPfdNyQs9fNE6dqs2zHh0WCY0bPZ9gdcwBnzEQdgFMkNPGtVdFsCdU64hUzA/BgFGPLL4cWSss5IDNgJ3o+VxXS8u3wANIemvZIhHozEt04uNla7X6/VWhdm6D/k8PC1F8IhAwD8byY1wkYx2Q4ocgdVIGT4pq1gEWWtJahQFPfyzHHvP512H0=");
     }
 
     public String getVampireSkinUrl() {
@@ -109,9 +111,11 @@ public final class ConfigManager {
         config.addDefault("vampire.stalk-ticks-max", 140);
         config.addDefault("vampire.spawn-radius", 48);
         config.addDefault("vampire.max-per-player", 1);
-        config.addDefault("vampire.skin-name", "aurinkoari");
-        config.addDefault("vampire.skin-texture", "");
-        config.addDefault("vampire.skin-signature", "");
+        config.addDefault("vampire.skin-name", "bloodmoon_vampire_150ea3e3982a1bd3");
+        config.addDefault("vampire.skin-texture",
+            "ewogICJ0aW1lc3RhbXAiIDogMTc2NTIzMzk2OTc2NiwKICAicHJvZmlsZUlkIiA6ICIwNWU0OTczZTk5ZDk0NGY2YjczNjY3ZTEzMzdiY2IzOSIsCiAgInByb2ZpbGVOYW1lIiA6ICJNaW5lX1NraW4iLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNjk4YTliNzdlOWNmM2MxYjE1ZmMzNTlhN2FjZmMxZjYyMWYyYTc1OWVmNzZmYmI5N2I0Nzg3NTQ3MWZkMzI1ZiIsCiAgICAgICJtZXRhZGF0YSIgOiB7CiAgICAgICAgIm1vZGVsIiA6ICJzbGltIgogICAgICB9CiAgICB9CiAgfQp9");
+        config.addDefault("vampire.skin-signature",
+            "wYc8PrLfnZyMfsRSHyTBP/CeBQRwzDG66MSQVlsUnghqwxvJdF47pwWlNPcI7yhU1+/Vwi+OYCVF/Ur7Pf+PP/Lx1U9z4x2jm0T50os8MzPh5VbRP54n82Qd727p9iSVJE9YUTrAG+nbqJ5joy0O5JLP9fBjZNA9RLsj6fFwnYccTc4zIV2QVamj0MNuYHihNHYiBh4lWTR8pLi+WH+/qS0Ll5And0QraSLLQdKdpsVl1IPJjghjGmqaRtUlQ+KaOhQBzcYnxxR7Dq4/IEOrkJUyq1/y/BmVuPpQldk9l6iQ8YVBEjJNHd9Ji9vkeplEJw+XxtWkh+yTbDz6XeszGUyIZ5CbY28VIDJYMmRWLMfgg37eK46xTrKzk+N9Yw2/qOrJtGHQ4n2cbbi76OAGv92eGsOWbR7Dw36zVBRHuUdn6+YqKChW3sqL3ES8JqA3KSwgs76GQMkDK/WlxR0LdE/ekaTLRYxKcBxbtverWhqCWt4Mt0zGraPfdNyQs9fNE6dqs2zHh0WCY0bPZ9gdcwBnzEQdgFMkNPGtVdFsCdU64hUzA/BgFGPLL4cWSss5IDNgJ3o+VxXS8u3wANIemvZIhHozEt04uNla7X6/VWhdm6D/k8PC1F8IhAwD8byY1wkYx2Q4ocgdVIGT4pq1gEWWtJahQFPfyzHHvP512H0=");
         config.addDefault("vampire.skin-url", "");
         config.addDefault("bleed.chance", 0.4D);
         config.addDefault("bleed.damage-per-tick", 1.0D);
