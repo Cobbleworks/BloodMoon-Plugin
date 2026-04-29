@@ -839,11 +839,20 @@ public final class VampireNPC {
         if (world == null) {
             return;
         }
-        double angle = stateTicks * 0.45D;
-        for (int step = 0; step < 3; step++) {
-            double offset = angle + (step * ((Math.PI * 2.0D) / 3.0D));
-            Location point = base.clone().add(Math.cos(offset) * 0.75D, 0.35D + (stateTicks % 20) * 0.045D, Math.sin(offset) * 0.75D);
-            world.spawnParticle(Particle.WITCH, point, 1, 0.02D, 0.02D, 0.02D, 0.0D);
+        VampireAbility ability = pendingAbility;
+        if (ability == null) {
+            spawnGenericCastingRing(world, base);
+            return;
+        }
+
+        switch (ability) {
+            case BLOOD_MAGIC -> spawnBloodMagicCastingParticles(world, base);
+            case DRAIN_LIFE -> spawnDrainLifeCastingParticles(world, base);
+            case SUMMON_BATS -> spawnSummonBatsCastingParticles(world, base);
+            case SHADOW_DASH -> spawnShadowDashCastingParticles(world, base);
+            case FEAR_SHRIEK -> spawnFearShriekCastingParticles(world, base);
+            case BLOOD_SHIELD -> spawnBloodShieldCastingParticles(world, base);
+            case BAT_FORM_ESCAPE -> spawnGenericCastingRing(world, base);
         }
     }
 
@@ -856,20 +865,19 @@ public final class VampireNPC {
             npc.faceLocation(target.getEyeLocation());
         }
 
-        boolean channeling = pendingAbility == VampireAbility.BLOOD_MAGIC
-            || pendingAbility == VampireAbility.DRAIN_LIFE
-            || pendingAbility == VampireAbility.BLOOD_SHIELD;
+        VampireAbility ability = pendingAbility;
+        if (ability == null) {
+            return;
+        }
 
-        if (stateTicks % 6 == 0) {
-            if (channeling) {
-                playCitizensPlayerAnimation(player, stateTicks % 12 == 0 ? "START_USE_OFFHAND_ITEM" : "START_USE_MAINHAND_ITEM");
-            } else if (pendingAbility == VampireAbility.SUMMON_BATS || pendingAbility == VampireAbility.FEAR_SHRIEK) {
-                player.swingOffHand();
-                playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
-            } else {
-                player.swingMainHand();
-                playCitizensPlayerAnimation(player, "ARM_SWING");
-            }
+        switch (ability) {
+            case BLOOD_MAGIC -> animateBloodMagicCasting(player);
+            case DRAIN_LIFE -> animateDrainLifeCasting(player);
+            case SUMMON_BATS -> animateSummonBatsCasting(player);
+            case SHADOW_DASH -> animateShadowDashCasting(player);
+            case FEAR_SHRIEK -> animateFearShriekCasting(player);
+            case BLOOD_SHIELD -> animateBloodShieldCasting(player);
+            case BAT_FORM_ESCAPE -> animateEscapeCasting(player);
         }
     }
 
@@ -877,6 +885,159 @@ public final class VampireNPC {
         LivingEntity entity = getLivingEntity();
         if (entity instanceof Player player) {
             playCitizensPlayerAnimation(player, "STOP_USE_ITEM");
+        }
+    }
+
+    private void spawnGenericCastingRing(World world, Location base) {
+        double angle = stateTicks * 0.45D;
+        for (int step = 0; step < 3; step++) {
+            double offset = angle + (step * ((Math.PI * 2.0D) / 3.0D));
+            Location point = base.clone().add(Math.cos(offset) * 0.75D, 0.35D + (stateTicks % 20) * 0.045D, Math.sin(offset) * 0.75D);
+            world.spawnParticle(Particle.WITCH, point, 1, 0.02D, 0.02D, 0.02D, 0.0D);
+        }
+    }
+
+    private void spawnBloodMagicCastingParticles(World world, Location base) {
+        spawnGenericCastingRing(world, base);
+        double angle = stateTicks * 0.38D;
+        for (int step = 0; step < 2; step++) {
+            double offset = angle + (step * Math.PI);
+            Location handPoint = base.clone().add(Math.cos(offset) * 0.5D, 1.15D, Math.sin(offset) * 0.5D);
+            world.spawnParticle(Particle.DUST, handPoint, 2, 0.08D, 0.12D, 0.08D, 0.0D, BRIGHT_BLOOD_DUST);
+            world.spawnParticle(Particle.CRIT, handPoint, 1, 0.04D, 0.04D, 0.04D, 0.0D);
+        }
+    }
+
+    private void spawnDrainLifeCastingParticles(World world, Location base) {
+        spawnGenericCastingRing(world, base);
+        if (target == null || !target.isOnline() || target.isDead()) {
+            return;
+        }
+        Location source = base.clone().add(0.0D, 1.2D, 0.0D);
+        Location destination = target.getEyeLocation();
+        for (int step = 0; step < 4; step++) {
+            double progress = ((stateTicks * 0.08D) + (step * 0.18D)) % 1.0D;
+            Location point = source.clone().add(destination.clone().subtract(source).toVector().multiply(progress));
+            world.spawnParticle(Particle.DUST, point, 1, 0.04D, 0.04D, 0.04D, 0.0D, DARK_BLOOD_DUST);
+            world.spawnParticle(Particle.DAMAGE_INDICATOR, point, 1, 0.02D, 0.02D, 0.02D, 0.0D);
+        }
+    }
+
+    private void spawnSummonBatsCastingParticles(World world, Location base) {
+        double angle = stateTicks * 0.6D;
+        for (int step = 0; step < 6; step++) {
+            double offset = angle + (step * ((Math.PI * 2.0D) / 6.0D));
+            Location point = base.clone().add(Math.cos(offset) * 0.9D, 0.3D + (step % 2) * 0.35D, Math.sin(offset) * 0.9D);
+            world.spawnParticle(Particle.PORTAL, point, 2, 0.06D, 0.08D, 0.06D, 0.01D);
+            world.spawnParticle(Particle.SMOKE, point, 1, 0.03D, 0.03D, 0.03D, 0.01D);
+        }
+    }
+
+    private void spawnShadowDashCastingParticles(World world, Location base) {
+        double angle = stateTicks * 0.85D;
+        for (int step = 0; step < 5; step++) {
+            double offset = angle + (step * ((Math.PI * 2.0D) / 5.0D));
+            Location point = base.clone().add(Math.cos(offset) * 0.85D, 0.15D, Math.sin(offset) * 0.85D);
+            world.spawnParticle(Particle.SMOKE, point, 2, 0.05D, 0.03D, 0.05D, 0.02D);
+            world.spawnParticle(Particle.DUST, point, 1, 0.03D, 0.02D, 0.03D, 0.0D, DARK_BLOOD_DUST);
+        }
+    }
+
+    private void spawnFearShriekCastingParticles(World world, Location base) {
+        double angle = stateTicks * 0.5D;
+        for (int step = 0; step < 8; step++) {
+            double offset = angle + (step * ((Math.PI * 2.0D) / 8.0D));
+            Location point = base.clone().add(Math.cos(offset) * 1.2D, 1.1D, Math.sin(offset) * 1.2D);
+            world.spawnParticle(Particle.DAMAGE_INDICATOR, point, 1, 0.04D, 0.04D, 0.04D, 0.0D);
+            world.spawnParticle(Particle.SMOKE, point, 1, 0.03D, 0.03D, 0.03D, 0.01D);
+        }
+    }
+
+    private void spawnBloodShieldCastingParticles(World world, Location base) {
+        double angle = stateTicks * 0.3D;
+        for (int step = 0; step < 10; step++) {
+            double offset = angle + (step * ((Math.PI * 2.0D) / 10.0D));
+            double height = 0.35D + ((step % 3) * 0.45D);
+            Location point = base.clone().add(Math.cos(offset) * 1.05D, height, Math.sin(offset) * 1.05D);
+            world.spawnParticle(Particle.DUST, point, 2, 0.04D, 0.06D, 0.04D, 0.0D, BLOOD_DUST);
+            if (step % 2 == 0) {
+                world.spawnParticle(Particle.WITCH, point, 1, 0.02D, 0.02D, 0.02D, 0.0D);
+            }
+        }
+    }
+
+    private void animateBloodMagicCasting(Player player) {
+        if (stateTicks % 4 == 0) {
+            player.swingMainHand();
+            playCitizensPlayerAnimation(player, "ARM_SWING");
+        }
+        if (stateTicks % 8 == 0) {
+            player.swingOffHand();
+            playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
+            playCitizensPlayerAnimation(player, "START_USE_MAINHAND_ITEM");
+            playCitizensPlayerAnimation(player, "START_USE_OFFHAND_ITEM");
+        }
+    }
+
+    private void animateDrainLifeCasting(Player player) {
+        if (stateTicks % 5 == 0) {
+            playCitizensPlayerAnimation(player, "START_USE_MAINHAND_ITEM");
+            playCitizensPlayerAnimation(player, "START_USE_OFFHAND_ITEM");
+        }
+        if (stateTicks % 10 == 0) {
+            player.swingMainHand();
+            player.swingOffHand();
+            playCitizensPlayerAnimation(player, "ARM_SWING");
+            playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
+        }
+    }
+
+    private void animateSummonBatsCasting(Player player) {
+        if (stateTicks % 3 == 0) {
+            player.swingOffHand();
+            playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
+        }
+        if (stateTicks % 6 == 0) {
+            player.swingMainHand();
+            playCitizensPlayerAnimation(player, "ARM_SWING");
+        }
+    }
+
+    private void animateShadowDashCasting(Player player) {
+        if (stateTicks % 3 == 0) {
+            player.swingMainHand();
+            playCitizensPlayerAnimation(player, "ARM_SWING");
+        }
+        if (stateTicks % 6 == 0) {
+            player.swingOffHand();
+            playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
+        }
+    }
+
+    private void animateFearShriekCasting(Player player) {
+        if (stateTicks % 4 == 0) {
+            player.swingMainHand();
+            player.swingOffHand();
+            playCitizensPlayerAnimation(player, "ARM_SWING");
+            playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
+        }
+    }
+
+    private void animateBloodShieldCasting(Player player) {
+        if (stateTicks % 5 == 0) {
+            playCitizensPlayerAnimation(player, "START_USE_MAINHAND_ITEM");
+            playCitizensPlayerAnimation(player, "START_USE_OFFHAND_ITEM");
+        }
+        if (stateTicks % 10 == 0) {
+            player.swingOffHand();
+            playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
+        }
+    }
+
+    private void animateEscapeCasting(Player player) {
+        if (stateTicks % 4 == 0) {
+            player.swingMainHand();
+            playCitizensPlayerAnimation(player, "ARM_SWING");
         }
     }
 
