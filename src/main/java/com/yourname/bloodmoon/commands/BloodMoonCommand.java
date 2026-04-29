@@ -89,7 +89,7 @@ public final class BloodMoonCommand implements CommandExecutor {
             + (plugin.getBloodMoonManager().hasChanceOverride() ? " §e(temporary override)" : ""));
         MessageUtils.send(sender, "§7Active vampires: §f" + plugin.getNPCManager().getActiveNpcIds().size());
         MessageUtils.send(sender, "§7Tracked bats: §f" + plugin.getNPCManager().getActiveBatIds().size());
-        MessageUtils.send(sender, "§7Special monsters: §f" + plugin.getSpecialMonsterManager().getMonsterIds().size());
+        MessageUtils.send(sender, "§7System mode: §fNPC-only enemies");
         for (World world : Bukkit.getWorlds()) {
             if (plugin.getBloodMoonManager().isConfiguredWorld(world) || plugin.getBloodMoonManager().isActive(world)) {
                 MessageUtils.send(sender, "§8- §e" + world.getName() + "§7: "
@@ -100,8 +100,8 @@ public final class BloodMoonCommand implements CommandExecutor {
     }
 
     private void handleSpawn(CommandSender sender, String[] args) {
-        if (args.length < 3 || !"vampire".equalsIgnoreCase(args[1])) {
-            MessageUtils.send(sender, "§cUsage: /bloodmoon spawn vampire <player>");
+        if (args.length < 3) {
+            MessageUtils.send(sender, "§cUsage: /bloodmoon spawn <vampire> <player>");
             return;
         }
         Player player = Bukkit.getPlayerExact(args[2]);
@@ -109,10 +109,12 @@ public final class BloodMoonCommand implements CommandExecutor {
             MessageUtils.send(sender, "§cPlayer not found.");
             return;
         }
-        plugin.getNPCManager().spawnVampireNear(player).ifPresentOrElse(
-            vampire -> MessageUtils.send(sender, "§aSpawned vampire NPC §e" + vampire.getNpc().getId() + "§a near §e" + player.getName() + "§a."),
-            () -> MessageUtils.send(sender, "§cCould not spawn a vampire. Citizens/Sentinel may not be ready.")
-        );
+        switch (args[1].toLowerCase()) {
+            case "vampire" -> plugin.getNPCManager().spawnVampireNear(player).ifPresentOrElse(
+                v -> MessageUtils.send(sender, "§aSpawned vampire near §e" + player.getName() + "§a."),
+                () -> MessageUtils.send(sender, "§cCould not spawn. Citizens/Sentinel may not be ready."));
+            default -> MessageUtils.send(sender, "§cUnknown type. Use: vampire.");
+        }
     }
 
     private void handleClear(CommandSender sender, String[] args) {
@@ -122,12 +124,18 @@ public final class BloodMoonCommand implements CommandExecutor {
                 MessageUtils.send(sender, "§cWorld not found.");
                 return;
             }
-            plugin.getNPCManager().cleanupWorld(world);
-            plugin.getSpecialMonsterManager().cleanupWorld(world);
+            if (plugin.getBloodMoonManager().isActive(world)) {
+                plugin.getBloodMoonManager().endBloodMoon(world, true);
+            } else {
+                plugin.getNPCManager().cleanupWorld(world);
+            }
             MessageUtils.send(sender, "§aCleared all Blood Moon enemies in §e" + world.getName() + "§a.");
         } else {
-            plugin.getNPCManager().cleanupAll();
-            plugin.getSpecialMonsterManager().cleanupAll();
+            if (!plugin.getBloodMoonManager().getActiveWorlds().isEmpty()) {
+                plugin.getBloodMoonManager().forceEnd();
+            } else {
+                plugin.getNPCManager().cleanupAll();
+            }
             MessageUtils.send(sender, "§aCleared all Blood Moon enemies across all worlds.");
         }
     }
@@ -176,6 +184,7 @@ public final class BloodMoonCommand implements CommandExecutor {
         MessageUtils.send(sender, "§7/bloodmoon stop [world]");
         MessageUtils.send(sender, "§7/bloodmoon status");
         MessageUtils.send(sender, "§7/bloodmoon spawn vampire <player>");
+
         MessageUtils.send(sender, "§7/bloodmoon clear [world]");
         MessageUtils.send(sender, "§7/bloodmoon reload");
         MessageUtils.send(sender, "§7/bloodmoon chance <1-100>");

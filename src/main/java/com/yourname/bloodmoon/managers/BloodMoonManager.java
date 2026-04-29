@@ -118,12 +118,9 @@ public final class BloodMoonManager {
         forceStorm(world);
         broadcastStart(world);
 
-        plugin.getMobSpawnManager().start();
-        plugin.getSpecialMonsterManager().start();
         startVampireSpawnTask();
         startAmbientParticles();
         spawnInitialVampires(world);
-        spawnInitialSpecialMonsters(world);
         return true;
     }
 
@@ -141,13 +138,10 @@ public final class BloodMoonManager {
 
         activeWorldIds.remove(world.getUID());
         plugin.getNPCManager().cleanupWorld(world);
-        plugin.getSpecialMonsterManager().cleanupWorld(world);
         stopStorm(world);
         broadcastEnd(world);
 
         if (activeWorldIds.isEmpty()) {
-            plugin.getMobSpawnManager().stop();
-            plugin.getSpecialMonsterManager().stopSpawner();
             stopVampireSpawnTask();
             stopAmbientParticles();
         }
@@ -162,8 +156,6 @@ public final class BloodMoonManager {
             endBloodMoon(world, true);
         }
         activeWorldIds.clear();
-        plugin.getMobSpawnManager().stop();
-        plugin.getSpecialMonsterManager().cleanupAll();
         stopVampireSpawnTask();
         stopAmbientParticles();
         plugin.getNPCManager().cleanupAll();
@@ -374,23 +366,6 @@ public final class BloodMoonManager {
         }
     }
 
-    private void spawnInitialSpecialMonsters(World world) {
-        if (!plugin.getConfigManager().areSpecialMonstersEnabled()) {
-            return;
-        }
-        for (Player player : world.getPlayers()) {
-            int max = plugin.getConfigManager().getSpecialMonstersMaxPerPlayer();
-            for (int index = 0; index < Math.max(1, max); index++) {
-                if (plugin.getSpecialMonsterManager().countNear(player, 96.0D) >= max) {
-                    break;
-                }
-                if (random.nextDouble() <= plugin.getConfigManager().getSpecialMonsterSpawnChance()) {
-                    plugin.getSpecialMonsterManager().spawnRandomNear(player);
-                }
-            }
-        }
-    }
-
     private void startVampireSpawnTask() {
         if (vampireSpawnTask != null) {
             return;
@@ -426,9 +401,11 @@ public final class BloodMoonManager {
             if (plugin.getNPCManager().countVampiresNear(player, 96.0D) >= plugin.getConfigManager().getMaxVampiresPerPlayer()) {
                 continue;
             }
-            if (random.nextDouble() <= 0.45D) {
+            if (random.nextDouble() <= 0.18D) {
                 plugin.getNPCManager().spawnVampireNear(player);
             }
         }
     }
+
+
 }

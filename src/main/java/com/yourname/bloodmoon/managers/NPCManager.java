@@ -32,7 +32,7 @@ import org.mcmonkey.sentinel.SentinelPlugin;
 import org.mcmonkey.sentinel.SentinelTrait;
 
 /**
- * Creates, tracks, and cleans Blood Moon Citizens NPCs and bat entities.
+ * Creates, tracks, and cleans vampire Citizens NPCs and disguise bats.
  */
 public final class NPCManager {
 
@@ -48,9 +48,6 @@ public final class NPCManager {
         this.plugin = plugin;
     }
 
-    /**
-     * Initializes Citizens trait registration and Sentinel integration.
-     */
     public void initializeCitizens() {
         if (!isCitizensReady()) {
             return;
@@ -65,25 +62,17 @@ public final class NPCManager {
         citizensInitialized = true;
     }
 
-    /**
-     * Returns whether Citizens API is available.
-     *
-     * @return true when safe to call CitizensAPI
-     */
     public boolean isCitizensReady() {
         return CitizensAPI.hasImplementation()
             && CitizensAPI.getNPCRegistry() != null
             && CitizensAPI.getTraitFactory() != null;
     }
 
-    /**
-     * Spawns a vampire near a specific player.
-     *
-     * @param player player to spawn near
-     * @return created vampire, if any
-     */
     public Optional<VampireNPC> spawnVampireNear(Player player) {
         if (player == null || !player.isOnline()) {
+            return Optional.empty();
+        }
+        if (countVampiresNear(player, 96.0D) >= plugin.getConfigManager().getMaxVampiresPerPlayer()) {
             return Optional.empty();
         }
         Location location = findSpawnLocationNear(player);
@@ -94,13 +83,6 @@ public final class NPCManager {
         return spawnVampire(location, player);
     }
 
-    /**
-     * Spawns a vampire at an exact location.
-     *
-     * @param location spawn location
-     * @param initialTarget first target
-     * @return created vampire, if Citizens is ready
-     */
     public Optional<VampireNPC> spawnVampire(Location location, Player initialTarget) {
         if (!citizensInitialized) {
             initializeCitizens();
@@ -121,43 +103,20 @@ public final class NPCManager {
         return Optional.of(vampire);
     }
 
-    /**
-     * Checks every disguised vampire against a player for transformation.
-     *
-     * @param player player to test
-     */
     public void checkDisguisedProximity(Player player) {
         for (VampireNPC vampire : List.copyOf(vampires.values())) {
             vampire.checkProximity(player);
         }
     }
 
-    /**
-     * Gets a vampire controller by NPC id.
-     *
-     * @param npcId Citizens NPC id
-     * @return vampire or null
-     */
     public VampireNPC getVampire(int npcId) {
         return vampires.get(npcId);
     }
 
-    /**
-     * Gets a vampire controller for a Citizens NPC.
-     *
-     * @param npc NPC
-     * @return vampire or null
-     */
     public VampireNPC getVampire(NPC npc) {
         return npc == null ? null : vampires.get(npc.getId());
     }
 
-    /**
-     * Gets a vampire controller from an entity, if it is a tracked NPC.
-     *
-     * @param entity entity to inspect
-     * @return vampire or null
-     */
     public VampireNPC getVampire(Entity entity) {
         if (entity == null || !entity.hasMetadata("NPC") || !isCitizensReady()) {
             return null;
@@ -166,75 +125,37 @@ public final class NPCManager {
         if (registry == null || !registry.isNPC(entity)) {
             return null;
         }
-        NPC npc = registry.getNPC(entity);
-        return getVampire(npc);
+        return getVampire(registry.getNPC(entity));
     }
 
-    /**
-     * Returns whether an entity is one of this plugin's vampire NPCs.
-     *
-     * @param entity entity to inspect
-     * @return true if tracked
-     */
     public boolean isBloodMoonNpc(Entity entity) {
         return getVampire(entity) != null;
     }
 
-    /**
-     * Registers a bat entity for cleanup.
-     *
-     * @param bat bat entity
-     */
     public void registerBat(Bat bat) {
         if (bat != null) {
             activeBatIds.add(bat.getUniqueId());
         }
     }
 
-    /**
-     * Unregisters a bat entity.
-     *
-     * @param bat bat entity
-     */
     public void unregisterBat(Bat bat) {
         if (bat != null) {
             activeBatIds.remove(bat.getUniqueId());
         }
     }
 
-    /**
-     * Returns immutable active NPC ids.
-     *
-     * @return active ids
-     */
     public Set<Integer> getActiveNpcIds() {
         return Collections.unmodifiableSet(activeNpcIds);
     }
 
-    /**
-     * Returns immutable active bat ids.
-     *
-     * @return active bat ids
-     */
     public Set<UUID> getActiveBatIds() {
         return Collections.unmodifiableSet(activeBatIds);
     }
 
-    /**
-     * Returns active vampire controllers.
-     *
-     * @return vampires
-     */
     public List<VampireNPC> getActiveVampires() {
         return List.copyOf(vampires.values());
     }
 
-    /**
-     * Counts active vampires in a world.
-     *
-     * @param world world
-     * @return count
-     */
     public int countVampires(World world) {
         int count = 0;
         for (VampireNPC vampire : vampires.values()) {
@@ -246,13 +167,6 @@ public final class NPCManager {
         return count;
     }
 
-    /**
-     * Counts vampires near a player.
-     *
-     * @param player player
-     * @param radius radius
-     * @return count
-     */
     public int countVampiresNear(Player player, double radius) {
         if (player == null) {
             return 0;
@@ -270,19 +184,11 @@ public final class NPCManager {
         return count;
     }
 
-    /**
-     * Unregisters a vampire id without destroying it again.
-     *
-     * @param npcId NPC id
-     */
     public void unregisterVampire(int npcId) {
         activeNpcIds.remove(npcId);
         vampires.remove(npcId);
     }
 
-    /**
-     * Cleans every active NPC and bat.
-     */
     public void cleanupAll() {
         for (VampireNPC vampire : new ArrayList<>(vampires.values())) {
             vampire.cleanup();
@@ -292,11 +198,6 @@ public final class NPCManager {
         cleanupTrackedBats();
     }
 
-    /**
-     * Cleans NPCs in a specific world.
-     *
-     * @param world world to clean
-     */
     public void cleanupWorld(World world) {
         List<Integer> toRemove = new ArrayList<>();
         for (Map.Entry<Integer, VampireNPC> entry : new ArrayList<>(vampires.entrySet())) {
@@ -311,9 +212,9 @@ public final class NPCManager {
             activeNpcIds.remove(id);
         });
         activeBatIds.removeIf(uid -> {
-            for (org.bukkit.entity.Entity e : world.getEntities()) {
-                if (e.getUniqueId().equals(uid)) {
-                    e.remove();
+            for (Entity entity : world.getEntities()) {
+                if (entity.getUniqueId().equals(uid)) {
+                    entity.remove();
                     return true;
                 }
             }

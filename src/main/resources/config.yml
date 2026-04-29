@@ -1,21 +1,17 @@
 bloodmoon:
-  chance: 12
+  chance: 24
   worlds:
     - world
-  special-monsters:
-    enabled: true
-    spawn-radius: 48
-    max-per-player: 2
-    spawn-pulse-ticks: 120
-    spawn-chance: 0.55
 
 vampire:
   health: 40.0
   stalk-ticks-min: 80
   stalk-ticks-max: 140
   spawn-radius: 48
-  max-per-player: 2
-  skin-name: ""  # Minecraft player username whose skin the vampire uses (e.g. Dracula, Alucard, Count_V, DarkVampire)
+  max-per-player: 1
+  skin-name: "bloodmoon_selected_vampire"  # Cache key for the exact selected vampire skin below
+  skin-texture: "e3RleHR1cmVzOntTS0lOOnt1cmw6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNjk4YTliNzdlOWNmM2MxYjE1ZmMzNTlhN2FjZmMxZjYyMWYyYTc1OWVmNzZmYmI5N2I0Nzg3NTQ3MWZkMzI1ZiJ9fX0="  # Exact NameMC skin 150ea3e3982a1bd3
+  skin-signature: ""  # Blank because NameMC provided an unsigned texture payload
 
 bleed:
   chance: 0.4
@@ -24,5 +20,5 @@ bleed:
   max-stacks: 2
 
 messages:
-  event-start: "§4- THE BLOOD MOON RISES -"
+  event-start: "§4☽ THE BLOOD MOON RISES §4☾"
   event-end: "§6The Blood Moon fades... for now."

@@ -37,7 +37,7 @@ public final class BloodMoonTabCompleter implements TabCompleter {
         if (args.length == 2 && "spawn".equals(sub)) {
             return filter(List.of("vampire"), args[1]);
         }
-        if (args.length == 3 && "spawn".equals(sub) && "vampire".equalsIgnoreCase(args[1])) {
+        if (args.length == 3 && "spawn".equals(sub) && "vampire".equals(args[1].toLowerCase())) {
             return filter(Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(), args[2]);
         }
         if (args.length == 2 && "chance".equals(sub)) {

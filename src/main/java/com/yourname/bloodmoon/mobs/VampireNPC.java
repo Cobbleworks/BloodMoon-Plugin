@@ -18,6 +18,7 @@ import net.citizensnpcs.api.ai.Navigator;
 import net.citizensnpcs.api.npc.NPC;
 import net.citizensnpcs.api.trait.Trait;
 import org.bukkit.Color;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
@@ -34,6 +35,8 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.scoreboard.Scoreboard;
+import org.bukkit.scoreboard.Team;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -313,6 +316,7 @@ public final class VampireNPC {
         if (world != null) {
             spawnDeathParticles(world, deathLocation);
             world.playSound(deathLocation, Sound.ENTITY_WITHER_DEATH, 1.0F, 0.55F);
+            world.playSound(deathLocation, Sound.ENTITY_EVOKER_DEATH, 0.9F, 0.72F);
             dropLoot(world, deathLocation);
         }
 
@@ -395,6 +399,8 @@ public final class VampireNPC {
 
     private void configureNpc() {
         npc.data().set("bloodmoon-vampire", true);
+        npc.data().set("nameplate-visible", false);
+        npc.data().set("always-use-name-hologram", false);
         npc.setProtected(false);
         configureVampireTrait();
         configureSkin();
@@ -409,16 +415,41 @@ public final class VampireNPC {
 
     private void configureSkin() {
         String skinName = plugin.getConfigManager().getVampireSkinName();
-        if (skinName == null || skinName.isBlank()) {
+        String texture = plugin.getConfigManager().getVampireSkinTexture();
+        String signature = plugin.getConfigManager().getVampireSkinSignature();
+        if ((skinName == null || skinName.isBlank()) && (texture == null || texture.isBlank())) {
             return;
         }
         try {
             Class<? extends Trait> skinTraitClass = Class.forName("net.citizensnpcs.trait.SkinTrait").asSubclass(Trait.class);
             Trait skinTrait = npc.getOrAddTrait(skinTraitClass);
+            if (texture != null && !texture.isBlank() && applyExactSkinTexture(skinTraitClass, skinTrait, skinName, signature, texture)) {
+                return;
+            }
             Method setSkinName = skinTraitClass.getMethod("setSkinName", String.class);
             setSkinName.invoke(skinTrait, skinName);
         } catch (ReflectiveOperationException ex) {
             plugin.getLogger().warning("Could not apply Citizens SkinTrait to vampire NPC " + npc.getId() + ": " + ex.getMessage());
+        }
+    }
+
+    private boolean applyExactSkinTexture(Class<? extends Trait> skinTraitClass, Trait skinTrait, String skinName, String signature,
+                                          String texture) {
+        String cacheKey = (skinName == null || skinName.isBlank()) ? "bloodmoon_selected_vampire" : skinName;
+        try {
+            Method setSkinPersistent = skinTraitClass.getMethod("setSkinPersistent", String.class, String.class, String.class);
+            setSkinPersistent.invoke(skinTrait, cacheKey, signature == null ? "" : signature, texture);
+            return true;
+        } catch (ReflectiveOperationException ignored) {
+            try {
+                Method setSkinPersistent = skinTraitClass.getMethod("setSkinPersistent", String.class, String.class, String.class, boolean.class);
+                setSkinPersistent.invoke(skinTrait, cacheKey, signature == null ? "" : signature, texture, true);
+                return true;
+            } catch (ReflectiveOperationException ignoredAgain) {
+                plugin.getLogger().warning("Citizens SkinTrait did not expose a compatible exact-texture method for vampire NPC " + npc.getId()
+                    + "; falling back to username-based skin lookup.");
+                return false;
+            }
         }
     }
 
@@ -443,7 +474,28 @@ public final class VampireNPC {
         LivingEntity entity = getLivingEntity();
         if (entity != null) {
             applyConfiguredHealth(entity);
+            entity.setInvulnerable(false);
+            hideNameplate(entity);
             applyHiddenStateIfNeeded(entity);
+        }
+    }
+
+    private void hideNameplate(LivingEntity entity) {
+        try {
+            Scoreboard board = Bukkit.getScoreboardManager().getMainScoreboard();
+            if (board == null) {
+                return;
+            }
+            Team team = board.getTeam("bm_hidden_npc");
+            if (team == null) {
+                team = board.registerNewTeam("bm_hidden_npc");
+                team.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER);
+            }
+            if (entity instanceof Player player) {
+                team.addEntry(player.getName());
+            }
+        } catch (Exception ex) {
+            plugin.getLogger().warning("Could not hide NPC nameplate: " + ex.getMessage());
         }
     }
 
@@ -1467,62 +1519,26 @@ public final class VampireNPC {
     }
 
     private void dropLoot(World world, Location location) {
-        if (random.nextDouble() <= 0.60D) {
+        if (random.nextDouble() <= 0.75D) {
             world.dropItemNaturally(location, new ItemStack(Material.REDSTONE, random.nextInt(4) + 2));
-            world.dropItemNaturally(location, new ItemStack(Material.BONE, random.nextInt(3) + 1));
-            world.dropItemNaturally(location, new ItemStack(Material.ROTTEN_FLESH, random.nextInt(2) + 1));
         }
-        if (random.nextDouble() <= 0.35D) {
-            ItemStack medium = switch (random.nextInt(3)) {
-                case 0 -> new ItemStack(Material.FERMENTED_SPIDER_EYE, 1);
-                case 1 -> new ItemStack(Material.PHANTOM_MEMBRANE, 1);
-                default -> createVampireFang();
-            };
-            world.dropItemNaturally(location, medium);
+        if (random.nextDouble() <= 0.60D) {
+            world.dropItemNaturally(location, new ItemStack(Material.ROTTEN_FLESH, random.nextInt(3) + 1));
         }
-        if (random.nextDouble() <= 0.15D) {
-            world.dropItemNaturally(location, createBloodVial());
+        if (random.nextDouble() <= 0.45D) {
+            world.dropItemNaturally(location, new ItemStack(Material.SPIDER_EYE, random.nextInt(2) + 1));
         }
-        if (random.nextDouble() <= 0.05D) {
-            world.dropItemNaturally(location, createVampiricHeart());
+        if (random.nextDouble() <= 0.30D) {
+            world.dropItemNaturally(location, new ItemStack(Material.FERMENTED_SPIDER_EYE, 1));
+        }
+        if (random.nextDouble() <= 0.18D) {
+            world.dropItemNaturally(location, new ItemStack(Material.GLASS_BOTTLE, random.nextInt(2) + 1));
+        }
+        if (random.nextDouble() <= 0.10D) {
+            world.dropItemNaturally(location, new ItemStack(Material.PHANTOM_MEMBRANE, 1));
         }
         ExperienceOrb orb = world.spawn(location, ExperienceOrb.class);
-        orb.setExperience(random.nextInt(41) + 40);
-    }
-
-    private ItemStack createVampireFang() {
-        ItemStack item = new ItemStack(Material.BONE);
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName("§cVampire Fang");
-            item.setItemMeta(meta);
-        }
-        item.addUnsafeEnchantment(Enchantment.SHARPNESS, 1);
-        return item;
-    }
-
-    private ItemStack createBloodVial() {
-        ItemStack item = new ItemStack(Material.GLASS_BOTTLE);
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName("§4Blood Vial");
-            meta.setLore(List.of("§7A vial of ancient vampire blood", "§7Used in dark rituals"));
-            item.setItemMeta(meta);
-        }
-        item.addUnsafeEnchantment(Enchantment.LUCK_OF_THE_SEA, 1);
-        return item;
-    }
-
-    private ItemStack createVampiricHeart() {
-        ItemStack item = new ItemStack(Material.NETHER_STAR);
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName("§5Vampiric Heart");
-            meta.setLore(List.of("§5Pulses with dark energy", "§7The source of a vampire's power"));
-            item.setItemMeta(meta);
-        }
-        item.addUnsafeEnchantment(Enchantment.LUCK_OF_THE_SEA, 1);
-        return item;
+        orb.setExperience(random.nextInt(16) + 20);
     }
 
     private void cancelControllerOnly() {

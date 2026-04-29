@@ -6,11 +6,8 @@ import com.yourname.bloodmoon.effects.BleedEffect;
 import com.yourname.bloodmoon.listeners.BloodMoonListener;
 import com.yourname.bloodmoon.listeners.NPCListener;
 import com.yourname.bloodmoon.listeners.PlayerListener;
-import com.yourname.bloodmoon.listeners.SpecialMonsterListener;
 import com.yourname.bloodmoon.managers.BloodMoonManager;
-import com.yourname.bloodmoon.managers.MobSpawnManager;
 import com.yourname.bloodmoon.managers.NPCManager;
-import com.yourname.bloodmoon.managers.SpecialMonsterManager;
 import com.yourname.bloodmoon.utils.ConfigManager;
 import java.util.Objects;
 import org.bukkit.command.PluginCommand;
@@ -26,9 +23,7 @@ public final class BloodMoonPlugin extends JavaPlugin {
 
     private ConfigManager configManager;
     private BloodMoonManager bloodMoonManager;
-    private MobSpawnManager mobSpawnManager;
     private NPCManager npcManager;
-    private SpecialMonsterManager specialMonsterManager;
     private BleedEffect bleedEffect;
 
     /**
@@ -54,8 +49,6 @@ public final class BloodMoonPlugin extends JavaPlugin {
 
         bleedEffect = new BleedEffect(this);
         npcManager = new NPCManager(this);
-        mobSpawnManager = new MobSpawnManager(this);
-        specialMonsterManager = new SpecialMonsterManager(this);
         bloodMoonManager = new BloodMoonManager(this);
 
         registerListeners();
@@ -72,17 +65,11 @@ public final class BloodMoonPlugin extends JavaPlugin {
             bloodMoonManager.forceEnd();
             bloodMoonManager.stop();
         }
-        if (mobSpawnManager != null) {
-            mobSpawnManager.stop();
-        }
         if (bleedEffect != null) {
             bleedEffect.cancelAll();
         }
         if (npcManager != null) {
             npcManager.cleanupAll();
-        }
-        if (specialMonsterManager != null) {
-            specialMonsterManager.cleanupAll();
         }
         getServer().getScheduler().cancelTasks(this);
         getLogger().info("BloodMoon Event disabled.");
@@ -108,30 +95,12 @@ public final class BloodMoonPlugin extends JavaPlugin {
     }
 
     /**
-     * Gets the vanilla mob spawn manager.
-     *
-     * @return mob spawn manager
-     */
-    public MobSpawnManager getMobSpawnManager() {
-        return mobSpawnManager;
-    }
-
-    /**
      * Gets the Citizens NPC manager.
      *
      * @return NPC manager
      */
     public NPCManager getNPCManager() {
         return npcManager;
-    }
-
-    /**
-     * Gets the special monster manager.
-     *
-     * @return special monster manager
-     */
-    public SpecialMonsterManager getSpecialMonsterManager() {
-        return specialMonsterManager;
     }
 
     /**
@@ -161,7 +130,6 @@ public final class BloodMoonPlugin extends JavaPlugin {
         pluginManager.registerEvents(new BloodMoonListener(this), this);
         pluginManager.registerEvents(new PlayerListener(this), this);
         pluginManager.registerEvents(new NPCListener(this), this);
-        pluginManager.registerEvents(new SpecialMonsterListener(this), this);
     }
 
     private void registerCommand() {
