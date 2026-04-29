@@ -859,27 +859,36 @@ public final class VampireNPC {
         boolean channeling = pendingAbility == VampireAbility.BLOOD_MAGIC
             || pendingAbility == VampireAbility.DRAIN_LIFE
             || pendingAbility == VampireAbility.BLOOD_SHIELD;
-        player.setSneaking(channeling && stateTicks % 12 < 8);
 
         if (stateTicks % 6 == 0) {
-            if (pendingAbility == VampireAbility.SUMMON_BATS || pendingAbility == VampireAbility.FEAR_SHRIEK) {
+            if (channeling) {
+                playCitizensPlayerAnimation(player, stateTicks % 12 == 0 ? "START_USE_OFFHAND_ITEM" : "START_USE_MAINHAND_ITEM");
+            } else if (pendingAbility == VampireAbility.SUMMON_BATS || pendingAbility == VampireAbility.FEAR_SHRIEK) {
                 player.swingOffHand();
+                playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
             } else {
                 player.swingMainHand();
+                playCitizensPlayerAnimation(player, "ARM_SWING");
             }
-        }
-
-        if (channeling && stateTicks % 10 == 0) {
-            Vector pulse = player.getVelocity().clone();
-            pulse.setY(Math.max(pulse.getY(), 0.18D));
-            player.setVelocity(pulse);
         }
     }
 
     private void resetCastingAnimation() {
         LivingEntity entity = getLivingEntity();
         if (entity instanceof Player player) {
-            player.setSneaking(false);
+            playCitizensPlayerAnimation(player, "STOP_USE_ITEM");
+        }
+    }
+
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    private void playCitizensPlayerAnimation(Player player, String animationName) {
+        try {
+            Class<? extends Enum> animationClass = Class.forName("net.citizensnpcs.util.PlayerAnimation").asSubclass(Enum.class);
+            Enum animation = Enum.valueOf(animationClass, animationName);
+            Method playMethod = animationClass.getMethod("play", Player.class);
+            playMethod.invoke(animation, player);
+        } catch (ReflectiveOperationException ignored) {
+            // Citizens implementation classes are not on the compile classpath; hand animation falls back to Bukkit swings.
         }
     }
 

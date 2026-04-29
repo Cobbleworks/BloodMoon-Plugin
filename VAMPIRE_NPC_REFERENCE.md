@@ -7,7 +7,7 @@ This document describes the current in-game implementation of the Blood Moon vam
 - Enemy type: Citizens NPC (PLAYER type), controlled by Sentinel.
 - Damageability: Players can damage the vampire (`npc.setProtected(false)` and entity is set non-invulnerable).
 - Nametag visibility: Hidden using Citizens metadata and scoreboard nametag suppression.
-- Bat nametags: Removed entirely from both disguise and escape bats.
+- Bat nametags: Removed entirely from disguise bats, escape bats, and summoned swarm bats.
 - Default skin: the fixed historical NameMC skin from `19.12.2025 - 13:35:55`, using NameMC skin id `150ea3e3982a1bd3`.
 - Skin source path: `https://s.namemc.com/i/150ea3e3982a1bd3.png`
 - Citizens application path: a signed Mineskin-generated `texture` and `signature` are stored in config and applied through the documented `SkinTrait.setSkinPersistent(...)` path before spawn.
@@ -57,7 +57,7 @@ Cooldown constants (ticks):
 - Melee applies bleed chance logic through the plugin bleed system.
 - Blood Shield reduces incoming damage while active.
 - Summoned bat swarm cap: `6`.
-- Casting now includes visible player-arm swings, crouched channeling pulses for blood spells, and more active body motion while abilities charge.
+- Casting now includes visible main-hand and off-hand animation during spell charge so the vampire keeps moving while casting without using a crouch pose.
 
 ## Audio feedback
 

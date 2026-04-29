@@ -50,7 +50,7 @@ public final class VampireBatSwarm {
                 owner.randomDouble(-2.0D, 2.0D)
             );
             Bat bat = (Bat) world.spawnEntity(spawn, EntityType.BAT);
-            bat.setCustomName("§4Blood Bat");
+            bat.setCustomName(null);
             bat.setCustomNameVisible(false);
             bat.setRemoveWhenFarAway(false);
             bat.setAwake(true);
