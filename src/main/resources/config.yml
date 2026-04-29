@@ -24,5 +24,5 @@ bleed:
   max-stacks: 2
 
 messages:
-  event-start: "§4☽ THE BLOOD MOON RISES §4☾"
+  event-start: "§4- THE BLOOD MOON RISES -"
   event-end: "§6The Blood Moon fades... for now."

@@ -25,7 +25,7 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.LeatherArmorMeta;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -76,6 +76,11 @@ public final class MobSpawnManager {
         Material.DIAMOND_BOOTS
     );
 
+    private static final List<Material> WEAPONS = List.of(
+        Material.IRON_SWORD,
+        Material.STONE_SWORD,
+        Material.GOLDEN_SWORD
+    );
 
     private final BloodMoonPlugin plugin;
     private final Random random = new Random();
@@ -194,7 +199,9 @@ public final class MobSpawnManager {
         EntityType type = HOSTILE_TYPES.get(random.nextInt(HOSTILE_TYPES.size()));
         LivingEntity entity = (LivingEntity) location.getWorld().spawnEntity(location, type);
         configureBloodMob(entity, type);
-        equip(entity, type);
+        if (random.nextDouble() <= 0.30D) {
+            equip(entity);
+        }
         activeMobs.put(entity.getUniqueId(), new BloodMobProfile(entity.getUniqueId(), type, baseCooldown(type), 20 + random.nextInt(40)));
     }
 
@@ -421,64 +428,31 @@ public final class MobSpawnManager {
             && location.getY() < world.getMaxHeight() - 2;
     }
 
-    private void equip(LivingEntity entity, EntityType type) {
+    private void equip(LivingEntity entity) {
         EntityEquipment equipment = entity.getEquipment();
         if (equipment == null) {
             return;
         }
 
-        equipment.setHelmetDropChance(0.02F);
-        equipment.setChestplateDropChance(0.02F);
-        equipment.setLeggingsDropChance(0.02F);
-        equipment.setBootsDropChance(0.02F);
-        equipment.setItemInMainHandDropChance(0.0F);
-        equipment.setItemInMainHand(null);
+        equipment.setHelmetDropChance(0.04F);
+        equipment.setChestplateDropChance(0.04F);
+        equipment.setLeggingsDropChance(0.04F);
+        equipment.setBootsDropChance(0.04F);
+        equipment.setItemInMainHandDropChance(0.05F);
 
-        switch (type) {
-            case ZOMBIE -> {
-                equipment.setHelmet(dyedArmor(Material.LEATHER_HELMET, Color.fromRGB(95, 0, 0)));
-                equipment.setChestplate(dyedArmor(Material.LEATHER_CHESTPLATE, Color.fromRGB(120, 15, 15)));
-                equipment.setLeggings(dyedArmor(Material.LEATHER_LEGGINGS, Color.fromRGB(70, 0, 0)));
-                equipment.setBoots(dyedArmor(Material.LEATHER_BOOTS, Color.fromRGB(50, 0, 0)));
-            }
-            case HUSK -> {
-                equipment.setHelmet(dyedArmor(Material.LEATHER_HELMET, Color.fromRGB(170, 110, 35)));
-                equipment.setChestplate(dyedArmor(Material.LEATHER_CHESTPLATE, Color.fromRGB(140, 85, 25)));
-                equipment.setLeggings(dyedArmor(Material.LEATHER_LEGGINGS, Color.fromRGB(120, 72, 20)));
-                equipment.setBoots(dyedArmor(Material.LEATHER_BOOTS, Color.fromRGB(95, 55, 18)));
-            }
-            case SKELETON -> {
-                equipment.setHelmet(new ItemStack(Material.CHAINMAIL_HELMET));
-                equipment.setChestplate(new ItemStack(Material.CHAINMAIL_CHESTPLATE));
-                equipment.setLeggings(new ItemStack(Material.CHAINMAIL_LEGGINGS));
-                equipment.setBoots(new ItemStack(Material.CHAINMAIL_BOOTS));
-            }
-            case STRAY -> {
-                equipment.setHelmet(dyedArmor(Material.LEATHER_HELMET, Color.fromRGB(140, 180, 205)));
-                equipment.setChestplate(dyedArmor(Material.LEATHER_CHESTPLATE, Color.fromRGB(120, 160, 190)));
-                equipment.setLeggings(dyedArmor(Material.LEATHER_LEGGINGS, Color.fromRGB(95, 135, 165)));
-                equipment.setBoots(dyedArmor(Material.LEATHER_BOOTS, Color.fromRGB(80, 115, 145)));
-            }
-            case SPIDER -> {
-                if (random.nextDouble() <= 0.35D) {
-                    equipment.setHelmet(dyedArmor(Material.LEATHER_HELMET, Color.fromRGB(55, 0, 75)));
-                }
-            }
-            default -> {
-                if (random.nextBoolean()) {
-                    equipment.setHelmet(randomArmor(HELMETS));
-                }
-                if (random.nextBoolean()) {
-                    equipment.setChestplate(randomArmor(CHESTPLATES));
-                }
-                if (random.nextBoolean()) {
-                    equipment.setLeggings(randomArmor(LEGGINGS));
-                }
-                if (random.nextBoolean()) {
-                    equipment.setBoots(randomArmor(BOOTS));
-                }
-            }
+        if (random.nextBoolean()) {
+            equipment.setHelmet(randomArmor(HELMETS));
         }
+        if (random.nextBoolean()) {
+            equipment.setChestplate(randomArmor(CHESTPLATES));
+        }
+        if (random.nextBoolean()) {
+            equipment.setLeggings(randomArmor(LEGGINGS));
+        }
+        if (random.nextBoolean()) {
+            equipment.setBoots(randomArmor(BOOTS));
+        }
+        equipment.setItemInMainHand(randomWeapon());
     }
 
     private ItemStack randomArmor(List<Material> materials) {
@@ -487,6 +461,40 @@ public final class MobSpawnManager {
         return item;
     }
 
+    private ItemStack randomWeapon() {
+        ItemStack item;
+        if (random.nextDouble() < 0.25D) {
+            item = createBloodSickle();
+        } else {
+            item = new ItemStack(WEAPONS.get(random.nextInt(WEAPONS.size())));
+        }
+        maybeEnchantWeapon(item);
+        return item;
+    }
+
+    private ItemStack createBloodSickle() {
+        ItemStack item = new ItemStack(Material.IRON_HOE);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§cBlood Sickle");
+            item.setItemMeta(meta);
+        }
+        item.addUnsafeEnchantment(Enchantment.SHARPNESS, 2);
+        item.addUnsafeEnchantment(Enchantment.KNOCKBACK, 1);
+        return item;
+    }
+
+    private void maybeEnchantWeapon(ItemStack item) {
+        if (random.nextDouble() < 0.12D) {
+            item.addUnsafeEnchantment(Enchantment.FIRE_ASPECT, 1);
+        }
+        if (random.nextDouble() < 0.10D) {
+            item.addUnsafeEnchantment(Enchantment.LOOTING, 1);
+        }
+        if (random.nextDouble() < 0.08D) {
+            item.addUnsafeEnchantment(Enchantment.SHARPNESS, 1);
+        }
+    }
 
     private void maybeEnchantArmor(ItemStack item) {
         if (item.getType() == Material.LEATHER_HELMET
@@ -501,19 +509,9 @@ public final class MobSpawnManager {
     }
 
     private void dyeLeather(ItemStack item) {
-        if (item.getItemMeta() instanceof LeatherArmorMeta meta) {
+        if (item.getItemMeta() instanceof org.bukkit.inventory.meta.LeatherArmorMeta meta) {
             meta.setColor(Color.fromRGB(95, 0, 0));
             item.setItemMeta(meta);
         }
-    }
-
-    private ItemStack dyedArmor(Material material, Color color) {
-        ItemStack item = new ItemStack(material);
-        if (item.getItemMeta() instanceof LeatherArmorMeta meta) {
-            meta.setColor(color);
-            item.setItemMeta(meta);
-        }
-        maybeEnchantArmor(item);
-        return item;
     }
 }

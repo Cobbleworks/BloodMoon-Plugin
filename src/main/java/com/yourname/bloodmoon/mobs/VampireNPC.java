@@ -3,10 +3,8 @@ package com.yourname.bloodmoon.mobs;
 import com.yourname.bloodmoon.BloodMoonPlugin;
 import com.yourname.bloodmoon.effects.BloodMagicProjectile;
 import com.yourname.bloodmoon.traits.VampireTrait;
-import java.nio.charset.StandardCharsets;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -19,8 +17,6 @@ import java.util.UUID;
 import net.citizensnpcs.api.ai.Navigator;
 import net.citizensnpcs.api.npc.NPC;
 import net.citizensnpcs.api.trait.Trait;
-import net.citizensnpcs.api.trait.trait.Equipment;
-import net.citizensnpcs.api.trait.trait.Equipment.EquipmentSlot;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -402,7 +398,6 @@ public final class VampireNPC {
         npc.setProtected(false);
         configureVampireTrait();
         configureSkin();
-        configureEquipment();
         configureSentinel();
         spawnHiddenNpc();
     }
@@ -413,34 +408,18 @@ public final class VampireNPC {
     }
 
     private void configureSkin() {
+        String skinName = plugin.getConfigManager().getVampireSkinName();
+        if (skinName == null || skinName.isBlank()) {
+            return;
+        }
         try {
             Class<? extends Trait> skinTraitClass = Class.forName("net.citizensnpcs.trait.SkinTrait").asSubclass(Trait.class);
             Trait skinTrait = npc.getOrAddTrait(skinTraitClass);
-            Method setFetchDefaultSkin = skinTraitClass.getMethod("setFetchDefaultSkin", boolean.class);
-            Method setSkinPersistent = skinTraitClass.getMethod("setSkinPersistent", String.class, String.class, String.class);
-            setFetchDefaultSkin.invoke(skinTrait, false);
-            setSkinPersistent.invoke(skinTrait, "bloodmoon_vampire", "", createUnsignedTexture(plugin.getConfigManager().getVampireSkinUrl()));
+            Method setSkinName = skinTraitClass.getMethod("setSkinName", String.class);
+            setSkinName.invoke(skinTrait, skinName);
         } catch (ReflectiveOperationException ex) {
             plugin.getLogger().warning("Could not apply Citizens SkinTrait to vampire NPC " + npc.getId() + ": " + ex.getMessage());
         }
-    }
-
-    private String createUnsignedTexture(String skinUrl) {
-        String safeUrl = skinUrl == null || skinUrl.isBlank()
-            ? "https://s.namemc.com/i/a15d2c945b798f66.png"
-            : skinUrl;
-        String payload = "{\"timestamp\":" + System.currentTimeMillis()
-            + ",\"profileId\":\"00000000000000000000000000000000\","
-            + "\"profileName\":\"BloodMoonVampire\","
-            + "\"textures\":{\"SKIN\":{\"url\":\"" + safeUrl + "\"}}}";
-        return Base64.getEncoder().encodeToString(payload.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private void configureEquipment() {
-        Equipment equipment = npc.getOrAddTrait(Equipment.class);
-        equipment.set(EquipmentSlot.HAND, new ItemStack(Material.IRON_SWORD));
-        equipment.set(EquipmentSlot.HELMET, new ItemStack(Material.LEATHER_HELMET));
-        equipment.set(EquipmentSlot.CHESTPLATE, new ItemStack(Material.LEATHER_CHESTPLATE));
     }
 
     private void configureSentinel() {
