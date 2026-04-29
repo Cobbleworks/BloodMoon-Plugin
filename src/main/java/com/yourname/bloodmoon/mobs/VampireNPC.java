@@ -35,11 +35,14 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.potion.PotionType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 import org.mcmonkey.sentinel.SentinelTrait;
@@ -401,6 +404,7 @@ public final class VampireNPC {
         npc.data().set("bloodmoon-vampire", true);
         npc.data().set("nameplate-visible", false);
         npc.data().set("always-use-name-hologram", false);
+        npc.data().setPersistent(NPC.Metadata.NAMEPLATE_VISIBLE, false);
         npc.setProtected(false);
         configureVampireTrait();
         configureSkin();
@@ -504,7 +508,7 @@ public final class VampireNPC {
             return;
         }
         disguiseBat = (Bat) world.spawnEntity(spawnLocation, EntityType.BAT);
-        disguiseBat.setCustomName("§4Vampire");
+        disguiseBat.setCustomName(null);
         disguiseBat.setCustomNameVisible(false);
         disguiseBat.setAwake(true);
         disguiseBat.setRemoveWhenFarAway(false);
@@ -815,12 +819,14 @@ public final class VampireNPC {
 
     private void tickCasting() {
         runCastingParticles();
+        updateCastingAnimation();
         if (stateTicks < castingDurationTicks) {
             return;
         }
         VampireAbility ability = pendingAbility;
         pendingAbility = null;
         executeAbility(ability);
+        resetCastingAnimation();
         if (state == VampireState.CASTING) {
             state = stateBeforeCasting == VampireState.STALKING ? VampireState.COMBAT : stateBeforeCasting;
             stateTicks = 0;
@@ -838,6 +844,42 @@ public final class VampireNPC {
             double offset = angle + (step * ((Math.PI * 2.0D) / 3.0D));
             Location point = base.clone().add(Math.cos(offset) * 0.75D, 0.35D + (stateTicks % 20) * 0.045D, Math.sin(offset) * 0.75D);
             world.spawnParticle(Particle.WITCH, point, 1, 0.02D, 0.02D, 0.02D, 0.0D);
+        }
+    }
+
+    private void updateCastingAnimation() {
+        LivingEntity entity = getLivingEntity();
+        if (!(entity instanceof Player player)) {
+            return;
+        }
+        if (target != null && target.isOnline() && !target.isDead()) {
+            npc.faceLocation(target.getEyeLocation());
+        }
+
+        boolean channeling = pendingAbility == VampireAbility.BLOOD_MAGIC
+            || pendingAbility == VampireAbility.DRAIN_LIFE
+            || pendingAbility == VampireAbility.BLOOD_SHIELD;
+        player.setSneaking(channeling && stateTicks % 12 < 8);
+
+        if (stateTicks % 6 == 0) {
+            if (pendingAbility == VampireAbility.SUMMON_BATS || pendingAbility == VampireAbility.FEAR_SHRIEK) {
+                player.swingOffHand();
+            } else {
+                player.swingMainHand();
+            }
+        }
+
+        if (channeling && stateTicks % 10 == 0) {
+            Vector pulse = player.getVelocity().clone();
+            pulse.setY(Math.max(pulse.getY(), 0.18D));
+            player.setVelocity(pulse);
+        }
+    }
+
+    private void resetCastingAnimation() {
+        LivingEntity entity = getLivingEntity();
+        if (entity instanceof Player player) {
+            player.setSneaking(false);
         }
     }
 
@@ -1228,7 +1270,7 @@ public final class VampireNPC {
         setNpcInvisible(200);
         npc.getNavigator().cancelNavigation();
         escapeBat = (Bat) world.spawnEntity(start, EntityType.BAT);
-        escapeBat.setCustomName("§4Vampire");
+        escapeBat.setCustomName(null);
         escapeBat.setCustomNameVisible(false);
         escapeBat.setAwake(true);
         escapeBat.setRemoveWhenFarAway(false);
@@ -1521,6 +1563,9 @@ public final class VampireNPC {
         if (random.nextDouble() <= 0.75D) {
             world.dropItemNaturally(location, new ItemStack(Material.REDSTONE, random.nextInt(4) + 2));
         }
+        if (random.nextDouble() <= 0.55D) {
+            world.dropItemNaturally(location, new ItemStack(Material.BONE, random.nextInt(4) + 1));
+        }
         if (random.nextDouble() <= 0.60D) {
             world.dropItemNaturally(location, new ItemStack(Material.ROTTEN_FLESH, random.nextInt(3) + 1));
         }
@@ -1536,8 +1581,79 @@ public final class VampireNPC {
         if (random.nextDouble() <= 0.10D) {
             world.dropItemNaturally(location, new ItemStack(Material.PHANTOM_MEMBRANE, 1));
         }
+        if (random.nextDouble() <= 0.14D) {
+            world.dropItemNaturally(location, createTippedArrow(PotionType.HEALING, random.nextInt(3) + 2));
+        }
+        if (random.nextDouble() <= 0.12D) {
+            world.dropItemNaturally(location, createTippedArrow(PotionType.HARMING, random.nextInt(2) + 1));
+        }
+        if (random.nextDouble() <= 0.10D) {
+            world.dropItemNaturally(location, createPotionReward(Material.SPLASH_POTION,
+                random.nextBoolean() ? PotionType.HEALING : PotionType.REGENERATION));
+        }
+        if (random.nextDouble() <= 0.08D) {
+            world.dropItemNaturally(location, createEnchantedBookReward());
+        }
+        if (random.nextDouble() <= 0.05D) {
+            world.dropItemNaturally(location, createEnchantedWeaponReward());
+        }
+        if (random.nextDouble() <= 0.06D) {
+            world.dropItemNaturally(location, new ItemStack(Material.GOLDEN_APPLE, 1));
+        }
         ExperienceOrb orb = world.spawn(location, ExperienceOrb.class);
         orb.setExperience(random.nextInt(16) + 20);
+    }
+
+    private ItemStack createTippedArrow(PotionType potionType, int amount) {
+        ItemStack item = new ItemStack(Material.TIPPED_ARROW, Math.max(1, amount));
+        if (item.getItemMeta() instanceof PotionMeta meta) {
+            meta.setBasePotionType(potionType);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    private ItemStack createPotionReward(Material material, PotionType potionType) {
+        ItemStack item = new ItemStack(material, 1);
+        if (item.getItemMeta() instanceof PotionMeta meta) {
+            meta.setBasePotionType(potionType);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    private ItemStack createEnchantedBookReward() {
+        ItemStack item = new ItemStack(Material.ENCHANTED_BOOK, 1);
+        if (item.getItemMeta() instanceof EnchantmentStorageMeta meta) {
+            switch (random.nextInt(5)) {
+                case 0 -> meta.addStoredEnchant(Enchantment.MENDING, 1, true);
+                case 1 -> meta.addStoredEnchant(Enchantment.UNBREAKING, 3, true);
+                case 2 -> meta.addStoredEnchant(Enchantment.SHARPNESS, 4, true);
+                case 3 -> meta.addStoredEnchant(Enchantment.FIRE_ASPECT, 2, true);
+                default -> meta.addStoredEnchant(Enchantment.LOOTING, 2, true);
+            }
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    private ItemStack createEnchantedWeaponReward() {
+        ItemStack item = new ItemStack(random.nextDouble() < 0.35D ? Material.DIAMOND_SWORD : Material.IRON_SWORD, 1);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            item.setItemMeta(meta);
+        }
+        item.addUnsafeEnchantment(Enchantment.SHARPNESS, random.nextBoolean() ? 4 : 5);
+        if (random.nextDouble() <= 0.70D) {
+            item.addUnsafeEnchantment(Enchantment.FIRE_ASPECT, 2);
+        }
+        if (random.nextDouble() <= 0.50D) {
+            item.addUnsafeEnchantment(Enchantment.LOOTING, 2);
+        }
+        if (random.nextDouble() <= 0.40D) {
+            item.addUnsafeEnchantment(Enchantment.UNBREAKING, 3);
+        }
+        return item;
     }
 
     private void cancelControllerOnly() {

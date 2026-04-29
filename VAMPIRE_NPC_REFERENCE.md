@@ -7,6 +7,7 @@ This document describes the current in-game implementation of the Blood Moon vam
 - Enemy type: Citizens NPC (PLAYER type), controlled by Sentinel.
 - Damageability: Players can damage the vampire (`npc.setProtected(false)` and entity is set non-invulnerable).
 - Nametag visibility: Hidden using Citizens metadata and scoreboard nametag suppression.
+- Bat nametags: Removed entirely from both disguise and escape bats.
 - Default skin: the fixed historical NameMC skin from `19.12.2025 - 13:35:55`, using NameMC skin id `150ea3e3982a1bd3`.
 - Skin source path: `https://s.namemc.com/i/150ea3e3982a1bd3.png`
 - Citizens application path: a signed Mineskin-generated `texture` and `signature` are stored in config and applied through the documented `SkinTrait.setSkinPersistent(...)` path before spawn.
@@ -56,6 +57,7 @@ Cooldown constants (ticks):
 - Melee applies bleed chance logic through the plugin bleed system.
 - Blood Shield reduces incoming damage while active.
 - Summoned bat swarm cap: `6`.
+- Casting now includes visible player-arm swings, crouched channeling pulses for blood spells, and more active body motion while abilities charge.
 
 ## Audio feedback
 
@@ -67,11 +69,18 @@ Cooldown constants (ticks):
 On death, drops are rolled from this vanilla-only pool:
 
 - Redstone (`2-5`) at 75%
+- Bone (`1-4`) at 55%
 - Rotten Flesh (`1-3`) at 60%
 - Spider Eye (`1-2`) at 45%
 - Fermented Spider Eye (`1`) at 30%
 - Glass Bottle (`1-2`) at 18%
 - Phantom Membrane (`1`) at 10%
+- Arrow of Healing (`2-4`) at 14%
+- Arrow of Harming (`1-2`) at 12%
+- Splash Potion of Healing or Regeneration at 10%
+- Enchanted Book reward at 8%
+- Enchanted Iron or Diamond Sword reward at 5%
+- Golden Apple at 6%
 - Experience orb: `20-35` XP
 
 ## Config path summary
