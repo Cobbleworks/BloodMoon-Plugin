@@ -423,47 +423,44 @@ public final class VampireNPC {
         try {
             Class<? extends Trait> skinTraitClass = Class.forName("net.citizensnpcs.trait.SkinTrait").asSubclass(Trait.class);
             Trait skinTrait = npc.getOrAddTrait(skinTraitClass);
-            if (texture != null && !texture.isBlank() && applyExactSkinTexture(skinTraitClass, skinTrait, skinName, signature, texture)) {
+            Method setShouldUpdateSkins = skinTraitClass.getMethod("setShouldUpdateSkins", boolean.class);
+            Method setFetchDefaultSkin = skinTraitClass.getMethod("setFetchDefaultSkin", boolean.class);
+            setShouldUpdateSkins.invoke(skinTrait, false);
+            setFetchDefaultSkin.invoke(skinTrait, false);
+
+            if (texture != null && !texture.isBlank() && signature != null && !signature.isBlank()) {
+                Method setSkinPersistent = skinTraitClass.getMethod("setSkinPersistent", String.class, String.class, String.class);
+                String cacheKey = (skinName == null || skinName.isBlank()) ? "bloodmoon_selected_vampire" : skinName;
+                setSkinPersistent.invoke(skinTrait, cacheKey, signature, texture);
                 return;
             }
-            Method setSkinName = skinTraitClass.getMethod("setSkinName", String.class);
-            setSkinName.invoke(skinTrait, skinName);
+
+            if (skinName != null && !skinName.isBlank()) {
+                Method setSkinName = skinTraitClass.getMethod("setSkinName", String.class, boolean.class);
+                setSkinName.invoke(skinTrait, skinName, true);
+                return;
+            }
+
+            plugin.getLogger().warning("Vampire NPC " + npc.getId() + " has no valid Citizens skin configuration.");
         } catch (ReflectiveOperationException ex) {
             plugin.getLogger().warning("Could not apply Citizens SkinTrait to vampire NPC " + npc.getId() + ": " + ex.getMessage());
         }
     }
 
-    private boolean applyExactSkinTexture(Class<? extends Trait> skinTraitClass, Trait skinTrait, String skinName, String signature,
-                                          String texture) {
-        String cacheKey = (skinName == null || skinName.isBlank()) ? "bloodmoon_selected_vampire" : skinName;
-        try {
-            Method setSkinPersistent = skinTraitClass.getMethod("setSkinPersistent", String.class, String.class, String.class);
-            setSkinPersistent.invoke(skinTrait, cacheKey, signature == null ? "" : signature, texture);
-            return true;
-        } catch (ReflectiveOperationException ignored) {
-            try {
-                Method setSkinPersistent = skinTraitClass.getMethod("setSkinPersistent", String.class, String.class, String.class, boolean.class);
-                setSkinPersistent.invoke(skinTrait, cacheKey, signature == null ? "" : signature, texture, true);
-                return true;
-            } catch (ReflectiveOperationException ignoredAgain) {
-                plugin.getLogger().warning("Citizens SkinTrait did not expose a compatible exact-texture method for vampire NPC " + npc.getId()
-                    + "; falling back to username-based skin lookup.");
-                return false;
-            }
-        }
-    }
-
     private void configureSentinel() {
         SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
+        sentinel.setInvincible(false);
         sentinel.setHealth(plugin.getConfigManager().getVampireHealth());
         sentinel.health = plugin.getConfigManager().getVampireHealth();
         sentinel.damage = 6.0D;
         sentinel.respawnTime = -1;
         sentinel.chaseRange = 30.0D;
         sentinel.armor = 0.2D;
+        sentinel.protectFromIgnores = false;
         sentinel.allTargets = new SentinelTargetList();
         sentinel.addTarget("players");
         sentinel.allIgnores = new SentinelTargetList();
+        npc.setProtected(false);
     }
 
     private void spawnHiddenNpc() {
@@ -475,6 +472,8 @@ public final class VampireNPC {
         if (entity != null) {
             applyConfiguredHealth(entity);
             entity.setInvulnerable(false);
+            entity.setMaximumNoDamageTicks(0);
+            entity.setNoDamageTicks(0);
             hideNameplate(entity);
             applyHiddenStateIfNeeded(entity);
         }

@@ -62,12 +62,11 @@ public final class ConfigManager {
     }
 
     public String getVampireSkinName() {
-        return getConfig().getString("vampire.skin-name", "bloodmoon_selected_vampire");
+        return getConfig().getString("vampire.skin-name", "aurinkoari");
     }
 
     public String getVampireSkinTexture() {
-        return getConfig().getString("vampire.skin-texture",
-            "e3RleHR1cmVzOntTS0lOOnt1cmw6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNjk4YTliNzdlOWNmM2MxYjE1ZmMzNTlhN2FjZmMxZjYyMWYyYTc1OWVmNzZmYmI5N2I0Nzg3NTQ3MWZkMzI1ZiJ9fX0=");
+        return getConfig().getString("vampire.skin-texture", "");
     }
 
     public String getVampireSkinSignature() {
@@ -110,9 +109,8 @@ public final class ConfigManager {
         config.addDefault("vampire.stalk-ticks-max", 140);
         config.addDefault("vampire.spawn-radius", 48);
         config.addDefault("vampire.max-per-player", 1);
-        config.addDefault("vampire.skin-name", "bloodmoon_selected_vampire");
-        config.addDefault("vampire.skin-texture",
-            "e3RleHR1cmVzOntTS0lOOnt1cmw6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNjk4YTliNzdlOWNmM2MxYjE1ZmMzNTlhN2FjZmMxZjYyMWYyYTc1OWVmNzZmYmI5N2I0Nzg3NTQ3MWZkMzI1ZiJ9fX0=");
+        config.addDefault("vampire.skin-name", "aurinkoari");
+        config.addDefault("vampire.skin-texture", "");
         config.addDefault("vampire.skin-signature", "");
         config.addDefault("vampire.skin-url", "");
         config.addDefault("bleed.chance", 0.4D);

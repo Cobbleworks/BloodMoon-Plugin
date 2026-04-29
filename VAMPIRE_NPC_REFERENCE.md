@@ -7,7 +7,7 @@ This document describes the current in-game implementation of the Blood Moon vam
 - Enemy type: Citizens NPC (PLAYER type), controlled by Sentinel.
 - Damageability: Players can damage the vampire (`npc.setProtected(false)` and entity is set non-invulnerable).
 - Nametag visibility: Hidden using Citizens metadata and scoreboard nametag suppression.
-- Default skin: exact NameMC texture from skin 150ea3e3982a1bd3, applied through Citizens SkinTrait using the provided texture payload.
+- Default skin: the real player skin for `aurinkoari`, applied through the documented Citizens `SkinTrait.setSkinName(...)` path before the NPC spawns.
 
 ## Default spawn tuning
 
