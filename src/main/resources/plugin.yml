@@ -1,0 +1,22 @@
+name: BloodMoon
+version: 1.0.0
+main: com.yourname.bloodmoon.BloodMoonPlugin
+api-version: '1.20'
+author: Cobbleworks
+depend:
+  - Citizens
+  - Sentinel
+commands:
+  bloodmoon:
+    description: Manage the Blood Moon event.
+    usage: /bloodmoon <start|stop|status|spawn|reload|chance>
+    permission: bloodmoon.admin
+    aliases:
+      - bm
+permissions:
+  bloodmoon.admin:
+    description: Allows full Blood Moon administration.
+    default: op
+  bloodmoon.notify:
+    description: Allows receiving Blood Moon notifications.
+    default: true

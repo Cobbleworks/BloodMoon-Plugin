@@ -1,0 +1,28 @@
+bloodmoon:
+  chance: 12
+  worlds:
+    - world
+  special-monsters:
+    enabled: true
+    spawn-radius: 48
+    max-per-player: 2
+    spawn-pulse-ticks: 120
+    spawn-chance: 0.55
+
+vampire:
+  health: 40.0
+  stalk-ticks-min: 80
+  stalk-ticks-max: 140
+  spawn-radius: 48
+  max-per-player: 2
+  skin-url: "https://s.namemc.com/i/a15d2c945b798f66.png"
+
+bleed:
+  chance: 0.4
+  damage-per-tick: 1.0
+  interval-ticks: 40
+  max-stacks: 2
+
+messages:
+  event-start: "§4☽ §lTHE BLOOD MOON RISES §r§4☾"
+  event-end: "§6The Blood Moon fades... for now."
