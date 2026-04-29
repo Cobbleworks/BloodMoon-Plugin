@@ -5,12 +5,12 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.yourname</groupId>
-    <artifactId>BloodMoon</artifactId>
+    <artifactId>BloodMoon-Event</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
-    <name>BloodMoon</name>
-    <description>Blood Moon event plugin with Citizens and Sentinel vampires.</description>
+    <name>BloodMoon-Event</name>
+    <description>BloodMoon Event plugin with Citizens and Sentinel vampires.</description>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -61,7 +61,7 @@
     </dependencies>
 
     <build>
-        <finalName>BloodMoon-${project.version}</finalName>
+        <finalName>BloodMoon-Event-${project.version}</finalName>
         <resources>
             <resource>
                 <directory>src/main/resources</directory>

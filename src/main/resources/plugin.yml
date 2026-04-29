@@ -1,4 +1,4 @@
-name: BloodMoon
+name: BloodMoon-Event
 version: 1.0.0
 main: com.yourname.bloodmoon.BloodMoonPlugin
 api-version: '1.20'

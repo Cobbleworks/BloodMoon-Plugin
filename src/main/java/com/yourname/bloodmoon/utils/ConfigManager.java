@@ -92,8 +92,12 @@ public final class ConfigManager {
         return Math.max(0, getConfig().getInt("vampire.max-per-player", 2));
     }
 
+    public String getVampireSkinName() {
+        return getConfig().getString("vampire.skin-name", "");
+    }
+
     public String getVampireSkinUrl() {
-        return getConfig().getString("vampire.skin-url", "https://s.namemc.com/i/a15d2c945b798f66.png");
+        return getConfig().getString("vampire.skin-url", "");
     }
 
     public double getBleedChance() {
@@ -113,7 +117,7 @@ public final class ConfigManager {
     }
 
     public String getEventStartMessage() {
-        return getConfig().getString("messages.event-start", "§4☽ §lTHE BLOOD MOON RISES §r§4☾");
+        return getConfig().getString("messages.event-start", "§4☽ THE BLOOD MOON RISES §4☾");
     }
 
     public String getEventEndMessage() {
@@ -133,12 +137,13 @@ public final class ConfigManager {
         config.addDefault("vampire.stalk-ticks-max", 140);
         config.addDefault("vampire.spawn-radius", 48);
         config.addDefault("vampire.max-per-player", 2);
-        config.addDefault("vampire.skin-url", "https://s.namemc.com/i/a15d2c945b798f66.png");
+        config.addDefault("vampire.skin-name", "");
+        config.addDefault("vampire.skin-url", "");
         config.addDefault("bleed.chance", 0.4D);
         config.addDefault("bleed.damage-per-tick", 1.0D);
         config.addDefault("bleed.interval-ticks", 40);
         config.addDefault("bleed.max-stacks", 2);
-        config.addDefault("messages.event-start", "§4☽ §lTHE BLOOD MOON RISES §r§4☾");
+        config.addDefault("messages.event-start", "§4☽ THE BLOOD MOON RISES §4☾");
         config.addDefault("messages.event-end", "§6The Blood Moon fades... for now.");
         config.options().copyDefaults(true);
     }

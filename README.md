@@ -1,6 +1,6 @@
-# BloodMoon
+# BloodMoon Event
 
-BloodMoon is a Spigot/Paper 1.20.x/1.21.x event plugin for Java 17+ servers.
+BloodMoon Event is a Spigot/Paper 1.20.x/1.21.x event plugin for Java 17+ servers.
 It adds a random thunderstorm Blood Moon night, empowered vanilla hostile mobs,
 and Citizens/Sentinel vampire NPCs that begin disguised as bats.
 It also includes named Blood Moon monsters: Blood Witch, Harvest Scarecrow,
@@ -19,4 +19,4 @@ Frankenstein's Monster, Carnival Clown, and Blood Werewolf.
 mvn clean package
 ```
 
-The plugin jar is written to `target/BloodMoon-1.0.0.jar`.
+The plugin jar is written to `target/BloodMoon-Event-1.0.0-SNAPSHOT.jar`.

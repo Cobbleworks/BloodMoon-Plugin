@@ -63,7 +63,7 @@ public final class BloodMoonPlugin extends JavaPlugin {
 
         bloodMoonManager.start();
         getServer().getScheduler().runTask(this, () -> npcManager.initializeCitizens());
-        getLogger().info("BloodMoon enabled.");
+        getLogger().info("BloodMoon Event enabled.");
     }
 
     @Override
@@ -85,7 +85,7 @@ public final class BloodMoonPlugin extends JavaPlugin {
             specialMonsterManager.cleanupAll();
         }
         getServer().getScheduler().cancelTasks(this);
-        getLogger().info("BloodMoon disabled.");
+        getLogger().info("BloodMoon Event disabled.");
         instance = null;
     }
 
@@ -146,11 +146,11 @@ public final class BloodMoonPlugin extends JavaPlugin {
     private boolean hasRequiredDependencies() {
         PluginManager pluginManager = getServer().getPluginManager();
         if (!pluginManager.isPluginEnabled("Citizens")) {
-            getLogger().severe("Citizens is required for BloodMoon.");
+            getLogger().severe("Citizens is required for BloodMoon Event.");
             return false;
         }
         if (!pluginManager.isPluginEnabled("Sentinel")) {
-            getLogger().severe("Sentinel is required for BloodMoon.");
+            getLogger().severe("Sentinel is required for BloodMoon Event.");
             return false;
         }
         return true;

@@ -15,7 +15,7 @@ vampire:
   stalk-ticks-max: 140
   spawn-radius: 48
   max-per-player: 2
-  skin-url: "https://s.namemc.com/i/a15d2c945b798f66.png"
+  skin-name: ""  # Set to a Minecraft player username whose skin you want vampires to use
 
 bleed:
   chance: 0.4
@@ -24,5 +24,5 @@ bleed:
   max-stacks: 2
 
 messages:
-  event-start: "§4☽ §lTHE BLOOD MOON RISES §r§4☾"
+  event-start: "§4☽ THE BLOOD MOON RISES §4☾"
   event-end: "§6The Blood Moon fades... for now."

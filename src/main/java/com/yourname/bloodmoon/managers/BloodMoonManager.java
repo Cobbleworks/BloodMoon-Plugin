@@ -309,7 +309,7 @@ public final class BloodMoonManager {
 
     private void broadcastStart(World world) {
         String title = plugin.getConfigManager().getEventStartMessage();
-        MessageUtils.title(world, title, "§7The night hungers.", 20, 80, 20);
+        MessageUtils.title(world, title, "§7The night hungers.", 10, 60, 10);
         MessageUtils.broadcastToWorld(world, title);
         MessageUtils.playWorldSound(world, Sound.ENTITY_WITHER_SPAWN, 1.0F, 0.5F);
     }
