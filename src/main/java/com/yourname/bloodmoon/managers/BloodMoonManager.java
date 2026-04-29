@@ -10,6 +10,9 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import org.bukkit.Color;
+import org.bukkit.Location;
+import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -30,7 +33,10 @@ public final class BloodMoonManager {
     private final Random random = new Random();
     private BukkitRunnable timeCheckTask;
     private BukkitRunnable vampireSpawnTask;
+    private BukkitRunnable ambientParticleTask;
     private Integer chanceOverride;
+
+    private static final Particle.DustOptions BLOOD_AMBIENT = new Particle.DustOptions(Color.fromRGB(160, 0, 0), 1.0F);
 
     public BloodMoonManager(BloodMoonPlugin plugin) {
         this.plugin = plugin;
@@ -115,6 +121,7 @@ public final class BloodMoonManager {
         plugin.getMobSpawnManager().start();
         plugin.getSpecialMonsterManager().start();
         startVampireSpawnTask();
+        startAmbientParticles();
         spawnInitialVampires(world);
         spawnInitialSpecialMonsters(world);
         return true;
@@ -142,6 +149,7 @@ public final class BloodMoonManager {
             plugin.getMobSpawnManager().stop();
             plugin.getSpecialMonsterManager().stopSpawner();
             stopVampireSpawnTask();
+            stopAmbientParticles();
         }
         return true;
     }
@@ -157,6 +165,7 @@ public final class BloodMoonManager {
         plugin.getMobSpawnManager().stop();
         plugin.getSpecialMonsterManager().cleanupAll();
         stopVampireSpawnTask();
+        stopAmbientParticles();
         plugin.getNPCManager().cleanupAll();
     }
 
@@ -281,6 +290,41 @@ public final class BloodMoonManager {
         long time = world.getTime();
         if (time >= SUNRISE_END || time < NIGHT_START) {
             endBloodMoon(world, false);
+        }
+    }
+
+    private void startAmbientParticles() {
+        if (ambientParticleTask != null) {
+            return;
+        }
+        ambientParticleTask = new BukkitRunnable() {
+            @Override
+            public void run() {
+                tickAmbientParticles();
+            }
+        };
+        ambientParticleTask.runTaskTimer(plugin, 60L, 60L);
+    }
+
+    private void stopAmbientParticles() {
+        if (ambientParticleTask != null) {
+            ambientParticleTask.cancel();
+            ambientParticleTask = null;
+        }
+    }
+
+    private void tickAmbientParticles() {
+        for (World world : getActiveWorlds()) {
+            for (Player player : world.getPlayers()) {
+                Location origin = player.getLocation();
+                for (int i = 0; i < 4; i++) {
+                    double ox = (random.nextDouble() * 2.0 - 1.0) * 18.0;
+                    double oy = random.nextDouble() * 8.0;
+                    double oz = (random.nextDouble() * 2.0 - 1.0) * 18.0;
+                    Location loc = origin.clone().add(ox, oy, oz);
+                    world.spawnParticle(Particle.DUST, loc, 1, 0, 0, 0, 0, BLOOD_AMBIENT);
+                }
+            }
         }
     }
 

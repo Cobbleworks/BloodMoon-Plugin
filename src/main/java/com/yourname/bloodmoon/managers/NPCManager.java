@@ -298,12 +298,27 @@ public final class NPCManager {
      * @param world world to clean
      */
     public void cleanupWorld(World world) {
-        for (VampireNPC vampire : new ArrayList<>(vampires.values())) {
-            Location location = vampire.getCurrentLocation();
+        List<Integer> toRemove = new ArrayList<>();
+        for (Map.Entry<Integer, VampireNPC> entry : new ArrayList<>(vampires.entrySet())) {
+            Location location = entry.getValue().getCurrentLocation();
             if (location != null && location.getWorld() == world) {
-                vampire.cleanup();
+                entry.getValue().cleanup();
+                toRemove.add(entry.getKey());
             }
         }
+        toRemove.forEach(id -> {
+            vampires.remove(id);
+            activeNpcIds.remove(id);
+        });
+        activeBatIds.removeIf(uid -> {
+            for (org.bukkit.entity.Entity e : world.getEntities()) {
+                if (e.getUniqueId().equals(uid)) {
+                    e.remove();
+                    return true;
+                }
+            }
+            return false;
+        });
     }
 
     private void cleanupTrackedBats() {

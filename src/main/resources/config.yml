@@ -15,7 +15,7 @@ vampire:
   stalk-ticks-max: 140
   spawn-radius: 48
   max-per-player: 2
-  skin-name: ""  # Set to a Minecraft player username whose skin you want vampires to use
+  skin-name: ""  # Minecraft player username whose skin the vampire uses (e.g. Dracula, Alucard, Count_V, DarkVampire)
 
 bleed:
   chance: 0.4

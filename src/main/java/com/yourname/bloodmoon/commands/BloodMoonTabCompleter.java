@@ -15,7 +15,7 @@ import org.bukkit.entity.Player;
  */
 public final class BloodMoonTabCompleter implements TabCompleter {
 
-    private static final List<String> ROOT = List.of("start", "stop", "status", "spawn", "reload", "chance");
+    private static final List<String> ROOT = List.of("start", "stop", "status", "spawn", "clear", "reload", "chance");
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
@@ -29,6 +29,9 @@ public final class BloodMoonTabCompleter implements TabCompleter {
 
         String sub = args[0].toLowerCase(Locale.ROOT);
         if (args.length == 2 && "start".equals(sub)) {
+            return filter(Bukkit.getWorlds().stream().map(World::getName).toList(), args[1]);
+        }
+        if (args.length == 2 && ("stop".equals(sub) || "clear".equals(sub))) {
             return filter(Bukkit.getWorlds().stream().map(World::getName).toList(), args[1]);
         }
         if (args.length == 2 && "spawn".equals(sub)) {
