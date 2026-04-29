@@ -96,7 +96,7 @@ public final class ConfigManager {
     }
 
     public String getEventStartMessage() {
-        return getConfig().getString("messages.event-start", "§4☽ THE BLOOD MOON RISES §4☾");
+        return getConfig().getString("messages.event-start", "§4- THE BLOOD MOON RISES -");
     }
 
     public String getEventEndMessage() {
@@ -121,7 +121,7 @@ public final class ConfigManager {
         config.addDefault("bleed.damage-per-tick", 1.0D);
         config.addDefault("bleed.interval-ticks", 40);
         config.addDefault("bleed.max-stacks", 2);
-        config.addDefault("messages.event-start", "§4☽ THE BLOOD MOON RISES §4☾");
+        config.addDefault("messages.event-start", "§4- THE BLOOD MOON RISES -");
         config.addDefault("messages.event-end", "§6The Blood Moon fades... for now.");
         config.options().copyDefaults(true);
     }

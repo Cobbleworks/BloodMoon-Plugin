@@ -36,7 +36,7 @@ public final class BloodMoonManager {
     private BukkitRunnable ambientParticleTask;
     private Integer chanceOverride;
 
-    private static final Particle.DustOptions BLOOD_AMBIENT = new Particle.DustOptions(Color.fromRGB(160, 0, 0), 1.0F);
+    private static final Particle.DustOptions BLOOD_AMBIENT = new Particle.DustOptions(Color.fromRGB(160, 0, 0), 1.2F);
 
     public BloodMoonManager(BloodMoonPlugin plugin) {
         this.plugin = plugin;
@@ -295,7 +295,7 @@ public final class BloodMoonManager {
                 tickAmbientParticles();
             }
         };
-        ambientParticleTask.runTaskTimer(plugin, 60L, 60L);
+        ambientParticleTask.runTaskTimer(plugin, 40L, 40L);
     }
 
     private void stopAmbientParticles() {
@@ -309,12 +309,12 @@ public final class BloodMoonManager {
         for (World world : getActiveWorlds()) {
             for (Player player : world.getPlayers()) {
                 Location origin = player.getLocation();
-                for (int i = 0; i < 4; i++) {
-                    double ox = (random.nextDouble() * 2.0 - 1.0) * 18.0;
-                    double oy = random.nextDouble() * 8.0;
-                    double oz = (random.nextDouble() * 2.0 - 1.0) * 18.0;
+                for (int i = 0; i < 9; i++) {
+                    double ox = (random.nextDouble() * 2.0 - 1.0) * 14.0;
+                    double oy = random.nextDouble() * 6.0;
+                    double oz = (random.nextDouble() * 2.0 - 1.0) * 14.0;
                     Location loc = origin.clone().add(ox, oy, oz);
-                    world.spawnParticle(Particle.DUST, loc, 1, 0, 0, 0, 0, BLOOD_AMBIENT);
+                    world.spawnParticle(Particle.DUST, loc, 2, 0.12D, 0.18D, 0.12D, 0.0D, BLOOD_AMBIENT);
                 }
             }
         }
