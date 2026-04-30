@@ -305,7 +305,7 @@ public final class WitchNPC {
     private void castSoulShackle() {
         Player p = ensureTarget(30.0D);
         if (p == null) return;
-        p.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 80, 3, true, true, true));
+        p.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 45, 1, true, true, true));
         plugin.getDecayPlagueEffect().applyStack(p);
     }
 

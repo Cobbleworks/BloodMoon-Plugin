@@ -771,7 +771,9 @@ public final class ClownNPC {
                         if (flight.lengthSquared() > 0.0001) {
                             parrot.teleport(parrot.getLocation().add(flight.normalize().multiply(0.28)));
                         }
-                        parrot.getWorld().spawnParticle(Particle.CLOUD, parrot.getLocation().add(0, 0.3, 0), 2, 0.05, 0.05, 0.05, 0.01);
+                        if (ticks % 25 == 0) {
+                            parrot.getWorld().playSound(parrot.getLocation(), Sound.ENTITY_PARROT_AMBIENT, 0.35F, 1.6F);
+                        }
                         if (ticks % 20 == 0) {
                             SmallFireball fb = parrot.launchProjectile(SmallFireball.class);
                             Vector dir = eye.toVector().subtract(parrot.getEyeLocation().toVector());
@@ -822,7 +824,9 @@ public final class ClownNPC {
                         duck.teleport(duck.getLocation().add(step.normalize().multiply(0.25)));
                     }
                 }
-                duck.getWorld().spawnParticle(Particle.SMOKE, duck.getLocation().add(0, 0.2, 0), 1, 0.03, 0.03, 0.03, 0.01);
+                Location trail = duck.getLocation().clone().add(0, 0.1, 0);
+                duck.getWorld().spawnParticle(Particle.FLAME, trail, 4, 0.15, 0.05, 0.15, 0.01);
+                duck.getWorld().spawnParticle(Particle.SMOKE, trail, 2, 0.12, 0.04, 0.12, 0.01);
             }
         };
         ownedTasks.add(duckTask);
