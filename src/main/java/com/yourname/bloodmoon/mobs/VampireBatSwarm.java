@@ -10,8 +10,9 @@ import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.entity.Bat;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
-import org.bukkit.entity.Player;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
@@ -126,7 +127,7 @@ public final class VampireBatSwarm {
                 continue;
             }
 
-            Player target = owner.findNearestPlayer(bat.getLocation(), 32.0D);
+            LivingEntity target = findNearestTarget(bat.getLocation(), 32.0D);
             if (target == null) {
                 swirlNearOwner(bat);
                 continue;
@@ -142,7 +143,7 @@ public final class VampireBatSwarm {
         }
     }
 
-    private void moveTowardTarget(Bat bat, Player target) {
+    private void moveTowardTarget(Bat bat, LivingEntity target) {
         Vector direction = target.getEyeLocation().toVector().subtract(bat.getLocation().toVector());
         if (direction.lengthSquared() < 0.01D) {
             return;
@@ -165,7 +166,7 @@ public final class VampireBatSwarm {
         }
     }
 
-    private void tryContactDamage(Bat bat, Player target) {
+    private void tryContactDamage(Bat bat, LivingEntity target) {
         if (bat.getLocation().distanceSquared(target.getLocation()) > 1.6D) {
             return;
         }
@@ -179,6 +180,31 @@ public final class VampireBatSwarm {
         target.damage(1.0D, bat);
         target.getWorld().playSound(target.getLocation(), Sound.ENTITY_BAT_HURT, 0.4F, 1.3F);
         contactCooldowns.put(uuid, 20);
+    }
+
+    private LivingEntity findNearestTarget(Location center, double radius) {
+        World world = center.getWorld();
+        if (world == null) {
+            return null;
+        }
+
+        LivingEntity nearest = null;
+        double bestDistance = radius * radius;
+        for (Entity entity : world.getNearbyEntities(center, radius, 4.0D, radius)) {
+            if (!(entity instanceof LivingEntity living)
+                || entity.getType() == EntityType.BAT
+                || plugin.getNPCManager().isBloodMoonNpc(entity)
+                || living.isDead()
+                || !living.isValid()) {
+                continue;
+            }
+            double distance = living.getLocation().distanceSquared(center);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                nearest = living;
+            }
+        }
+        return nearest;
     }
 
     private void decrementCooldowns() {

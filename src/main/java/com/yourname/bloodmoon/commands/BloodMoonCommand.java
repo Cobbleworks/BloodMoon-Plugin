@@ -23,6 +23,11 @@ public final class BloodMoonCommand implements CommandExecutor {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length > 0 && "healthbar".equalsIgnoreCase(args[0])) {
+            handleHealthBar(sender, args);
+            return true;
+        }
+
         if (!sender.hasPermission("bloodmoon.admin")) {
             MessageUtils.send(sender, "§cYou do not have permission to use BloodMoon.");
             return true;
@@ -164,6 +169,36 @@ public final class BloodMoonCommand implements CommandExecutor {
         }
     }
 
+    private void handleHealthBar(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            MessageUtils.send(sender, "§cOnly players can toggle the vampire health bar.");
+            return;
+        }
+        if (!sender.hasPermission("bloodmoon.healthbar")) {
+            MessageUtils.send(sender, "§cYou do not have permission to use the vampire health bar.");
+            return;
+        }
+
+        if (args.length >= 2) {
+            switch (args[1].toLowerCase()) {
+                case "on" -> plugin.getVampireHealthBarManager().setEnabled(player, true);
+                case "off" -> plugin.getVampireHealthBarManager().setEnabled(player, false);
+                case "toggle" -> plugin.getVampireHealthBarManager().toggle(player);
+                default -> {
+                    MessageUtils.send(sender, "§cUsage: /bloodmoon healthbar [on|off|toggle]");
+                    return;
+                }
+            }
+        } else {
+            plugin.getVampireHealthBarManager().toggle(player);
+        }
+
+        boolean enabled = plugin.getVampireHealthBarManager().isEnabled(player);
+        MessageUtils.send(player, enabled
+            ? "§aNearest vampire health bar enabled."
+            : "§eNearest vampire health bar disabled.");
+    }
+
     private World resolveWorld(CommandSender sender, String name) {
         if (name != null) {
             return Bukkit.getWorld(name);
@@ -180,6 +215,9 @@ public final class BloodMoonCommand implements CommandExecutor {
 
     private void sendUsage(CommandSender sender) {
         MessageUtils.send(sender, "§4BloodMoon commands:");
+        if (sender instanceof Player player && player.hasPermission("bloodmoon.healthbar")) {
+            MessageUtils.send(sender, "§7/bloodmoon healthbar [on|off|toggle]");
+        }
         MessageUtils.send(sender, "§7/bloodmoon start [world]");
         MessageUtils.send(sender, "§7/bloodmoon stop [world]");
         MessageUtils.send(sender, "§7/bloodmoon status");

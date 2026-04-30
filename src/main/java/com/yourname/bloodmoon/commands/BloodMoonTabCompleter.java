@@ -16,18 +16,28 @@ import org.bukkit.entity.Player;
 public final class BloodMoonTabCompleter implements TabCompleter {
 
     private static final List<String> ROOT = List.of("start", "stop", "status", "spawn", "clear", "reload", "chance");
+    private static final List<String> PLAYER_ROOT = List.of("healthbar");
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (!sender.hasPermission("bloodmoon.admin")) {
-            return List.of();
-        }
-
         if (args.length == 1) {
-            return filter(ROOT, args[0]);
+            List<String> options = new ArrayList<>();
+            if (sender.hasPermission("bloodmoon.admin")) {
+                options.addAll(ROOT);
+            }
+            if (sender.hasPermission("bloodmoon.healthbar")) {
+                options.addAll(PLAYER_ROOT);
+            }
+            return filter(options, args[0]);
         }
 
         String sub = args[0].toLowerCase(Locale.ROOT);
+        if (args.length == 2 && "healthbar".equals(sub) && sender.hasPermission("bloodmoon.healthbar")) {
+            return filter(List.of("on", "off", "toggle"), args[1]);
+        }
+        if (!sender.hasPermission("bloodmoon.admin")) {
+            return List.of();
+        }
         if (args.length == 2 && "start".equals(sub)) {
             return filter(Bukkit.getWorlds().stream().map(World::getName).toList(), args[1]);
         }

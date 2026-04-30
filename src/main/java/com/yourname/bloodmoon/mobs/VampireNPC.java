@@ -19,6 +19,7 @@ import net.citizensnpcs.api.npc.NPC;
 import net.citizensnpcs.api.trait.Trait;
 import org.bukkit.Color;
 import org.bukkit.Bukkit;
+import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
@@ -44,6 +45,7 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.potion.PotionType;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 import org.mcmonkey.sentinel.SentinelTrait;
 import org.mcmonkey.sentinel.events.SentinelAttackEvent;
@@ -69,10 +71,11 @@ public final class VampireNPC {
     public enum VampireAbility {
         BLOOD_MAGIC(30),
         DRAIN_LIFE(18),
+        HEMOPLAGUE(10),
         BAT_FORM_ESCAPE(8),
         SUMMON_BATS(14),
         SHADOW_DASH(16),
-        FEAR_SHRIEK(8),
+        TIDES_OF_BLOOD(12),
         BLOOD_SHIELD(6);
 
         private final int weight;
@@ -94,16 +97,28 @@ public final class VampireNPC {
     private static final int BAT_MOVE_INTERVAL = 5;
     private static final int BAT_PROXIMITY_INTERVAL = 10;
     private static final int SHADOW_DASH_COOLDOWN = 300;
-    private static final int FEAR_SHRIEK_COOLDOWN = 500;
+    private static final int TIDES_OF_BLOOD_COOLDOWN = 420;
     private static final int BAT_ESCAPE_COOLDOWN = 360;
     private static final int BLOOD_SHIELD_DURATION = 100;
     private static final int BLOOD_SHIELD_COOLDOWN = 1200;
     private static final int BLOOD_MAGIC_COOLDOWN = 80;
-    private static final int DRAIN_LIFE_COOLDOWN = 120;
+    private static final int DRAIN_LIFE_COOLDOWN = 180;
+    private static final int HEMOPLAGUE_COOLDOWN = 260;
     private static final int SUMMON_BATS_COOLDOWN = 180;
     private static final int DEATH_REMOVE_DELAY = 60;
     private static final int MAX_SUMMONED_BATS = 6;
+    private static final int DRAIN_LIFE_DURATION_TICKS = 8;
+    private static final int HEMOPLAGUE_MARK_TICKS = 140;
     private static final double MELEE_BLEED_GRACE_TICKS = 10.0D;
+    private static final double DRAIN_LIFE_RANGE = 6.0D;
+    private static final double DRAIN_LIFE_TICK_DAMAGE = 4.0D;
+    private static final double DRAIN_LIFE_EMPOWERED_MULTIPLIER = 1.55D;
+    private static final double HEMOPLAGUE_RADIUS = 4.5D;
+    private static final double HEMOPLAGUE_EXPLOSION_DAMAGE = 6.0D;
+    private static final double HEMOPLAGUE_HEAL_MULTIPLIER = 1.00D;
+    private static final double HEMOPLAGUE_DAMAGE_BONUS = 1.20D;
+    private static final double TIDES_OF_BLOOD_RANGE = 7.0D;
+    private static final double TIDES_OF_BLOOD_BOLT_DAMAGE = 3.0D;
     private static final Particle.DustOptions BLOOD_DUST = new Particle.DustOptions(Color.fromRGB(140, 0, 0), 1.2F);
     private static final Particle.DustOptions DARK_BLOOD_DUST = new Particle.DustOptions(Color.fromRGB(80, 0, 0), 1.0F);
     private static final Particle.DustOptions BRIGHT_BLOOD_DUST = new Particle.DustOptions(Color.fromRGB(190, 0, 0), 1.45F);
@@ -114,6 +129,7 @@ public final class VampireNPC {
     private final Random random;
     private final Map<VampireAbility, Integer> cooldowns;
     private final Map<UUID, Long> bleedApplicationTicks;
+    private final Map<UUID, BukkitRunnable> hemoplagueMarks;
     private final List<BukkitRunnable> ownedTasks;
     private final VampireBatSwarm batSwarm;
     private VampireState state;
@@ -145,6 +161,7 @@ public final class VampireNPC {
         this.random = new Random();
         this.cooldowns = new EnumMap<>(VampireAbility.class);
         this.bleedApplicationTicks = new HashMap<>();
+        this.hemoplagueMarks = new HashMap<>();
         this.ownedTasks = new ArrayList<>();
         this.batSwarm = new VampireBatSwarm(plugin, this);
         this.state = VampireState.DISGUISED_BAT;
@@ -210,6 +227,16 @@ public final class VampireNPC {
             return entity.getLocation();
         }
         return lastKnownLocation == null ? spawnLocation.clone() : lastKnownLocation.clone();
+    }
+
+    public double getCurrentHealth() {
+        LivingEntity entity = getLivingEntity();
+        return entity == null ? plugin.getConfigManager().getVampireHealth() : Math.max(0.0D, entity.getHealth());
+    }
+
+    public double getMaximumHealth() {
+        LivingEntity entity = getLivingEntity();
+        return entity == null ? plugin.getConfigManager().getVampireHealth() : getMaxHealth(entity);
     }
 
     /**
@@ -342,6 +369,7 @@ public final class VampireNPC {
         }
         cleanedUp = true;
         cancelControllerOnly();
+        clearHemoplagueMarks();
         cancelOwnedTasks();
         removeDisguiseBat();
         removeEscapeBat();
@@ -807,7 +835,11 @@ public final class VampireNPC {
         stateBeforeCasting = state == VampireState.BAT_FORM_ESCAPE ? VampireState.COMBAT : state;
         state = VampireState.CASTING;
         stateTicks = 0;
-        castingDurationTicks = random.nextInt(11) + 20;
+        castingDurationTicks = switch (ability) {
+            case HEMOPLAGUE -> random.nextInt(11) + 30;
+            case TIDES_OF_BLOOD -> random.nextInt(9) + 34;
+            default -> random.nextInt(11) + 20;
+        };
         Navigator navigator = npc.getNavigator();
         navigator.cancelNavigation();
         Location location = getCurrentLocation();
@@ -848,9 +880,10 @@ public final class VampireNPC {
         switch (ability) {
             case BLOOD_MAGIC -> spawnBloodMagicCastingParticles(world, base);
             case DRAIN_LIFE -> spawnDrainLifeCastingParticles(world, base);
+            case HEMOPLAGUE -> spawnHemoplagueCastingParticles(world, base);
             case SUMMON_BATS -> spawnSummonBatsCastingParticles(world, base);
             case SHADOW_DASH -> spawnShadowDashCastingParticles(world, base);
-            case FEAR_SHRIEK -> spawnFearShriekCastingParticles(world, base);
+            case TIDES_OF_BLOOD -> spawnTidesOfBloodCastingParticles(world, base);
             case BLOOD_SHIELD -> spawnBloodShieldCastingParticles(world, base);
             case BAT_FORM_ESCAPE -> spawnGenericCastingRing(world, base);
         }
@@ -873,9 +906,10 @@ public final class VampireNPC {
         switch (ability) {
             case BLOOD_MAGIC -> animateBloodMagicCasting(player);
             case DRAIN_LIFE -> animateDrainLifeCasting(player);
+            case HEMOPLAGUE -> animateHemoplagueCasting(player);
             case SUMMON_BATS -> animateSummonBatsCasting(player);
             case SHADOW_DASH -> animateShadowDashCasting(player);
-            case FEAR_SHRIEK -> animateFearShriekCasting(player);
+            case TIDES_OF_BLOOD -> animateTidesOfBloodCasting(player);
             case BLOOD_SHIELD -> animateBloodShieldCasting(player);
             case BAT_FORM_ESCAPE -> animateEscapeCasting(player);
         }
@@ -899,12 +933,20 @@ public final class VampireNPC {
 
     private void spawnBloodMagicCastingParticles(World world, Location base) {
         spawnGenericCastingRing(world, base);
-        double angle = stateTicks * 0.38D;
-        for (int step = 0; step < 2; step++) {
-            double offset = angle + (step * Math.PI);
-            Location handPoint = base.clone().add(Math.cos(offset) * 0.5D, 1.15D, Math.sin(offset) * 0.5D);
-            world.spawnParticle(Particle.DUST, handPoint, 2, 0.08D, 0.12D, 0.08D, 0.0D, BRIGHT_BLOOD_DUST);
-            world.spawnParticle(Particle.CRIT, handPoint, 1, 0.04D, 0.04D, 0.04D, 0.0D);
+        double angle = stateTicks * 0.42D;
+        for (int step = 0; step < 3; step++) {
+            double offset = angle + (step * ((Math.PI * 2.0D) / 3.0D));
+            double radius = 0.48D + Math.sin((stateTicks * 0.25D) + step) * 0.08D;
+            double height = 1.0D + (step * 0.16D);
+            Location handPoint = base.clone().add(Math.cos(offset) * radius, height, Math.sin(offset) * radius);
+            world.spawnParticle(Particle.DUST, handPoint, 3, 0.07D, 0.10D, 0.07D, 0.0D, BRIGHT_BLOOD_DUST);
+            world.spawnParticle(Particle.DUST_COLOR_TRANSITION, handPoint, 2, 0.03D, 0.03D, 0.03D, 0.0D,
+                new Particle.DustTransition(Color.fromRGB(90, 0, 0), Color.fromRGB(220, 20, 20), 1.35F));
+            world.spawnParticle(Particle.ENCHANT, handPoint, 1, 0.01D, 0.01D, 0.01D, 0.0D);
+        }
+        if (stateTicks % 5 == 0) {
+            Location crown = base.clone().add(0.0D, 1.8D, 0.0D);
+            world.spawnParticle(Particle.CRIT, crown, 6, 0.22D, 0.08D, 0.22D, 0.02D);
         }
     }
 
@@ -915,54 +957,105 @@ public final class VampireNPC {
         }
         Location source = base.clone().add(0.0D, 1.2D, 0.0D);
         Location destination = target.getEyeLocation();
-        for (int step = 0; step < 4; step++) {
-            double progress = ((stateTicks * 0.08D) + (step * 0.18D)) % 1.0D;
+        for (int step = 0; step < 6; step++) {
+            double progress = ((stateTicks * 0.11D) + (step * 0.14D)) % 1.0D;
             Location point = source.clone().add(destination.clone().subtract(source).toVector().multiply(progress));
-            world.spawnParticle(Particle.DUST, point, 1, 0.04D, 0.04D, 0.04D, 0.0D, DARK_BLOOD_DUST);
+            world.spawnParticle(Particle.DUST, point, 1, 0.03D, 0.03D, 0.03D, 0.0D, DARK_BLOOD_DUST);
+            world.spawnParticle(Particle.DUST_COLOR_TRANSITION, point, 1, 0.02D, 0.02D, 0.02D, 0.0D,
+                new Particle.DustTransition(Color.fromRGB(60, 0, 0), Color.fromRGB(180, 0, 0), 1.0F));
             world.spawnParticle(Particle.DAMAGE_INDICATOR, point, 1, 0.02D, 0.02D, 0.02D, 0.0D);
         }
     }
 
+    private void spawnHemoplagueCastingParticles(World world, Location base) {
+        spawnGenericCastingRing(world, base);
+        double angle = stateTicks * 0.34D;
+        for (int step = 0; step < 8; step++) {
+            double offset = angle + (step * ((Math.PI * 2.0D) / 8.0D));
+            double radius = 0.8D + Math.sin((stateTicks * 0.18D) + step) * 0.18D;
+            double height = 0.45D + (step % 3) * 0.28D;
+            Location point = base.clone().add(Math.cos(offset) * radius, height, Math.sin(offset) * radius);
+            world.spawnParticle(Particle.DUST, point, 2, 0.04D, 0.06D, 0.04D, 0.0D, BRIGHT_BLOOD_DUST);
+            world.spawnParticle(Particle.DUST, point, 1, 0.03D, 0.05D, 0.03D, 0.0D, DARK_BLOOD_DUST);
+            if (step % 2 == 0) {
+                world.spawnParticle(Particle.SMOKE, point, 1, 0.02D, 0.03D, 0.02D, 0.01D);
+            }
+        }
+    }
+
     private void spawnSummonBatsCastingParticles(World world, Location base) {
-        double angle = stateTicks * 0.6D;
-        for (int step = 0; step < 6; step++) {
-            double offset = angle + (step * ((Math.PI * 2.0D) / 6.0D));
-            Location point = base.clone().add(Math.cos(offset) * 0.9D, 0.3D + (step % 2) * 0.35D, Math.sin(offset) * 0.9D);
-            world.spawnParticle(Particle.PORTAL, point, 2, 0.06D, 0.08D, 0.06D, 0.01D);
-            world.spawnParticle(Particle.SMOKE, point, 1, 0.03D, 0.03D, 0.03D, 0.01D);
+        double angle = stateTicks * 0.72D;
+        for (int step = 0; step < 10; step++) {
+            double offset = angle + (step * ((Math.PI * 2.0D) / 10.0D));
+            double radius = 0.7D + (step % 2) * 0.45D;
+            double height = 0.2D + ((step % 4) * 0.22D);
+            Location point = base.clone().add(Math.cos(offset) * radius, height, Math.sin(offset) * radius);
+            world.spawnParticle(Particle.PORTAL, point, 2, 0.05D, 0.06D, 0.05D, 0.02D);
+            world.spawnParticle(Particle.SMOKE, point, 2, 0.03D, 0.03D, 0.03D, 0.015D);
+            world.spawnParticle(Particle.SOUL, point, 1, 0.02D, 0.02D, 0.02D, 0.005D);
+        }
+        if (stateTicks % 6 == 0) {
+            world.playSound(base, Sound.ENTITY_BAT_TAKEOFF, 0.35F, 0.8F + (random.nextFloat() * 0.5F));
         }
     }
 
     private void spawnShadowDashCastingParticles(World world, Location base) {
-        double angle = stateTicks * 0.85D;
-        for (int step = 0; step < 5; step++) {
-            double offset = angle + (step * ((Math.PI * 2.0D) / 5.0D));
-            Location point = base.clone().add(Math.cos(offset) * 0.85D, 0.15D, Math.sin(offset) * 0.85D);
-            world.spawnParticle(Particle.SMOKE, point, 2, 0.05D, 0.03D, 0.05D, 0.02D);
+        double angle = stateTicks * 1.05D;
+        for (int step = 0; step < 9; step++) {
+            double offset = angle + (step * ((Math.PI * 2.0D) / 9.0D));
+            double radius = 0.35D + (step * 0.08D);
+            Location point = base.clone().add(Math.cos(offset) * radius, 0.05D + (step % 3) * 0.18D, Math.sin(offset) * radius);
+            world.spawnParticle(Particle.SMOKE, point, 2, 0.04D, 0.02D, 0.04D, 0.018D);
             world.spawnParticle(Particle.DUST, point, 1, 0.03D, 0.02D, 0.03D, 0.0D, DARK_BLOOD_DUST);
+            if (step % 2 == 0) {
+                world.spawnParticle(Particle.CRIT, point, 1, 0.01D, 0.01D, 0.01D, 0.0D);
+            }
         }
     }
 
-    private void spawnFearShriekCastingParticles(World world, Location base) {
-        double angle = stateTicks * 0.5D;
-        for (int step = 0; step < 8; step++) {
-            double offset = angle + (step * ((Math.PI * 2.0D) / 8.0D));
-            Location point = base.clone().add(Math.cos(offset) * 1.2D, 1.1D, Math.sin(offset) * 1.2D);
-            world.spawnParticle(Particle.DAMAGE_INDICATOR, point, 1, 0.04D, 0.04D, 0.04D, 0.0D);
-            world.spawnParticle(Particle.SMOKE, point, 1, 0.03D, 0.03D, 0.03D, 0.01D);
+    private void spawnTidesOfBloodCastingParticles(World world, Location base) {
+        Location orbCenter = base.clone().add(0.0D, 2.1D + Math.sin(stateTicks * 0.10D) * 0.12D, 0.0D);
+        world.spawnParticle(Particle.DUST, orbCenter, 8, 0.18D, 0.16D, 0.18D, 0.0D, BRIGHT_BLOOD_DUST);
+        world.spawnParticle(Particle.DUST, orbCenter, 4, 0.14D, 0.12D, 0.14D, 0.0D, DARK_BLOOD_DUST);
+
+        double orbit = stateTicks * 0.34D;
+        for (int step = 0; step < 10; step++) {
+            double angle = orbit + step * ((Math.PI * 2.0D) / 10.0D);
+            double radius = 0.18D + (step % 3) * 0.08D;
+            Location point = orbCenter.clone().add(Math.cos(angle) * radius, Math.sin(angle * 1.7D) * 0.11D, Math.sin(angle) * radius);
+            world.spawnParticle(Particle.DUST, point, 1, 0.02D, 0.02D, 0.02D, 0.0D, BRIGHT_BLOOD_DUST);
+            if (step % 2 == 0) {
+                world.spawnParticle(Particle.CRIT, point, 1, 0.01D, 0.01D, 0.01D, 0.0D);
+            }
+        }
+
+        for (int strand = 0; strand < 6; strand++) {
+            double phase = stateTicks * 0.22D + strand;
+            double x = Math.cos(phase) * 0.32D;
+            double z = Math.sin(phase) * 0.32D;
+            Location handArc = base.clone().add(x, 1.05D + strand * 0.16D, z);
+            world.spawnParticle(Particle.DUST, handArc, 1, 0.015D, 0.015D, 0.015D, 0.0D, DARK_BLOOD_DUST);
+        }
+
+        if (stateTicks % 7 == 0) {
+            world.playSound(base, Sound.BLOCK_BREWING_STAND_BREW, 0.25F, 0.55F);
         }
     }
 
     private void spawnBloodShieldCastingParticles(World world, Location base) {
-        double angle = stateTicks * 0.3D;
-        for (int step = 0; step < 10; step++) {
-            double offset = angle + (step * ((Math.PI * 2.0D) / 10.0D));
-            double height = 0.35D + ((step % 3) * 0.45D);
-            Location point = base.clone().add(Math.cos(offset) * 1.05D, height, Math.sin(offset) * 1.05D);
+        double angle = stateTicks * 0.34D;
+        for (int step = 0; step < 14; step++) {
+            double offset = angle + (step * ((Math.PI * 2.0D) / 14.0D));
+            double height = 0.25D + ((step % 4) * 0.38D);
+            double radius = 0.9D + ((step % 3) * 0.12D);
+            Location point = base.clone().add(Math.cos(offset) * radius, height, Math.sin(offset) * radius);
             world.spawnParticle(Particle.DUST, point, 2, 0.04D, 0.06D, 0.04D, 0.0D, BLOOD_DUST);
             if (step % 2 == 0) {
                 world.spawnParticle(Particle.WITCH, point, 1, 0.02D, 0.02D, 0.02D, 0.0D);
             }
+        }
+        if (stateTicks % 6 == 0) {
+            world.playSound(base, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.25F, 0.45F);
         }
     }
 
@@ -992,33 +1085,49 @@ public final class VampireNPC {
         }
     }
 
-    private void animateSummonBatsCasting(Player player) {
-        if (stateTicks % 3 == 0) {
+    private void animateHemoplagueCasting(Player player) {
+        if (stateTicks % 4 == 0) {
+            playCitizensPlayerAnimation(player, "START_USE_MAINHAND_ITEM");
+            playCitizensPlayerAnimation(player, "START_USE_OFFHAND_ITEM");
+        }
+        if (stateTicks % 8 == 0) {
+            player.swingMainHand();
+            playCitizensPlayerAnimation(player, "ARM_SWING");
+        }
+        if (stateTicks % 12 == 0) {
             player.swingOffHand();
             playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
         }
-        if (stateTicks % 6 == 0) {
+    }
+
+    private void animateSummonBatsCasting(Player player) {
+        if (stateTicks % 2 == 0) {
+            player.swingOffHand();
+            playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
+        }
+        if (stateTicks % 5 == 0) {
             player.swingMainHand();
             playCitizensPlayerAnimation(player, "ARM_SWING");
         }
     }
 
     private void animateShadowDashCasting(Player player) {
-        if (stateTicks % 3 == 0) {
+        if (stateTicks % 2 == 0) {
             player.swingMainHand();
             playCitizensPlayerAnimation(player, "ARM_SWING");
         }
-        if (stateTicks % 6 == 0) {
+        if (stateTicks % 4 == 0) {
             player.swingOffHand();
             playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
         }
     }
 
-    private void animateFearShriekCasting(Player player) {
-        if (stateTicks % 4 == 0) {
-            player.swingMainHand();
+    private void animateTidesOfBloodCasting(Player player) {
+        if (stateTicks % 3 == 0) {
+            playCitizensPlayerAnimation(player, "START_USE_MAINHAND_ITEM");
+        }
+        if (stateTicks % 9 == 0) {
             player.swingOffHand();
-            playCitizensPlayerAnimation(player, "ARM_SWING");
             playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
         }
     }
@@ -1060,10 +1169,11 @@ public final class VampireNPC {
         switch (ability) {
             case BLOOD_MAGIC -> castBloodMagic();
             case DRAIN_LIFE -> castDrainLife();
+            case HEMOPLAGUE -> castHemoplague();
             case BAT_FORM_ESCAPE -> castBatFormEscape();
             case SUMMON_BATS -> castSummonBats();
             case SHADOW_DASH -> castShadowDash();
-            case FEAR_SHRIEK -> castFearShriek();
+            case TIDES_OF_BLOOD -> castTidesOfBlood();
             case BLOOD_SHIELD -> castBloodShield();
         }
     }
@@ -1082,6 +1192,15 @@ public final class VampireNPC {
             int weight = ability.getWeight();
             if (ability == VampireAbility.DRAIN_LIFE && isBelowHealthPercent(0.30D)) {
                 weight *= 2;
+            }
+            if (ability == VampireAbility.HEMOPLAGUE) {
+                int hemoplagueTargets = findHemoplagueTargets(player).size();
+                if (hemoplagueTargets < 2) {
+                    continue;
+                }
+                if (hemoplagueTargets >= 3) {
+                    weight += 6;
+                }
             }
             if (ability == VampireAbility.BLOOD_SHIELD && (!isBelowHealthPercent(0.50D) || shieldUsed)) {
                 continue;
@@ -1116,12 +1235,27 @@ public final class VampireNPC {
         }
         return switch (ability) {
             case BLOOD_SHIELD -> !shieldUsed && !shielded;
+            case HEMOPLAGUE -> target != null && target.isOnline() && !target.isDead() && findHemoplagueTargets(target).size() >= 2;
             case SUMMON_BATS -> batSwarm.size() < MAX_SUMMONED_BATS;
             case SHADOW_DASH -> target != null && target.isOnline() && !target.isDead();
-            case FEAR_SHRIEK -> true;
+            case TIDES_OF_BLOOD -> countNearbyHostiles(getCurrentLocation(), TIDES_OF_BLOOD_RANGE) > 0;
             case BAT_FORM_ESCAPE -> target != null && target.isOnline() && !target.isDead();
             case BLOOD_MAGIC, DRAIN_LIFE -> target != null && target.isOnline() && !target.isDead();
         };
+    }
+
+    private int countNearbyHostiles(Location center, double radius) {
+        World world = center.getWorld();
+        if (world == null) {
+            return 0;
+        }
+        int count = 0;
+        for (Entity entity : world.getNearbyEntities(center, radius, 3.5D, radius)) {
+            if (entity instanceof LivingEntity living && isValidHemoplagueTarget(living)) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private void setCooldown(VampireAbility ability, int ticks) {
@@ -1152,6 +1286,9 @@ public final class VampireNPC {
         World world = start.getWorld();
         if (world != null) {
             world.playSound(start, Sound.ENTITY_ILLUSIONER_CAST_SPELL, 1.0F, 0.55F);
+            world.playSound(start, Sound.BLOCK_BREWING_STAND_BREW, 0.65F, 0.75F);
+            world.spawnParticle(Particle.DUST, start, 18, 0.35D, 0.25D, 0.35D, 0.0D, BRIGHT_BLOOD_DUST);
+            world.spawnParticle(Particle.ENCHANT, start, 14, 0.45D, 0.25D, 0.45D, 0.02D);
         }
         for (int index = 0; index < 3; index++) {
             BloodMagicProjectile projectile = new BloodMagicProjectile(plugin, caster, player, start.clone().add(0.0D, index * 0.12D, 0.0D), index);
@@ -1162,47 +1299,60 @@ public final class VampireNPC {
     }
 
     private void castDrainLife() {
-        Player player = ensureTarget(8.0D);
+        Player player = ensureTarget(DRAIN_LIFE_RANGE);
         LivingEntity vampire = getLivingEntity();
-        if (player == null || vampire == null || !vampire.hasLineOfSight(player)) {
+        if (player == null || vampire == null || !hasClearBloodPath(vampire, player, DRAIN_LIFE_RANGE)) {
             state = VampireState.COMBAT;
             return;
         }
+
+        final boolean empowered = isBelowHealthPercent(0.30D);
+        final double drainDamage = DRAIN_LIFE_TICK_DAMAGE * (empowered ? DRAIN_LIFE_EMPOWERED_MULTIPLIER : 1.0D);
 
         setCooldown(VampireAbility.DRAIN_LIFE, DRAIN_LIFE_COOLDOWN);
         Location location = vampire.getLocation();
         World world = location.getWorld();
         if (world != null) {
-            world.playSound(location, Sound.ENTITY_GUARDIAN_ATTACK, 1.0F, 1.5F);
+            playDrainLifeSound(location);
+            if (empowered) {
+                world.playSound(location, Sound.ENTITY_ENDER_DRAGON_GROWL, 0.35F, 1.65F);
+                world.spawnParticle(Particle.DUST, location.clone().add(0.0D, 1.2D, 0.0D), 24, 0.45D, 0.35D, 0.45D, 0.0D, BRIGHT_BLOOD_DUST);
+            }
         }
-        player.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 50, 0, true, true, true));
 
         BukkitRunnable drainTask = new BukkitRunnable() {
             private int ticks;
 
             @Override
             public void run() {
-                if (ticks > 40 || player.isDead() || !player.isOnline() || !npc.isSpawned()) {
+                if (ticks > DRAIN_LIFE_DURATION_TICKS || player.isDead() || !player.isOnline() || !npc.isSpawned()) {
                     cancel();
                     return;
                 }
 
                 LivingEntity currentVampire = getLivingEntity();
-                if (currentVampire == null || currentVampire.isDead()) {
+                if (currentVampire == null || currentVampire.isDead() || !hasClearBloodPath(currentVampire, player, DRAIN_LIFE_RANGE)) {
                     cancel();
                     return;
                 }
 
-                if (ticks % 2 == 0) {
-                    drawDrainBeam(currentVampire, player);
+                drawDrainStream(player, currentVampire, ticks * 2);
+
+                if (ticks == 0 || ticks == 4) {
+                    playDrainLifePulse(player.getLocation());
                 }
 
-                if (ticks % 5 == 0) {
-                    player.damage(0.5D, currentVampire);
-                    healVampire(0.5D);
+                if (ticks >= DRAIN_LIFE_DURATION_TICKS) {
+                    double beforeHealth = player.getHealth();
+                    player.damage(drainDamage, currentVampire);
+                    double actualDamage = Math.max(0.0D, beforeHealth - Math.max(0.0D, player.getHealth()));
+                    healVampire(actualDamage);
                     Location vLoc = currentVampire.getLocation().add(0.0D, 1.1D, 0.0D);
-                    currentVampire.getWorld().spawnParticle(Particle.DAMAGE_INDICATOR, vLoc, 6, 0.35D, 0.35D, 0.35D, 0.02D);
-                    currentVampire.getWorld().spawnParticle(Particle.DUST, vLoc, 8, 0.35D, 0.35D, 0.35D, 0.0D, BRIGHT_BLOOD_DUST);
+                    currentVampire.getWorld().spawnParticle(Particle.DAMAGE_INDICATOR, vLoc, 8, 0.25D, 0.3D, 0.25D, 0.02D);
+                    currentVampire.getWorld().spawnParticle(Particle.DUST, vLoc, 14, 0.28D, 0.25D, 0.28D, 0.0D, BRIGHT_BLOOD_DUST);
+                    currentVampire.getWorld().spawnParticle(Particle.DUST, vLoc, 6, 0.2D, 0.18D, 0.2D, 0.0D, DARK_BLOOD_DUST);
+                    cancel();
+                    return;
                 }
                 ticks++;
             }
@@ -1213,24 +1363,355 @@ public final class VampireNPC {
         stateTicks = 0;
     }
 
-    private void drawDrainBeam(LivingEntity vampire, Player player) {
-        Location start = vampire.getEyeLocation();
-        Location end = player.getEyeLocation();
+    private void castHemoplague() {
+        Player primaryTarget = ensureTarget(20.0D);
+        LivingEntity vampire = getLivingEntity();
+        if (primaryTarget == null || vampire == null || !hasClearBloodPath(vampire, primaryTarget, 20.0D)) {
+            state = VampireState.COMBAT;
+            return;
+        }
+
+        List<LivingEntity> targets = findHemoplagueTargets(primaryTarget);
+        if (targets.size() < 2) {
+            state = VampireState.COMBAT;
+            return;
+        }
+
+        setCooldown(VampireAbility.HEMOPLAGUE, HEMOPLAGUE_COOLDOWN);
+        Location epicenter = primaryTarget.getLocation().clone().add(0.0D, 0.2D, 0.0D);
+        World world = epicenter.getWorld();
+        if (world != null) {
+            spawnHemoplagueBurst(world, epicenter, targets.size());
+            spawnHemoplaguePool(epicenter);
+            playHemoplagueCastSound(epicenter);
+        }
+
+        for (LivingEntity marked : targets) {
+            applyHemoplagueMark(marked);
+        }
+        state = VampireState.COMBAT;
+        stateTicks = 0;
+    }
+
+    private void drawDrainStream(LivingEntity source, LivingEntity vampire, int animationTick) {
+        drawBloodStream(source.getEyeLocation().subtract(0.0D, 0.2D, 0.0D), vampire.getEyeLocation().subtract(0.0D, 0.15D, 0.0D), animationTick, 3, 0.34D, 0.18D, true);
+    }
+
+    private void drawBloodStream(Location start, Location end, int animationTick, int strands, double waveStrength, double widthScale, boolean spawnMist) {
         World world = start.getWorld();
+        if (world == null || end.getWorld() != world) {
+            return;
+        }
+
+        Vector vector = end.toVector().subtract(start.toVector());
+        double length = vector.length();
+        if (length <= 0.15D) {
+            return;
+        }
+
+        Vector direction = vector.clone().normalize();
+        Vector lateral = direction.clone().crossProduct(new Vector(0.0D, 1.0D, 0.0D));
+        if (lateral.lengthSquared() < 1.0E-4D) {
+            lateral = direction.clone().crossProduct(new Vector(1.0D, 0.0D, 0.0D));
+        }
+        lateral.normalize();
+        Vector vertical = lateral.clone().crossProduct(direction).normalize();
+
+        for (int strand = 0; strand < strands; strand++) {
+            double phase = (animationTick * 0.42D) + (strand * 2.1D);
+            for (double progress = 0.0D; progress <= 1.0D; progress += 0.06D) {
+                double coreWidth = Math.sin(progress * Math.PI) * widthScale;
+                double ribbon = Math.sin((progress * Math.PI * 2.6D) + phase) * waveStrength * (0.45D + (coreWidth * 0.75D));
+                double lift = Math.sin(progress * Math.PI) * 0.34D;
+                double sway = Math.cos((progress * Math.PI * 3.2D) + phase * 0.8D) * 0.08D;
+                Vector offset = lateral.clone().multiply(ribbon + (strand - ((strands - 1) / 2.0D)) * 0.08D)
+                    .add(vertical.clone().multiply(lift + sway));
+                Location point = start.clone().add(vector.clone().multiply(progress)).add(offset);
+                world.spawnParticle(Particle.DUST, point, 1, 0.01D, 0.01D, 0.01D, 0.0D, BRIGHT_BLOOD_DUST);
+                world.spawnParticle(Particle.DUST, point, 1, 0.015D, 0.015D, 0.015D, 0.0D, DARK_BLOOD_DUST);
+                if (spawnMist && progress > 0.08D && progress < 0.92D && strand == 1) {
+                    world.spawnParticle(Particle.SMOKE, point, 1, 0.008D, 0.008D, 0.008D, 0.005D);
+                }
+            }
+        }
+    }
+
+    private boolean hasClearBloodPath(LivingEntity source, LivingEntity target, double maxDistance) {
+        if (source == null || target == null || source.getWorld() != target.getWorld()) {
+            return false;
+        }
+        if (source.getLocation().distanceSquared(target.getLocation()) > maxDistance * maxDistance) {
+            return false;
+        }
+        return hasLineWithoutBlocking(source.getEyeLocation(), target.getEyeLocation())
+            && hasLineWithoutBlocking(source.getEyeLocation(), target.getLocation().add(0.0D, 1.0D, 0.0D));
+    }
+
+    private boolean hasLineWithoutBlocking(Location from, Location to) {
+        World world = from.getWorld();
+        if (world == null || to.getWorld() != world) {
+            return false;
+        }
+        Vector direction = to.toVector().subtract(from.toVector());
+        double distance = direction.length();
+        if (distance <= 0.01D) {
+            return true;
+        }
+        RayTraceResult hit = world.rayTraceBlocks(from, direction.normalize(), distance, FluidCollisionMode.NEVER, true);
+        return hit == null || hit.getHitBlock() == null;
+    }
+
+    private void playDrainLifeSound(Location location) {
+        World world = location.getWorld();
         if (world == null) {
             return;
         }
-        Vector vector = end.toVector().subtract(start.toVector());
-        double length = vector.length();
-        if (length <= 0.1D) {
+        world.playSound(location, Sound.BLOCK_BUBBLE_COLUMN_WHIRLPOOL_INSIDE, 1.1F, 1.35F);
+        world.playSound(location, Sound.BLOCK_HONEY_BLOCK_BREAK, 0.7F, 0.6F);
+        world.playSound(location, Sound.ENTITY_GENERIC_DRINK, 0.55F, 0.75F);
+    }
+
+    private void playDrainLifePulse(Location location) {
+        World world = location.getWorld();
+        if (world == null) {
             return;
         }
-        Vector step = vector.normalize().multiply(0.35D);
-        Location cursor = start.clone();
-        for (double traveled = 0.0D; traveled < length; traveled += 0.35D) {
-            world.spawnParticle(Particle.CRIT, cursor, 1, 0.02D, 0.02D, 0.02D, 0.0D);
-            cursor.add(step);
+        world.playSound(location, Sound.BLOCK_HONEY_BLOCK_STEP, 0.45F, 0.7F);
+        world.playSound(location, Sound.ENTITY_PLAYER_BREATH, 0.35F, 0.55F);
+    }
+
+    private List<LivingEntity> findHemoplagueTargets(LivingEntity primaryTarget) {
+        World world = primaryTarget.getWorld();
+        Location center = primaryTarget.getLocation();
+        List<LivingEntity> targets = new ArrayList<>();
+        if (!isValidHemoplagueTarget(primaryTarget)) {
+            return targets;
         }
+        targets.add(primaryTarget);
+        for (Entity entity : world.getNearbyEntities(center, HEMOPLAGUE_RADIUS, 3.0D, HEMOPLAGUE_RADIUS)) {
+            if (!(entity instanceof LivingEntity living) || living.equals(primaryTarget) || !isValidHemoplagueTarget(living)) {
+                continue;
+            }
+            targets.add(living);
+        }
+        targets.sort(Comparator.comparingDouble(entity -> entity.getLocation().distanceSquared(center)));
+        return targets;
+    }
+
+    private boolean isValidHemoplagueTarget(LivingEntity entity) {
+        LivingEntity vampire = getLivingEntity();
+        return entity != null
+            && !entity.isDead()
+            && entity.isValid()
+            && entity.getType() != EntityType.ARMOR_STAND
+            && entity.getType() != EntityType.BAT
+            && entity != vampire
+            && !plugin.getNPCManager().isBloodMoonNpc(entity);
+    }
+
+    private void spawnHemoplagueBurst(World world, Location center, int targetCount) {
+        double radius = 1.8D + (targetCount * 0.2D);
+        for (double angle = 0.0D; angle < Math.PI * 2.0D; angle += Math.PI / 14.0D) {
+            Vector direction = new Vector(Math.cos(angle), 0.08D, Math.sin(angle)).multiply(radius);
+            Location point = center.clone().add(direction);
+            world.spawnParticle(Particle.DUST, point, 4, 0.12D, 0.05D, 0.12D, 0.0D, BRIGHT_BLOOD_DUST);
+            world.spawnParticle(Particle.DAMAGE_INDICATOR, point, 2, 0.08D, 0.05D, 0.08D, 0.0D);
+        }
+        world.spawnParticle(Particle.DUST, center.clone().add(0.0D, 0.8D, 0.0D), 32, 0.85D, 0.55D, 0.85D, 0.0D, DARK_BLOOD_DUST);
+        world.spawnParticle(Particle.SMOKE, center.clone().add(0.0D, 0.5D, 0.0D), 20, 0.6D, 0.25D, 0.6D, 0.04D);
+    }
+
+    private void spawnHemoplaguePool(Location center) {
+        BukkitRunnable poolTask = new BukkitRunnable() {
+            private int ticks;
+
+            @Override
+            public void run() {
+                if (ticks > HEMOPLAGUE_MARK_TICKS) {
+                    cancel();
+                    return;
+                }
+
+                World world = center.getWorld();
+                if (world == null) {
+                    cancel();
+                    return;
+                }
+
+                Location base = center.clone().add(0.0D, 0.08D, 0.0D);
+                double phase = ticks * 0.09D;
+                for (double radius = 0.45D; radius <= HEMOPLAGUE_RADIUS + 0.45D; radius += 0.32D) {
+                    int points = Math.max(10, (int) Math.round(radius * 18.0D));
+                    for (int step = 0; step < points; step++) {
+                        double angle = ((Math.PI * 2.0D) / points) * step + phase + (radius * 0.18D);
+                        double ripple = Math.sin((ticks * 0.12D) + step * 0.7D) * 0.07D;
+                        Location point = base.clone().add(Math.cos(angle) * (radius + ripple), 0.0D, Math.sin(angle) * (radius + ripple));
+                        world.spawnParticle(Particle.DUST, point, 1, 0.03D, 0.01D, 0.03D, 0.0D, step % 3 == 0 ? BRIGHT_BLOOD_DUST : DARK_BLOOD_DUST);
+                    }
+                }
+
+                for (int blotch = 0; blotch < 8; blotch++) {
+                    double angle = phase + (blotch * ((Math.PI * 2.0D) / 8.0D));
+                    double radius = 0.55D + Math.sin((ticks * 0.08D) + blotch) * 0.35D;
+                    Location point = base.clone().add(Math.cos(angle) * radius, 0.02D, Math.sin(angle) * radius);
+                    world.spawnParticle(Particle.DUST, point, 2, 0.08D, 0.01D, 0.08D, 0.0D, BRIGHT_BLOOD_DUST);
+                }
+
+                if (ticks % 20 == 0) {
+                    world.playSound(base, Sound.BLOCK_BUBBLE_COLUMN_WHIRLPOOL_INSIDE, 0.25F, 0.85F);
+                    world.playSound(base, Sound.BLOCK_HONEY_BLOCK_STEP, 0.3F, 0.55F);
+                }
+                ticks += 2;
+            }
+        };
+        ownedTasks.add(poolTask);
+        poolTask.runTaskTimer(plugin, 0L, 2L);
+    }
+
+    private void playHemoplagueCastSound(Location location) {
+        World world = location.getWorld();
+        if (world == null) {
+            return;
+        }
+        world.playSound(location, Sound.BLOCK_SLIME_BLOCK_BREAK, 1.0F, 0.55F);
+        world.playSound(location, Sound.BLOCK_HONEY_BLOCK_BREAK, 0.9F, 0.45F);
+        world.playSound(location, Sound.ENTITY_WITHER_AMBIENT, 0.45F, 1.55F);
+    }
+
+    private void applyHemoplagueMark(LivingEntity victim) {
+        removeHemoplagueMark(victim.getUniqueId());
+        World world = victim.getWorld();
+        Location location = victim.getLocation().clone().add(0.0D, 1.0D, 0.0D);
+        world.spawnParticle(Particle.DUST, location, 22, 0.45D, 0.65D, 0.45D, 0.0D, BRIGHT_BLOOD_DUST);
+        world.spawnParticle(Particle.DUST, location, 12, 0.35D, 0.55D, 0.35D, 0.0D, DARK_BLOOD_DUST);
+        world.playSound(location, Sound.ENTITY_GENERIC_DRINK, 0.55F, 0.6F);
+
+        BukkitRunnable markTask = new BukkitRunnable() {
+            private int ticks;
+
+            @Override
+            public void run() {
+                LivingEntity currentVampire = getLivingEntity();
+                if (currentVampire == null || currentVampire.isDead() || victim.isDead() || !victim.isValid()) {
+                    removeHemoplagueMark(victim.getUniqueId());
+                    return;
+                }
+
+                spawnHemoplagueMarkPulse(victim, ticks);
+                if (ticks >= HEMOPLAGUE_MARK_TICKS) {
+                    removeHemoplagueMark(victim.getUniqueId());
+                    detonateHemoplague(victim);
+                    return;
+                }
+
+                if (ticks % 20 == 0) {
+                    victim.getWorld().playSound(victim.getLocation(), Sound.BLOCK_BUBBLE_COLUMN_WHIRLPOOL_INSIDE, 0.28F, 1.7F);
+                }
+                ticks += 2;
+            }
+        };
+        hemoplagueMarks.put(victim.getUniqueId(), markTask);
+        ownedTasks.add(markTask);
+        markTask.runTaskTimer(plugin, 0L, 2L);
+    }
+
+    private void spawnHemoplagueMarkPulse(LivingEntity victim, int animationTick) {
+        Location center = victim.getLocation().clone().add(0.0D, 1.0D, 0.0D);
+        World world = center.getWorld();
+        if (world == null) {
+            return;
+        }
+        double pulse = 0.28D + (Math.sin(animationTick * 0.14D) * 0.08D);
+        for (int step = 0; step < 6; step++) {
+            double angle = (Math.PI * 2.0D / 6.0D) * step + (animationTick * 0.06D);
+            Location point = center.clone().add(Math.cos(angle) * pulse, (step % 3) * 0.28D - 0.35D, Math.sin(angle) * pulse);
+            world.spawnParticle(Particle.DUST, point, 1, 0.03D, 0.03D, 0.03D, 0.0D, BRIGHT_BLOOD_DUST);
+            world.spawnParticle(Particle.SMOKE, point, 1, 0.01D, 0.01D, 0.01D, 0.01D);
+        }
+    }
+
+    private void detonateHemoplague(LivingEntity victim) {
+        LivingEntity vampire = getLivingEntity();
+        if (vampire == null || vampire.isDead()) {
+            return;
+        }
+
+        Location center = victim.getLocation().clone().add(0.0D, 1.0D, 0.0D);
+        World world = center.getWorld();
+        if (world == null) {
+            return;
+        }
+
+        world.spawnParticle(Particle.DUST, center, 36, 0.55D, 0.75D, 0.55D, 0.0D, BRIGHT_BLOOD_DUST);
+        world.spawnParticle(Particle.DUST, center, 22, 0.45D, 0.65D, 0.45D, 0.0D, DARK_BLOOD_DUST);
+        world.spawnParticle(Particle.DAMAGE_INDICATOR, center, 18, 0.45D, 0.55D, 0.45D, 0.02D);
+        world.playSound(center, Sound.BLOCK_SLIME_BLOCK_BREAK, 0.95F, 0.7F);
+        world.playSound(center, Sound.ENTITY_PLAYER_HURT, 0.75F, 0.5F);
+
+        double beforeHealth = victim.getHealth();
+        victim.damage(HEMOPLAGUE_EXPLOSION_DAMAGE, vampire);
+        double actualDamage = Math.max(0.0D, beforeHealth - Math.max(0.0D, victim.getHealth()));
+        if (actualDamage <= 0.0D) {
+            return;
+        }
+        launchHemoplagueHealStream(victim, actualDamage);
+    }
+
+    private void launchHemoplagueHealStream(LivingEntity source, double healAmount) {
+        BukkitRunnable streamTask = new BukkitRunnable() {
+            private int tick;
+
+            @Override
+            public void run() {
+                LivingEntity currentVampire = getLivingEntity();
+                if (currentVampire == null || currentVampire.isDead() || source.isDead() || !source.isValid()) {
+                    cancel();
+                    return;
+                }
+
+                drawBloodStream(source.getLocation().add(0.0D, 1.0D, 0.0D), currentVampire.getEyeLocation().subtract(0.0D, 0.2D, 0.0D), tick, 3, 0.42D, 0.22D, true);
+                if (tick == 0) {
+                    source.getWorld().playSound(source.getLocation(), Sound.BLOCK_BUBBLE_COLUMN_WHIRLPOOL_INSIDE, 0.5F, 1.45F);
+                }
+                if (tick >= 10) {
+                    healVampire(healAmount * HEMOPLAGUE_HEAL_MULTIPLIER);
+                    Location healPoint = currentVampire.getLocation().add(0.0D, 1.1D, 0.0D);
+                    currentVampire.getWorld().spawnParticle(Particle.DUST, healPoint, 12, 0.25D, 0.25D, 0.25D, 0.0D, BRIGHT_BLOOD_DUST);
+                    currentVampire.getWorld().spawnParticle(Particle.DAMAGE_INDICATOR, healPoint, 6, 0.2D, 0.25D, 0.2D, 0.02D);
+                    cancel();
+                    return;
+                }
+                tick++;
+            }
+        };
+        ownedTasks.add(streamTask);
+        streamTask.runTaskTimer(plugin, 0L, 1L);
+    }
+
+    private void removeHemoplagueMark(UUID victimId) {
+        BukkitRunnable existing = hemoplagueMarks.remove(victimId);
+        if (existing != null) {
+            ownedTasks.remove(existing);
+            try {
+                existing.cancel();
+            } catch (IllegalStateException ignored) {
+                // Defensive cleanup for tasks that may already be completed.
+            }
+        }
+    }
+
+    private void clearHemoplagueMarks() {
+        for (UUID victimId : List.copyOf(hemoplagueMarks.keySet())) {
+            removeHemoplagueMark(victimId);
+        }
+    }
+
+    public boolean isHemoplagueMarked(LivingEntity entity) {
+        return entity != null && hemoplagueMarks.containsKey(entity.getUniqueId());
+    }
+
+    public double getHemoplagueDamageMultiplier(LivingEntity entity) {
+        return isHemoplagueMarked(entity) ? HEMOPLAGUE_DAMAGE_BONUS : 1.0D;
     }
 
     private void castSummonBats() {
@@ -1245,9 +1726,11 @@ public final class VampireNPC {
         if (world != null) {
             world.spawnParticle(Particle.PORTAL, location, 30, 0.9D, 0.8D, 0.9D, 0.18D);
             world.spawnParticle(Particle.SMOKE, location, 30, 0.7D, 0.7D, 0.7D, 0.04D);
+            world.spawnParticle(Particle.SOUL, location, 24, 0.75D, 0.65D, 0.75D, 0.01D);
             world.playSound(location, Sound.ENTITY_BAT_LOOP, 0.8F, 0.7F);
             world.playSound(location, Sound.ENTITY_BAT_LOOP, 0.8F, 0.9F);
             world.playSound(location, Sound.ENTITY_BAT_LOOP, 0.8F, 1.1F);
+            world.playSound(location, Sound.ENTITY_PHANTOM_FLAP, 0.45F, 1.2F);
         }
         batSwarm.spawn(location, 3);
         state = VampireState.COMBAT;
@@ -1267,6 +1750,8 @@ public final class VampireNPC {
         World world = origin.getWorld();
         if (world != null) {
             world.spawnParticle(Particle.SMOKE, origin, 35, 0.5D, 0.6D, 0.5D, 0.08D);
+            world.spawnParticle(Particle.PORTAL, origin, 22, 0.45D, 0.55D, 0.45D, 0.18D);
+            world.spawnParticle(Particle.DUST, origin, 18, 0.32D, 0.38D, 0.32D, 0.0D, DARK_BLOOD_DUST);
             world.playSound(origin, Sound.ENTITY_ENDERMAN_TELEPORT, 0.9F, 0.55F);
         }
         ensureNpcSpawned(destination);
@@ -1274,6 +1759,8 @@ public final class VampireNPC {
         setNpcVisible();
         if (destination.getWorld() != null) {
             destination.getWorld().spawnParticle(Particle.SMOKE, destination, 35, 0.5D, 0.6D, 0.5D, 0.08D);
+            destination.getWorld().spawnParticle(Particle.PORTAL, destination, 22, 0.45D, 0.55D, 0.45D, 0.18D);
+            destination.getWorld().spawnParticle(Particle.DUST, destination, 18, 0.32D, 0.38D, 0.32D, 0.0D, DARK_BLOOD_DUST);
             destination.getWorld().playSound(destination, Sound.ENTITY_ENDERMAN_TELEPORT, 0.9F, 0.85F);
         }
 
@@ -1338,40 +1825,99 @@ public final class VampireNPC {
         return ground.getType().isSolid() && feet.isPassable() && head.isPassable();
     }
 
-    private void castFearShriek() {
-        setCooldown(VampireAbility.FEAR_SHRIEK, FEAR_SHRIEK_COOLDOWN);
+    private void castTidesOfBlood() {
+        setCooldown(VampireAbility.TIDES_OF_BLOOD, TIDES_OF_BLOOD_COOLDOWN);
         Location location = getCurrentLocation();
         World world = location.getWorld();
         if (world == null) {
             state = VampireState.COMBAT;
             return;
         }
-        world.playSound(location, Sound.ENTITY_WITHER_AMBIENT, 1.0F, 0.4F);
-        spawnShriekRing(world, location);
-        double radiusSquared = 10.0D * 10.0D;
-        for (Player player : world.getPlayers()) {
-            if (player.getLocation().distanceSquared(location) > radiusSquared) {
-                continue;
-            }
-            player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 100, 1, true, true, true));
-            player.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS, 60, 0, true, true, true));
-            Vector knockback = player.getLocation().toVector().subtract(location.toVector());
-            if (knockback.lengthSquared() < 0.01D) {
-                knockback = new Vector(randomDouble(-1.0D, 1.0D), 0.0D, randomDouble(-1.0D, 1.0D));
-            }
-            knockback.normalize().multiply(0.8D);
-            knockback.setY(0.35D);
-            player.setVelocity(knockback);
+
+        LivingEntity vampire = getLivingEntity();
+        if (vampire == null) {
+            state = VampireState.COMBAT;
+            return;
         }
+
+        Location orb = location.clone().add(0.0D, 2.15D, 0.0D);
+        world.playSound(location, Sound.BLOCK_BREWING_STAND_BREW, 0.8F, 0.5F);
+        world.playSound(location, Sound.ENTITY_EVOKER_PREPARE_ATTACK, 0.7F, 0.65F);
+        world.spawnParticle(Particle.DUST, orb, 34, 0.35D, 0.28D, 0.35D, 0.0D, BRIGHT_BLOOD_DUST);
+        world.spawnParticle(Particle.DUST, orb, 18, 0.28D, 0.22D, 0.28D, 0.0D, DARK_BLOOD_DUST);
+
+        BukkitRunnable tideTask = new BukkitRunnable() {
+            private int wave;
+            private final java.util.Set<UUID> hitTargets = new java.util.HashSet<>();
+
+            @Override
+            public void run() {
+                LivingEntity currentVampire = getLivingEntity();
+                if (currentVampire == null || currentVampire.isDead() || !npc.isSpawned() || wave >= 3) {
+                    cancel();
+                    return;
+                }
+                releaseTidesWave(currentVampire, hitTargets, wave);
+                wave++;
+            }
+        };
+        ownedTasks.add(tideTask);
+        tideTask.runTaskTimer(plugin, 4L, 4L);
+
         state = VampireState.COMBAT;
         stateTicks = 0;
     }
 
-    private void spawnShriekRing(World world, Location center) {
-        for (int index = 0; index < 48; index++) {
-            double angle = (Math.PI * 2.0D * index) / 48.0D;
-            Location point = center.clone().add(Math.cos(angle) * 2.5D, 0.25D, Math.sin(angle) * 2.5D);
-            world.spawnParticle(Particle.EXPLOSION, point, 1, 0.02D, 0.02D, 0.02D, 0.0D);
+    private void releaseTidesWave(LivingEntity vampire, java.util.Set<UUID> hitTargets, int wave) {
+        Location center = vampire.getLocation().clone().add(0.0D, 1.25D, 0.0D);
+        World world = center.getWorld();
+        if (world == null) {
+            return;
+        }
+
+        int bolts = 12 + (wave * 4);
+        for (int index = 0; index < bolts; index++) {
+            double angle = (Math.PI * 2.0D * index) / bolts + (wave * 0.25D);
+            Vector direction = new Vector(Math.cos(angle), 0.02D + wave * 0.01D, Math.sin(angle)).normalize();
+            traceTidesBolt(vampire, center, direction, hitTargets);
+        }
+
+        world.playSound(center, Sound.ENTITY_BLAZE_SHOOT, 0.45F, 0.55F + wave * 0.12F);
+        world.playSound(center, Sound.BLOCK_LAVA_POP, 0.35F, 0.6F + wave * 0.08F);
+    }
+
+    private void traceTidesBolt(LivingEntity vampire, Location start, Vector direction, java.util.Set<UUID> hitTargets) {
+        World world = start.getWorld();
+        if (world == null) {
+            return;
+        }
+
+        for (double distance = 0.4D; distance <= TIDES_OF_BLOOD_RANGE; distance += 0.4D) {
+            Location point = start.clone().add(direction.clone().multiply(distance));
+            world.spawnParticle(Particle.DUST, point, 1, 0.03D, 0.03D, 0.03D, 0.0D, BRIGHT_BLOOD_DUST);
+            world.spawnParticle(Particle.SMOKE, point, 1, 0.015D, 0.015D, 0.015D, 0.005D);
+
+            if (!point.getBlock().isPassable()) {
+                break;
+            }
+
+            for (Entity nearby : world.getNearbyEntities(point, 0.45D, 0.65D, 0.45D)) {
+                if (!(nearby instanceof LivingEntity victim)
+                    || victim.equals(vampire)
+                    || !isValidHemoplagueTarget(victim)
+                    || !hitTargets.add(victim.getUniqueId())) {
+                    continue;
+                }
+                double before = victim.getHealth();
+                victim.damage(TIDES_OF_BLOOD_BOLT_DAMAGE, vampire);
+                double actualDamage = Math.max(0.0D, before - Math.max(0.0D, victim.getHealth()));
+                if (actualDamage > 0.0D) {
+                    healVampire(actualDamage * 0.30D);
+                }
+                world.spawnParticle(Particle.DAMAGE_INDICATOR, victim.getLocation().add(0.0D, 1.0D, 0.0D), 6, 0.25D, 0.35D, 0.25D, 0.02D);
+                world.playSound(victim.getLocation(), Sound.ENTITY_PLAYER_HURT, 0.45F, 0.55F);
+                break;
+            }
         }
     }
 
@@ -1387,6 +1933,8 @@ public final class VampireNPC {
         World world = location.getWorld();
         if (world != null) {
             world.playSound(location, Sound.BLOCK_ENCHANTMENT_TABLE_USE, 1.0F, 0.65F);
+            world.playSound(location, Sound.ITEM_TOTEM_USE, 0.55F, 0.65F);
+            world.spawnParticle(Particle.DUST, location.clone().add(0.0D, 1.0D, 0.0D), 32, 0.75D, 0.95D, 0.75D, 0.0D, BLOOD_DUST);
         }
 
         BukkitRunnable shieldTask = new BukkitRunnable() {
@@ -1415,11 +1963,18 @@ public final class VampireNPC {
         if (world == null) {
             return;
         }
-        for (int index = 0; index < 4; index++) {
-            double angle = (ticks * 0.28D) + (index * Math.PI / 2.0D);
-            Location point = center.clone().add(Math.cos(angle) * 1.0D, 0.8D + Math.sin(ticks * 0.10D) * 0.25D, Math.sin(angle) * 1.0D);
-            world.spawnParticle(Particle.WITCH, point, 1, 0.02D, 0.02D, 0.02D, 0.0D);
-            world.spawnParticle(Particle.DUST, point, 1, 0.02D, 0.02D, 0.02D, 0.0D, BRIGHT_BLOOD_DUST);
+        for (int shell = 0; shell < 2; shell++) {
+            double baseRadius = 0.95D + shell * 0.28D;
+            for (int index = 0; index < 7; index++) {
+                double angle = (ticks * (0.24D + shell * 0.08D)) + (index * ((Math.PI * 2.0D) / 7.0D));
+                double height = 0.45D + (index % 3) * 0.42D + Math.sin((ticks * 0.11D) + index) * 0.08D;
+                Location point = center.clone().add(Math.cos(angle) * baseRadius, height, Math.sin(angle) * baseRadius);
+                world.spawnParticle(Particle.DUST, point, 1, 0.03D, 0.03D, 0.03D, 0.0D, BLOOD_DUST);
+                world.spawnParticle(Particle.CRIT, point, 1, 0.02D, 0.02D, 0.02D, 0.0D);
+            }
+        }
+        if (ticks % 8 == 0) {
+            world.playSound(center, Sound.BLOCK_AMETHYST_BLOCK_RESONATE, 0.18F, 0.5F);
         }
     }
 

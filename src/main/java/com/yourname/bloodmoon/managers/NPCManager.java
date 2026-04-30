@@ -77,10 +77,9 @@ public final class NPCManager {
         }
         Location location = findSpawnLocationNear(player);
         if (location == null) {
-            location = player.getLocation().clone().add(3.0D, 0.0D, 3.0D);
-            location.setY(player.getWorld().getHighestBlockYAt(location) + 1.0D);
+            return Optional.empty();
         }
-        return spawnVampire(location, player);
+        return spawnVampire(location, null);
     }
 
     public Optional<VampireNPC> spawnVampire(Location location, Player initialTarget) {
@@ -236,20 +235,22 @@ public final class NPCManager {
     private Location findSpawnLocationNear(Player player) {
         World world = player.getWorld();
         int radius = plugin.getConfigManager().getVampireSpawnRadius();
-        for (int attempt = 0; attempt < 32; attempt++) {
+        double minDistanceSquared = 24.0D * 24.0D;
+        Location playerLocation = player.getLocation();
+        for (int attempt = 0; attempt < 64; attempt++) {
             int dx = random.nextInt(radius * 2 + 1) - radius;
             int dz = random.nextInt(radius * 2 + 1) - radius;
-            if (Math.abs(dx) < 10 && Math.abs(dz) < 10) {
-                continue;
-            }
-            int x = player.getLocation().getBlockX() + dx;
-            int z = player.getLocation().getBlockZ() + dz;
+            int x = playerLocation.getBlockX() + dx;
+            int z = playerLocation.getBlockZ() + dz;
             Chunk chunk = world.getChunkAt(x >> 4, z >> 4);
             if (!chunk.isLoaded()) {
                 continue;
             }
             Block ground = world.getHighestBlockAt(x, z);
             Location candidate = ground.getLocation().add(0.5D, 1.0D, 0.5D);
+            if (candidate.distanceSquared(playerLocation) < minDistanceSquared) {
+                continue;
+            }
             if (isValidSpawnLocation(candidate)) {
                 return candidate;
             }

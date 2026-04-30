@@ -17,6 +17,8 @@ This document describes the current in-game implementation of the Blood Moon vam
 - Blood Moon trigger chance: `1 in 24` (`bloodmoon.chance: 24`).
 - Vampire max per player: `1` (`vampire.max-per-player: 1`).
 - Vampire pulse spawn chance while event is active: `0.18` per pulse attempt.
+- Event spawns now require a farther valid position (`>= 24` blocks from the checked player), and no close fallback spawn is used.
+- Event-spawned vampires start without a forced initial target, so they stalk first instead of hard-snapping into immediate combat.
 
 ## State machine
 
@@ -35,19 +37,21 @@ Weighted combat abilities:
 
 - `BLOOD_MAGIC` (weight 30)
 - `DRAIN_LIFE` (weight 18)
+- `HEMOPLAGUE` (weight 10)
 - `BAT_FORM_ESCAPE` (weight 8)
 - `SUMMON_BATS` (weight 14)
 - `SHADOW_DASH` (weight 16)
-- `FEAR_SHRIEK` (weight 8)
+- `TIDES_OF_BLOOD` (weight 12)
 - `BLOOD_SHIELD` (weight 6)
 
 Cooldown constants (ticks):
 
 - Blood Magic: `80`
-- Drain Life: `120`
+- Drain Life: `180`
+- Hemoplague: `260`
 - Summon Bats: `180`
 - Shadow Dash: `300`
-- Fear Shriek: `500`
+- Tides of Blood: `420`
 - Bat Form Escape: `360`
 - Blood Shield: `1200`
 - Blood Shield duration: `100`
@@ -55,9 +59,15 @@ Cooldown constants (ticks):
 ## Combat behavior notes
 
 - Melee applies bleed chance logic through the plugin bleed system.
+- Drain Life is empowered below `30%` HP (`x1.55` drain damage).
+- Hemoplague now heals for `100%` of explosion damage dealt.
+- Tides of Blood replaced the old fear/wither-style spell.
+- Tides of Blood behavior: charges a blood orb above the vampire, then fires radial blood bolts in waves up to `7` blocks.
 - Blood Shield reduces incoming damage while active.
 - Summoned bat swarm cap: `6`.
-- Casting now includes visible main-hand and off-hand animation during spell charge so the vampire keeps moving while casting without using a crouch pose.
+- Swarm bats now target nearby living entities (players and non-BloodMoon NPCs), not only players.
+- Vampire and tracked BloodMoon bats ignore fall damage.
+- Casting includes visible hand usage/arm swings so spell prep reads clearly as a mini-boss cast.
 
 ## Audio feedback
 

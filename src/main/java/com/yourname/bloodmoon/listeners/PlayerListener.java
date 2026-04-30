@@ -7,11 +7,13 @@ import java.util.Map;
 import java.util.UUID;
 import org.bukkit.Material;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
@@ -28,15 +30,37 @@ public final class PlayerListener implements Listener {
         this.plugin = plugin;
     }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
-        if (!(event.getEntity() instanceof Player player)) {
+        Entity damager = event.getDamager();
+        boolean bloodMoonBat = plugin.getNPCManager().getActiveBatIds().contains(damager.getUniqueId());
+        VampireNPC vampire = plugin.getNPCManager().getVampire(damager);
+
+        if (event.isCancelled() && (vampire != null || bloodMoonBat) && event.getEntity() instanceof LivingEntity) {
+            event.setCancelled(false);
+        }
+
+        if (event.isCancelled()) {
             return;
         }
-        Entity damager = event.getDamager();
-        VampireNPC vampire = plugin.getNPCManager().getVampire(damager);
-        if (vampire != null) {
+
+        if (vampire != null && event.getEntity() instanceof LivingEntity livingEntity) {
+            event.setDamage(event.getDamage() * vampire.getHemoplagueDamageMultiplier(livingEntity));
+        }
+        if (vampire != null && event.getEntity() instanceof Player player) {
             vampire.onMeleeHit(player);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onEntityDamage(EntityDamageEvent event) {
+        if (event.getCause() != EntityDamageEvent.DamageCause.FALL) {
+            return;
+        }
+        Entity entity = event.getEntity();
+        if (plugin.getNPCManager().isBloodMoonNpc(entity)
+            || plugin.getNPCManager().getActiveBatIds().contains(entity.getUniqueId())) {
+            event.setCancelled(true);
         }
     }
 

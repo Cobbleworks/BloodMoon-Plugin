@@ -8,6 +8,7 @@ import com.yourname.bloodmoon.listeners.NPCListener;
 import com.yourname.bloodmoon.listeners.PlayerListener;
 import com.yourname.bloodmoon.managers.BloodMoonManager;
 import com.yourname.bloodmoon.managers.NPCManager;
+import com.yourname.bloodmoon.managers.VampireHealthBarManager;
 import com.yourname.bloodmoon.utils.ConfigManager;
 import java.util.Objects;
 import org.bukkit.command.PluginCommand;
@@ -25,6 +26,7 @@ public final class BloodMoonPlugin extends JavaPlugin {
     private BloodMoonManager bloodMoonManager;
     private NPCManager npcManager;
     private BleedEffect bleedEffect;
+    private VampireHealthBarManager vampireHealthBarManager;
 
     /**
      * Gets the active plugin instance.
@@ -50,11 +52,13 @@ public final class BloodMoonPlugin extends JavaPlugin {
         bleedEffect = new BleedEffect(this);
         npcManager = new NPCManager(this);
         bloodMoonManager = new BloodMoonManager(this);
+        vampireHealthBarManager = new VampireHealthBarManager(this);
 
         registerListeners();
         registerCommand();
 
         bloodMoonManager.start();
+        vampireHealthBarManager.start();
         getServer().getScheduler().runTask(this, () -> npcManager.initializeCitizens());
         getLogger().info("BloodMoon Event enabled.");
     }
@@ -67,6 +71,9 @@ public final class BloodMoonPlugin extends JavaPlugin {
         }
         if (bleedEffect != null) {
             bleedEffect.cancelAll();
+        }
+        if (vampireHealthBarManager != null) {
+            vampireHealthBarManager.stop();
         }
         if (npcManager != null) {
             npcManager.cleanupAll();
@@ -110,6 +117,10 @@ public final class BloodMoonPlugin extends JavaPlugin {
      */
     public BleedEffect getBleedEffect() {
         return bleedEffect;
+    }
+
+    public VampireHealthBarManager getVampireHealthBarManager() {
+        return vampireHealthBarManager;
     }
 
     private boolean hasRequiredDependencies() {
