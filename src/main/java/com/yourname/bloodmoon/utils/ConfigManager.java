@@ -209,6 +209,30 @@ public final class ConfigManager {
             "rhzvhjIEuVPiVeh6n0YPLphl3CDbClnNiKE4QUUX0Zbsm4kxMT0xvjAWC8ELt9y0oFt6IDoP2bBd3Gyrm90Zbn6G4P8fcFI8HPMeDKzjPm1R/vVqtBsy9c4yhQuR0Lc2LaeLMIOp9vXgTTX0/2GraXtRzhP6KjtV+Mt5eZe+zqca66k5ZlJkEuIibPpKtyN3EHiitLhZzUIpJcahy1v3XV5RTkEbAhRs/y5MeyK94t04wLBwAlA9jdgaQZB0Um1jj8n+yB8DninFtJc7kQKjcQlLpnmR7qCj7X03pOVJAlIFfgEfkhmo8w27qwbw+Or1Mbc5/i8fGJmDqQ+HUHEy9UgBDRla87B2gVVp5wdqLTp/fSPHMttBI36QryQDMX8EOIztKnlq3cKv6u8P/mjLEG7NEvAFLDsniPo6D6IkYEENqbdJNvuKmmNtOlNWxVKMH8JbiYV1jgDwD8T6F9AFv9CysYHuel2SP57QM4qjctFiZtztEj4reYE8TbyvpIZqCirqgsg7IjFyHTekiOPqg2L1JKseD44FFgcKFM+27A9i20j3qa+jH6fecd/7uBtV9Ea/mb0O28f9/2vdg0zK9HM7FFsVWiPufrMP8+xGkiSHDPFDlKsqSK2F81WX+795CKxNPcI9aI8aS8y8gVfQQurG+BwcWnJ/f3ZkPfF/0Pw=");
     }
 
+    public double getScarecrowHealth() {
+        return Math.max(1.0D, getConfig().getDouble("scarecrow.health", 42.0D));
+    }
+
+    public int getScarecrowMaxPerPlayer() {
+        return Math.max(0, getConfig().getInt("scarecrow.max-per-player", 1));
+    }
+
+    public int getScarecrowSpawnRadius() {
+        return Math.max(8, getConfig().getInt("scarecrow.spawn-radius", 48));
+    }
+
+    public String getScarecrowSkinName() {
+        return getConfig().getString("scarecrow.skin-name", "bloodmoon_scarecrow");
+    }
+
+    public String getScarecrowSkinTexture() {
+        return getConfig().getString("scarecrow.skin-texture", "");
+    }
+
+    public String getScarecrowSkinSignature() {
+        return getConfig().getString("scarecrow.skin-signature", "");
+    }
+
     public double getBleedChance() {
         return Math.max(0.0D, Math.min(1.0D, getConfig().getDouble("bleed.chance", 0.4D)));
     }
@@ -284,6 +308,12 @@ public final class ConfigManager {
             "ewogICJ0aW1lc3RhbXAiIDogMTY4MzgxNTIwMzQyMiwKICAicHJvZmlsZUlkIiA6ICI1NWQ4NzcyODJmMDc0MWM5ODMyNjBhZDQ3OGE4ODNhMSIsCiAgInByb2ZpbGVOYW1lIiA6ICJUYW1ha2lfSXJvaGExIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzljNWZhYzlkMjE2NGM4NTEwZTYzZDA3NmU5MDBmYWZhZGNjNDcxNWQ4MDQyMTQzNGNjZTJmZGZkMGJiMDE1OCIsCiAgICAgICJtZXRhZGF0YSIgOiB7CiAgICAgICAgIm1vZGVsIiA6ICJzbGltIgogICAgICB9CiAgICB9CiAgfQp9");
         config.addDefault("witch.skin-signature",
             "rhzvhjIEuVPiVeh6n0YPLphl3CDbClnNiKE4QUUX0Zbsm4kxMT0xvjAWC8ELt9y0oFt6IDoP2bBd3Gyrm90Zbn6G4P8fcFI8HPMeDKzjPm1R/vVqtBsy9c4yhQuR0Lc2LaeLMIOp9vXgTTX0/2GraXtRzhP6KjtV+Mt5eZe+zqca66k5ZlJkEuIibPpKtyN3EHiitLhZzUIpJcahy1v3XV5RTkEbAhRs/y5MeyK94t04wLBwAlA9jdgaQZB0Um1jj8n+yB8DninFtJc7kQKjcQlLpnmR7qCj7X03pOVJAlIFfgEfkhmo8w27qwbw+Or1Mbc5/i8fGJmDqQ+HUHEy9UgBDRla87B2gVVp5wdqLTp/fSPHMttBI36QryQDMX8EOIztKnlq3cKv6u8P/mjLEG7NEvAFLDsniPo6D6IkYEENqbdJNvuKmmNtOlNWxVKMH8JbiYV1jgDwD8T6F9AFv9CysYHuel2SP57QM4qjctFiZtztEj4reYE8TbyvpIZqCirqgsg7IjFyHTekiOPqg2L1JKseD44FFgcKFM+27A9i20j3qa+jH6fecd/7uBtV9Ea/mb0O28f9/2vdg0zK9HM7FFsVWiPufrMP8+xGkiSHDPFDlKsqSK2F81WX+795CKxNPcI9aI8aS8y8gVfQQurG+BwcWnJ/f3ZkPfF/0Pw=");
+        config.addDefault("scarecrow.health", 42.0D);
+        config.addDefault("scarecrow.max-per-player", 1);
+        config.addDefault("scarecrow.spawn-radius", 48);
+        config.addDefault("scarecrow.skin-name", "bloodmoon_scarecrow");
+        config.addDefault("scarecrow.skin-texture", "");
+        config.addDefault("scarecrow.skin-signature", "");
         config.addDefault("bleed.chance", 0.4D);
         config.addDefault("bleed.damage-per-tick", 1.0D);
         config.addDefault("bleed.interval-ticks", 40);
