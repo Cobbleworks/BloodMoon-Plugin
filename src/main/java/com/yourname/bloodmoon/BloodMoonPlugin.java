@@ -3,6 +3,7 @@ package com.yourname.bloodmoon;
 import com.yourname.bloodmoon.commands.BloodMoonCommand;
 import com.yourname.bloodmoon.commands.BloodMoonTabCompleter;
 import com.yourname.bloodmoon.effects.BleedEffect;
+import com.yourname.bloodmoon.effects.InfectionEffect;
 import com.yourname.bloodmoon.listeners.BloodMoonListener;
 import com.yourname.bloodmoon.listeners.NPCListener;
 import com.yourname.bloodmoon.listeners.PlayerListener;
@@ -26,6 +27,7 @@ public final class BloodMoonPlugin extends JavaPlugin {
     private BloodMoonManager bloodMoonManager;
     private NPCManager npcManager;
     private BleedEffect bleedEffect;
+    private InfectionEffect infectionEffect;
     private VampireHealthBarManager vampireHealthBarManager;
 
     /**
@@ -50,6 +52,7 @@ public final class BloodMoonPlugin extends JavaPlugin {
         configManager.load();
 
         bleedEffect = new BleedEffect(this);
+        infectionEffect = new InfectionEffect(this);
         npcManager = new NPCManager(this);
         bloodMoonManager = new BloodMoonManager(this);
         vampireHealthBarManager = new VampireHealthBarManager(this);
@@ -71,6 +74,9 @@ public final class BloodMoonPlugin extends JavaPlugin {
         }
         if (bleedEffect != null) {
             bleedEffect.cancelAll();
+        }
+        if (infectionEffect != null) {
+            infectionEffect.cancelAll();
         }
         if (vampireHealthBarManager != null) {
             vampireHealthBarManager.stop();
@@ -117,6 +123,10 @@ public final class BloodMoonPlugin extends JavaPlugin {
      */
     public BleedEffect getBleedEffect() {
         return bleedEffect;
+    }
+
+    public InfectionEffect getInfectionEffect() {
+        return infectionEffect;
     }
 
     public VampireHealthBarManager getVampireHealthBarManager() {

@@ -94,6 +94,7 @@ public final class BloodMoonCommand implements CommandExecutor {
             + (plugin.getBloodMoonManager().hasChanceOverride() ? " §e(temporary override)" : ""));
         MessageUtils.send(sender, "§7Active vampires: §f" + plugin.getNPCManager().getActiveVampires().size());
         MessageUtils.send(sender, "§7Active clowns: §f" + plugin.getNPCManager().getActiveClowns().size());
+        MessageUtils.send(sender, "§7Active zombies: §f" + plugin.getNPCManager().getActiveZombies().size());
         MessageUtils.send(sender, "§7Tracked bats: §f" + plugin.getNPCManager().getActiveBatIds().size());
         MessageUtils.send(sender, "§7System mode: §fNPC-only enemies");
         for (World world : Bukkit.getWorlds()) {
@@ -107,7 +108,7 @@ public final class BloodMoonCommand implements CommandExecutor {
 
     private void handleSpawn(CommandSender sender, String[] args) {
         if (args.length < 3) {
-            MessageUtils.send(sender, "§cUsage: /bloodmoon spawn <vampire> <player>");
+            MessageUtils.send(sender, "§cUsage: /bloodmoon spawn <vampire|clown|zombie> <player>");
             return;
         }
         Player player = Bukkit.getPlayerExact(args[2]);
@@ -122,7 +123,13 @@ public final class BloodMoonCommand implements CommandExecutor {
             case "clown" -> plugin.getNPCManager().spawnClownNear(player).ifPresentOrElse(
                 c -> MessageUtils.send(sender, "§aSpawned clown near §e" + player.getName() + "§a."),
                 () -> MessageUtils.send(sender, "§cCould not spawn clown here right now."));
-            default -> MessageUtils.send(sender, "§cUnknown type. Use: vampire or clown.");
+            case "zombie" -> {
+                boolean spawned = plugin.getNPCManager().spawnZombieNear(player);
+                MessageUtils.send(sender, spawned
+                    ? "§aSpawned shambling zombie near §e" + player.getName() + "§a."
+                    : "§cCould not spawn zombie here right now.");
+            }
+            default -> MessageUtils.send(sender, "§cUnknown type. Use: vampire, clown, or zombie.");
         }
     }
 
@@ -225,7 +232,7 @@ public final class BloodMoonCommand implements CommandExecutor {
         MessageUtils.send(sender, "§7/bloodmoon start [world]");
         MessageUtils.send(sender, "§7/bloodmoon stop [world]");
         MessageUtils.send(sender, "§7/bloodmoon status");
-        MessageUtils.send(sender, "§7/bloodmoon spawn <vampire|clown> <player>");
+        MessageUtils.send(sender, "§7/bloodmoon spawn <vampire|clown|zombie> <player>");
 
         MessageUtils.send(sender, "§7/bloodmoon clear [world]");
         MessageUtils.send(sender, "§7/bloodmoon reload");
