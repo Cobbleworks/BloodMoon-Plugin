@@ -74,6 +74,8 @@ public final class WitchNPC {
     // Deadly Spell accumulator
     private double deadlySpellAccumulated = 0.0D;
     private boolean brandActive = false;
+    // Evasive warp cooldown (ticks)
+    private int warpCooldown = 0;
 
     private WitchState state = WitchState.COMBAT;
     private WitchState beforeCast = WitchState.COMBAT;
@@ -123,7 +125,6 @@ public final class WitchNPC {
     public void handleSentinelAttack(SentinelAttackEvent event) {
         if (!(event.getTarget() instanceof Player player) || state == WitchState.DEAD) return;
         target = player;
-        plugin.getDecayPlagueEffect().applyStack(player);
     }
 
     public void startDeathSequence() {
@@ -258,6 +259,7 @@ public final class WitchNPC {
         if (cleaned || deathStarted) return;
         stateTicks++;
         cooldowns.replaceAll((k, v) -> Math.max(0, v - 1));
+        if (warpCooldown > 0) warpCooldown--;
         onTraitTick();
 
         if (state == WitchState.CASTING) { tickCasting(); return; }
@@ -269,6 +271,12 @@ public final class WitchNPC {
         Player player = ensureTarget(48.0D);
         if (player == null) { player = findNearestPlayer(getCurrentLocation(), 48.0D); target = player; }
         if (player == null) return;
+
+        // Evasive warp every 3-4.5 s
+        if (warpCooldown <= 0 && stateTicks > 20) {
+            doEvasiveWarp();
+            warpCooldown = 60 + random.nextInt(30);
+        }
 
         npc.getNavigator().setTarget(player, true);
         npc.faceLocation(player.getEyeLocation());
@@ -958,7 +966,6 @@ public final class WitchNPC {
                 }
                 if (caster != null && player.getLocation().distanceSquared(cur) <= 6.0D) {
                     player.damage(2.0D, caster);
-                    plugin.getDecayPlagueEffect().applyStack(player);
                 }
                 world.playSound(from, Sound.BLOCK_NOTE_BLOCK_PLING, 0.3F, 1.5F + random.nextFloat() * 0.5F);
             }
@@ -1135,6 +1142,44 @@ public final class WitchNPC {
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    /** Short-range evasive warp used during combat to make the witch difficult to target. */
+    private void doEvasiveWarp() {
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) return;
+        Location origin = entity.getLocation();
+        World world = origin.getWorld();
+        if (world == null) return;
+        double angle = random.nextDouble() * Math.PI * 2.0D;
+        double dist  = 3.0D + random.nextDouble() * 4.0D;
+        Location dest = origin.clone().add(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
+        dest.setY(world.getHighestBlockYAt(dest) + 1.0D);
+        dest.setYaw(origin.getYaw()); dest.setPitch(origin.getPitch());
+        world.spawnParticle(Particle.DUST,  origin.clone().add(0, 1, 0), 12, 0.4, 0.5, 0.4, 0, DUST_VIOLET);
+        world.spawnParticle(Particle.SMOKE, origin.clone().add(0, 1, 0),  6, 0.3, 0.3, 0.3, 0.03);
+        world.playSound(origin, Sound.ENTITY_ENDERMAN_TELEPORT, 0.45F, 1.6F);
+        npc.teleport(dest, PlayerTeleportEvent.TeleportCause.PLUGIN);
+        world.spawnParticle(Particle.DUST, dest.clone().add(0, 1, 0), 8, 0.3, 0.4, 0.3, 0, DUST_VIOLET);
+    }
+
+    /** Reflects an incoming arrow back at the shooter at high speed. */
+    public void reflectArrow(org.bukkit.entity.Arrow incomingArrow, Player shooter) {
+        LivingEntity caster = getLivingEntity();
+        if (caster == null) return;
+        Location from = caster.getEyeLocation();
+        World world = from.getWorld();
+        if (world == null) return;
+        incomingArrow.remove();
+        Vector dir = shooter.getEyeLocation().toVector().subtract(from.toVector());
+        if (dir.lengthSquared() > 0.001D) dir.normalize();
+        org.bukkit.entity.Arrow reflected = world.spawn(from, org.bukkit.entity.Arrow.class);
+        reflected.setShooter(caster);
+        reflected.setVelocity(dir.multiply(3.5D));
+        reflected.setDamage(6.0D);
+        world.playSound(from, Sound.ENTITY_WITCH_CELEBRATE, 0.7F, 1.8F);
+        world.spawnParticle(Particle.CRIT, from, 10, 0.3, 0.3, 0.3, 0.05);
+        world.spawnParticle(Particle.DUST, from,  8, 0.3, 0.3, 0.3, 0, DUST_VIOLET);
+    }
 
     /** Draws a particle line between two locations. */
     private void drawLine(Location a, Location b, Particle.DustOptions dust) {

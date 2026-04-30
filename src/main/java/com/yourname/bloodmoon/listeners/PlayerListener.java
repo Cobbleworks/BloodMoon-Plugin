@@ -43,6 +43,17 @@ public final class PlayerListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
+        // Arrow reflection: witch deflects incoming arrows back at the shooter
+        if (event.getDamager() instanceof org.bukkit.entity.Arrow arrow) {
+            WitchNPC arrowTargetWitch = plugin.getNPCManager().getWitch(event.getEntity());
+            if (arrowTargetWitch != null && !arrowTargetWitch.isDead()
+                    && arrow.getShooter() instanceof Player arrowShooter) {
+                event.setCancelled(true);
+                arrowTargetWitch.reflectArrow(arrow, arrowShooter);
+                return;
+            }
+        }
+
         if (event.getEntity().hasMetadata("bloodmoon-witch-clone")) {
             int npcId = event.getEntity().getMetadata("bloodmoon-witch-clone").isEmpty()
                 ? -1
