@@ -124,12 +124,9 @@ public final class BloodMoonCommand implements CommandExecutor {
             case "clown" -> plugin.getNPCManager().spawnClownNear(player).ifPresentOrElse(
                 c -> MessageUtils.send(sender, "§aSpawned clown near §e" + player.getName() + "§a."),
                 () -> MessageUtils.send(sender, "§cCould not spawn clown here right now."));
-            case "zombie" -> {
-                boolean spawned = plugin.getNPCManager().spawnZombieNear(player);
-                MessageUtils.send(sender, spawned
-                    ? "§aSpawned shambling zombie near §e" + player.getName() + "§a."
-                    : "§cCould not spawn zombie here right now.");
-            }
+            case "zombie" -> plugin.getNPCManager().spawnZombieNear(player).ifPresentOrElse(
+                z -> MessageUtils.send(sender, "§aSpawned zombie near §e" + player.getName() + "§a."),
+                () -> MessageUtils.send(sender, "§cCould not spawn zombie here right now."));
             case "witch" -> plugin.getNPCManager().spawnWitchNear(player).ifPresentOrElse(
                 w -> MessageUtils.send(sender, "§aSpawned witch near §e" + player.getName() + "§a."),
                 () -> MessageUtils.send(sender, "§cCould not spawn witch here right now."));

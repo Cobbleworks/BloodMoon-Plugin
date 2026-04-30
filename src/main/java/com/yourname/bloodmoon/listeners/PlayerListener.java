@@ -14,6 +14,7 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.entity.Zombie;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -84,6 +85,17 @@ public final class PlayerListener implements Listener {
             zombie.onMeleeHit(player);
         }
 
+        // 15 % outgoing-damage reduction when the player has the zombie-weakened debuff
+        if (event.getDamager() instanceof Player attackingPlayer
+                && attackingPlayer.hasMetadata("bloodmoon-zombie-weakened")) {
+            long expiry = attackingPlayer.getMetadata("bloodmoon-zombie-weakened").get(0).asLong();
+            if (System.currentTimeMillis() < expiry) {
+                event.setDamage(event.getDamage() * 0.85D);
+            } else {
+                attackingPlayer.removeMetadata("bloodmoon-zombie-weakened", plugin);
+            }
+        }
+
         if (plugin.getNPCManager().getClown(event.getEntity()) != null) {
             // First hit should force the jester into snapped combat mode.
             plugin.getNPCManager().getClown(event.getEntity()).triggerSnapFromDamage();
@@ -92,14 +104,43 @@ public final class PlayerListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityDamage(EntityDamageEvent event) {
-        if (event.getCause() != EntityDamageEvent.DamageCause.FALL) {
-            return;
-        }
         Entity entity = event.getEntity();
-        if (plugin.getNPCManager().isBloodMoonNpc(entity)
-            || plugin.getNPCManager().getActiveBatIds().contains(entity.getUniqueId())) {
-            event.setCancelled(true);
+
+        // Cancel fall damage for Blood Moon NPCs / bats
+        if (event.getCause() == EntityDamageEvent.DamageCause.FALL) {
+            if (plugin.getNPCManager().isBloodMoonNpc(entity)
+                    || plugin.getNPCManager().getActiveBatIds().contains(entity.getUniqueId())) {
+                event.setCancelled(true);
+                return;
+            }
         }
+
+        // Accelerated armor wear when the player has the acid-hit debuff
+        if (entity instanceof Player victim && victim.hasMetadata("bloodmoon-zombie-acid-hit")) {
+            long expiry = victim.getMetadata("bloodmoon-zombie-acid-hit").get(0).asLong();
+            if (System.currentTimeMillis() < expiry) {
+                damageArmor(victim, 3);
+            } else {
+                victim.removeMetadata("bloodmoon-zombie-acid-hit", plugin);
+            }
+        }
+    }
+
+    /** Applies extra durability damage to all worn armor pieces. */
+    private void damageArmor(Player player, int amount) {
+        ItemStack[] armor = player.getInventory().getArmorContents();
+        for (ItemStack piece : armor) {
+            if (piece == null || piece.getType().isAir()) {
+                continue;
+            }
+            if (piece.getItemMeta() instanceof org.bukkit.inventory.meta.Damageable d) {
+                int maxDur = piece.getType().getMaxDurability();
+                int newDmg = Math.min(d.getDamage() + amount, maxDur - 1);
+                d.setDamage(newDmg);
+                piece.setItemMeta(d);
+            }
+        }
+        player.getInventory().setArmorContents(armor);
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -120,21 +161,24 @@ public final class PlayerListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onProjectileHit(ProjectileHitEvent event) {
         Projectile projectile = event.getEntity();
-        if (!projectile.hasMetadata("bloodmoon-zombie-vomit")) {
+        if (!projectile.hasMetadata("bloodmoon-zombie-acid-spit")) {
             return;
         }
 
-        int npcId = projectile.getMetadata("bloodmoon-zombie-vomit").isEmpty()
+        int npcId = projectile.getMetadata("bloodmoon-zombie-acid-spit").isEmpty()
             ? -1
-            : projectile.getMetadata("bloodmoon-zombie-vomit").get(0).asInt();
+            : projectile.getMetadata("bloodmoon-zombie-acid-spit").get(0).asInt();
         ZombieNPC zombie = plugin.getNPCManager().getZombie(npcId);
         if (zombie == null) {
             projectile.remove();
             return;
         }
 
-        Player directHitPlayer = event.getHitEntity() instanceof Player p ? p : null;
-        zombie.handleVomitImpact(projectile, projectile.getLocation(), directHitPlayer);
+        projectile.remove();
+        Player hitPlayer = event.getHitEntity() instanceof Player p ? p : null;
+        if (hitPlayer != null) {
+            zombie.handleAcidSpit(hitPlayer);
+        }
     }
 
     @EventHandler(ignoreCancelled = true)

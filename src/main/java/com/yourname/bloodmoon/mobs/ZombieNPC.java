@@ -9,6 +9,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import net.citizensnpcs.api.npc.NPC;
 import net.citizensnpcs.api.trait.Trait;
 import org.bukkit.Bukkit;
@@ -19,15 +20,14 @@ import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
+import org.bukkit.block.Block;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.AreaEffectCloud;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.ExperienceOrb;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
-import org.bukkit.entity.Projectile;
-import org.bukkit.entity.Slime;
-import org.bukkit.entity.Zombie;
+import org.bukkit.entity.Snowball;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -43,23 +43,42 @@ import org.mcmonkey.sentinel.events.SentinelAttackEvent;
 import org.mcmonkey.sentinel.targeting.SentinelTargetList;
 
 /**
- * Main Blood Moon zombie controller.
+ * Blood Moon Zombie boss controller.
+ *
+ * Passive mechanics:
+ *   - Green movement trail that deals continuous damage when stepped on
+ *   - Hunger drain aura for nearby players
+ *   - Crop destruction aura (crops within range wither to dead bushes)
+ *
+ * Active abilities:
+ *   - ACID_SPIT   : Projectile that poisons + flags faster armor wear on subsequent hits
+ *   - ROT_ZONE    : Expanding green cloud; food items in inventory convert to rotten flesh
+ *   - POWER_LEAP  : Stronger melee that launches the player upward with extra knockback
+ *
+ * On-hit debuff:
+ *   - Each melee hit reduces the player's outgoing damage by 15 % for 5 seconds
+ *     (detected via "bloodmoon-zombie-weakened" player metadata in PlayerListener)
+ *
+ * Death sequence:
+ *   - Shaking animation → delayed explosion → persistent green damage trail at death site
  */
 public final class ZombieNPC {
+
+    // -------------------------------------------------------------------------
+    // State / ability enums
+    // -------------------------------------------------------------------------
 
     public enum ZombieState {
         INFECTED_RAGE,
         COMBAT,
         CASTING,
-        RISEN,
         DEAD
     }
 
     public enum ZombieAbility {
-        PLAGUE_VOMIT(22),
-        DEAD_WEIGHT(18),
-        HORDE_CALL(16),
-        NECROTIC_SLAM(14);
+        ACID_SPIT(22),
+        ROT_ZONE(20),
+        POWER_LEAP(18);
 
         private final int weight;
 
@@ -72,16 +91,70 @@ public final class ZombieNPC {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Constants
+    // -------------------------------------------------------------------------
+
     private static final int COMBAT_ABILITY_INTERVAL = 40;
-    private static final int COMBAT_AMBIENT_INTERVAL = 32;
-    private static final int RAGE_TICKS = 50;
-    private static final int RESURRECTION_DELAY = 60;
-    private static final int MELEE_INFECTION_COOLDOWN = 20;
-    private static final int PLAGUE_VOMIT_COOLDOWN = 180;
-    private static final int DEAD_WEIGHT_COOLDOWN = 300;
-    private static final int HORDE_CALL_COOLDOWN = 400;
-    private static final int NECROTIC_SLAM_COOLDOWN = 220;
-    private static final int DEATH_REMOVE_DELAY = 60;
+    private static final int COMBAT_AMBIENT_INTERVAL  = 32;
+    private static final int RAGE_TICKS               = 50;
+    private static final int DEATH_SHAKE_TICKS        = 30;
+    private static final int DEATH_REMOVE_DELAY       = 220;
+
+    private static final int ACID_SPIT_COOLDOWN  = 180;
+    private static final int ROT_ZONE_COOLDOWN   = 320;
+    private static final int POWER_LEAP_COOLDOWN = 120;
+
+    private static final int MELEE_COOLDOWN = 20;
+
+    // Passive timings (in global ticks)
+    private static final int TRAIL_SAMPLE_INTERVAL  = 2;
+    private static final int TRAIL_PARTICLE_INTERVAL = 3;
+    private static final int TRAIL_DAMAGE_INTERVAL  = 10;
+    private static final int TRAIL_DURATION_TICKS   = 100; // 5 s
+
+    private static final int HUNGER_DRAIN_INTERVAL = 30;
+    private static final double HUNGER_DRAIN_RADIUS = 12.0D;
+
+    private static final int CROP_CHECK_INTERVAL = 40;
+    private static final int CROP_CHECK_RADIUS   = 6;
+
+    private static final long DEBUFF_DURATION_MS = 5000L;
+    private static final long ACID_DURATION_MS   = 6000L;
+
+    // Trail damage radius squared (1.2 block radius)
+    private static final double TRAIL_RADIUS_SQUARED = 1.44D;
+
+    // Crops that the zombie wilts on proximity
+    private static final Set<Material> CROPS = Set.of(
+        Material.WHEAT,
+        Material.CARROTS,
+        Material.POTATOES,
+        Material.BEETROOTS,
+        Material.NETHER_WART,
+        Material.MELON_STEM,
+        Material.PUMPKIN_STEM,
+        Material.SWEET_BERRY_BUSH,
+        Material.TORCHFLOWER_CROP
+    );
+
+    // -------------------------------------------------------------------------
+    // Inner class: green movement trail segment
+    // -------------------------------------------------------------------------
+
+    private static final class TrailSegment {
+        final Location loc;
+        final int birthTick;
+
+        TrailSegment(Location loc, int tick) {
+            this.loc = loc.clone();
+            this.birthTick = tick;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Fields
+    // -------------------------------------------------------------------------
 
     private final BloodMoonPlugin plugin;
     private final NPC npc;
@@ -89,36 +162,48 @@ public final class ZombieNPC {
     private final Random random;
     private final Map<ZombieAbility, Integer> cooldowns;
     private final List<BukkitRunnable> ownedTasks;
+    private final List<TrailSegment> trailSegments;
+
     private ZombieState state;
     private ZombieState stateBeforeCasting;
     private ZombieAbility pendingAbility;
     private BukkitRunnable controllerTask;
     private Player target;
     private Location lastKnownLocation;
+    private Location lastTrailPoint;
+
     private int stateTicks;
     private int castingTicks;
+    private int globalTick;
+    private int meleeCooldown;
+
     private boolean cleanedUp;
     private boolean deathSequenceStarted;
     private boolean combatInitialized;
-    private boolean undeadResilienceUsed;
-    private boolean risenActive;
-    private boolean resurrecting;
-    private int meleeInfectionCooldown;
+
+    // -------------------------------------------------------------------------
+    // Constructor
+    // -------------------------------------------------------------------------
 
     public ZombieNPC(BloodMoonPlugin plugin, NPC npc, Location spawnLocation, Player initialTarget) {
-        this.plugin = plugin;
-        this.npc = npc;
-        this.spawnLocation = spawnLocation.clone();
-        this.random = new Random();
-        this.cooldowns = new EnumMap<>(ZombieAbility.class);
-        this.ownedTasks = new ArrayList<>();
-        this.state = ZombieState.INFECTED_RAGE;
+        this.plugin          = plugin;
+        this.npc             = npc;
+        this.spawnLocation   = spawnLocation.clone();
+        this.random          = new Random();
+        this.cooldowns       = new EnumMap<>(ZombieAbility.class);
+        this.ownedTasks      = new ArrayList<>();
+        this.trailSegments   = new ArrayList<>();
+        this.state           = ZombieState.INFECTED_RAGE;
         this.stateBeforeCasting = ZombieState.COMBAT;
-        this.target = initialTarget;
+        this.target          = initialTarget;
         this.lastKnownLocation = spawnLocation.clone();
         configureNpc();
         startController();
     }
+
+    // -------------------------------------------------------------------------
+    // Public API
+    // -------------------------------------------------------------------------
 
     public NPC getNpc() {
         return npc;
@@ -149,95 +234,66 @@ public final class ZombieNPC {
         applyConfiguredHealth(entity);
     }
 
+    /**
+     * Called by Sentinel on melee attack.
+     * Applies the 15 % outgoing-damage debuff to the player.
+     */
     public void onMeleeHit(Player player) {
         if (player == null || player.isDead()) {
             return;
         }
-        if (meleeInfectionCooldown <= 0) {
-            plugin.getInfectionEffect().applyInfection(player);
-            meleeInfectionCooldown = MELEE_INFECTION_COOLDOWN;
-        }
-        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ZOMBIE_ATTACK_WOODEN_DOOR, 0.6F, 0.8F);
+        // Mark the player so PlayerListener can reduce their outgoing damage by 15 %
+        player.setMetadata("bloodmoon-zombie-weakened",
+            new FixedMetadataValue(plugin, System.currentTimeMillis() + DEBUFF_DURATION_MS));
+
+        player.getWorld().playSound(player.getLocation(),
+            Sound.ENTITY_ZOMBIE_ATTACK_IRON_DOOR, 0.7F, 0.8F);
     }
 
     public void handleSentinelAttack(SentinelAttackEvent event) {
         if (!(event.getTarget() instanceof Player player)) {
             return;
         }
-        if (state == ZombieState.DEAD || resurrecting) {
+        if (state == ZombieState.DEAD) {
             event.setCancelled(true);
             return;
         }
         target = player;
         onMeleeHit(player);
-        if (state != ZombieState.CASTING && random.nextDouble() < 0.10D) {
-            ZombieAbility ability = chooseAbility();
-            if (ability != null && canUseAbility(ability)) {
-                startCasting(ability);
+
+        // Occasionally trigger POWER_LEAP directly from melee outside a casting state
+        if (state != ZombieState.CASTING && meleeCooldown <= 0 && random.nextDouble() < 0.18D) {
+            if (canUseAbility(ZombieAbility.POWER_LEAP)) {
+                startCasting(ZombieAbility.POWER_LEAP);
             }
         }
     }
 
-    public boolean tryTriggerUndeadResilience(double incomingDamage) {
-        if (undeadResilienceUsed || resurrecting || deathSequenceStarted || state == ZombieState.DEAD) {
-            return false;
+    /**
+     * Called from PlayerListener when the acid-spit projectile hits a player.
+     * Applies poison, direct damage, and marks the player for accelerated armor wear.
+     */
+    public void handleAcidSpit(Player hitPlayer) {
+        if (hitPlayer == null || hitPlayer.isDead()) {
+            return;
         }
-        LivingEntity entity = getLivingEntity();
-        if (entity == null) {
-            return false;
-        }
-        if (entity.getHealth() - incomingDamage > 0.0D) {
-            return false;
-        }
+        hitPlayer.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 60, 1, true, true, true));
+        hitPlayer.damage(2.5D);
 
-        undeadResilienceUsed = true;
-        resurrecting = true;
-        state = ZombieState.DEAD;
-        stateTicks = 0;
+        // Flag accelerated armor wear for ACID_DURATION_MS
+        hitPlayer.setMetadata("bloodmoon-zombie-acid-hit",
+            new FixedMetadataValue(plugin, System.currentTimeMillis() + ACID_DURATION_MS));
 
-        Location location = entity.getLocation();
-        World world = location.getWorld();
-        if (world != null) {
-            world.playSound(location, Sound.ENTITY_ZOMBIE_DEATH, 1.0F, 0.6F);
-            world.spawnParticle(Particle.SMOKE, location.clone().add(0.0D, 0.8D, 0.0D), 22, 0.45D, 0.45D, 0.45D, 0.04D);
-        }
-
-        entity.setHealth(1.0D);
-        entity.setInvulnerable(true);
-        entity.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, RESURRECTION_DELAY + 10, 0, true, false, false));
-        npc.getNavigator().cancelNavigation();
-
-        BukkitRunnable riseTask = new BukkitRunnable() {
-            @Override
-            public void run() {
-                LivingEntity current = getLivingEntity();
-                if (current == null || current.isDead()) {
-                    cleanup();
-                    return;
-                }
-                current.setInvulnerable(false);
-                current.removePotionEffect(PotionEffectType.INVISIBILITY);
-                double max = getMaxHealth(current);
-                double risenHealth = max * plugin.getConfigManager().getZombieRisenHpFraction();
-                current.setHealth(Math.max(1.0D, Math.min(max, risenHealth)));
-                state = ZombieState.RISEN;
-                risenActive = true;
-                resurrecting = false;
-                stateTicks = 0;
-                if (current.getWorld() != null) {
-                    current.getWorld().playSound(current.getLocation(), Sound.ENTITY_ZOMBIE_VILLAGER_CONVERTED, 1.2F, 0.65F);
-                    current.getWorld().spawnParticle(Particle.TRIAL_OMEN, current.getLocation().add(0.0D, 1.0D, 0.0D), 24, 0.4D, 0.5D, 0.4D, 0.0D);
-                }
-                setNavigationSpeed(1.15F);
-            }
-        };
-        ownedTasks.add(riseTask);
-        riseTask.runTaskLater(plugin, RESURRECTION_DELAY);
-        return true;
+        World world = hitPlayer.getWorld();
+        Location loc = hitPlayer.getLocation().add(0, 1, 0);
+        world.spawnParticle(Particle.DUST, loc, 24, 0.45D, 0.5D, 0.45D, 0D,
+            new Particle.DustOptions(Color.fromRGB(50, 220, 50), 1.1F));
+        world.spawnParticle(Particle.SNEEZE, loc, 8, 0.3D, 0.3D, 0.3D, 0D);
+        world.playSound(hitPlayer.getLocation(), Sound.ENTITY_SLIME_SQUISH_SMALL, 1.0F, 0.6F);
     }
 
     public void startDeathSequence() {
-        if (deathSequenceStarted || resurrecting) {
+        if (deathSequenceStarted) {
             return;
         }
         deathSequenceStarted = true;
@@ -248,21 +304,65 @@ public final class ZombieNPC {
         lastKnownLocation = deathLocation.clone();
         cancelControllerOnly();
         cancelOwnedTasks();
+        trailSegments.clear();
 
-        World world = deathLocation.getWorld();
-        if (world != null) {
-            triggerPlagueBurst(world, deathLocation);
-            dropLoot(world, deathLocation);
+        LivingEntity entity = getLivingEntity();
+        if (entity != null) {
+            entity.setAI(false);
+            entity.setInvulnerable(true);
         }
 
-        BukkitRunnable removalTask = new BukkitRunnable() {
+        dropLoot(deathLocation.getWorld(), deathLocation);
+
+        final Location deathLoc = deathLocation.clone();
+
+        // Shaking animation for DEATH_SHAKE_TICKS, then explode
+        BukkitRunnable shake = new BukkitRunnable() {
+            int tick = 0;
+
+            @Override
+            public void run() {
+                tick++;
+                LivingEntity e = getLivingEntity();
+
+                if (tick > DEATH_SHAKE_TICKS || e == null) {
+                    triggerDeathExplosion(deathLoc);
+                    cancel();
+                    return;
+                }
+
+                // Jitter the entity back and forth
+                if (tick % 3 == 0) {
+                    double ox = (random.nextDouble() - 0.5D) * 0.28D;
+                    double oz = (random.nextDouble() - 0.5D) * 0.28D;
+                    e.teleport(e.getLocation().add(ox, 0D, oz));
+                }
+
+                World w = deathLoc.getWorld();
+                if (w != null) {
+                    w.spawnParticle(Particle.DUST,
+                        deathLoc.clone().add(0D, 1.1D, 0D), 5, 0.35D, 0.45D, 0.35D, 0D,
+                        new Particle.DustOptions(Color.fromRGB(40, 190, 40), 1.0F));
+                    w.spawnParticle(Particle.SMOKE,
+                        deathLoc.clone().add(0D, 0.5D, 0D), 2, 0.2D, 0.2D, 0.2D, 0.01D);
+                    if (tick % 10 == 0) {
+                        w.playSound(deathLoc, Sound.ENTITY_ZOMBIE_AMBIENT, 1.0F, 0.3F);
+                    }
+                }
+            }
+        };
+        ownedTasks.add(shake);
+        shake.runTaskTimer(plugin, 1L, 1L);
+
+        // Cleanup after the full death sequence finishes
+        BukkitRunnable removal = new BukkitRunnable() {
             @Override
             public void run() {
                 cleanup();
             }
         };
-        ownedTasks.add(removalTask);
-        removalTask.runTaskLater(plugin, DEATH_REMOVE_DELAY);
+        ownedTasks.add(removal);
+        removal.runTaskLater(plugin, DEATH_REMOVE_DELAY);
     }
 
     public void cleanup() {
@@ -272,6 +372,7 @@ public final class ZombieNPC {
         cleanedUp = true;
         cancelControllerOnly();
         cancelOwnedTasks();
+        trailSegments.clear();
         if (npc.isSpawned()) {
             npc.despawn();
         }
@@ -285,11 +386,15 @@ public final class ZombieNPC {
         }
         double radiusSquared = radius * radius;
         return location.getWorld().getPlayers().stream()
-            .filter(player -> !player.isDead())
-            .filter(player -> player.getLocation().distanceSquared(location) <= radiusSquared)
-            .min(Comparator.comparingDouble(player -> player.getLocation().distanceSquared(location)))
+            .filter(p -> !p.isDead())
+            .filter(p -> p.getLocation().distanceSquared(location) <= radiusSquared)
+            .min(Comparator.comparingDouble(p -> p.getLocation().distanceSquared(location)))
             .orElse(null);
     }
+
+    // -------------------------------------------------------------------------
+    // NPC setup
+    // -------------------------------------------------------------------------
 
     private void configureNpc() {
         npc.data().set("bloodmoon-zombie", true);
@@ -309,33 +414,36 @@ public final class ZombieNPC {
     }
 
     private void configureSkin() {
-        String skinName = plugin.getConfigManager().getZombieSkinName();
-        String texture = plugin.getConfigManager().getZombieSkinTexture();
+        String skinName  = plugin.getConfigManager().getZombieSkinName();
+        String texture   = plugin.getConfigManager().getZombieSkinTexture();
         String signature = plugin.getConfigManager().getZombieSkinSignature();
         if ((skinName == null || skinName.isBlank()) && (texture == null || texture.isBlank())) {
             return;
         }
         try {
-            Class<? extends Trait> skinTraitClass = Class.forName("net.citizensnpcs.trait.SkinTrait").asSubclass(Trait.class);
+            Class<? extends Trait> skinTraitClass =
+                Class.forName("net.citizensnpcs.trait.SkinTrait").asSubclass(Trait.class);
             Trait skinTrait = npc.getOrAddTrait(skinTraitClass);
             Method setShouldUpdateSkins = skinTraitClass.getMethod("setShouldUpdateSkins", boolean.class);
-            Method setFetchDefaultSkin = skinTraitClass.getMethod("setFetchDefaultSkin", boolean.class);
+            Method setFetchDefaultSkin  = skinTraitClass.getMethod("setFetchDefaultSkin",  boolean.class);
             setShouldUpdateSkins.invoke(skinTrait, false);
             setFetchDefaultSkin.invoke(skinTrait, false);
 
             if (texture != null && !texture.isBlank() && signature != null && !signature.isBlank()) {
-                Method setSkinPersistent = skinTraitClass.getMethod("setSkinPersistent", String.class, String.class, String.class);
-                String cacheKey = (skinName == null || skinName.isBlank()) ? "bloodmoon_selected_zombie" : skinName;
+                Method setSkinPersistent = skinTraitClass.getMethod(
+                    "setSkinPersistent", String.class, String.class, String.class);
+                String cacheKey = (skinName == null || skinName.isBlank())
+                    ? "bloodmoon_selected_zombie" : skinName;
                 setSkinPersistent.invoke(skinTrait, cacheKey, signature, texture);
                 return;
             }
-
             if (skinName != null && !skinName.isBlank()) {
                 Method setSkinName = skinTraitClass.getMethod("setSkinName", String.class, boolean.class);
                 setSkinName.invoke(skinTrait, skinName, true);
             }
         } catch (ReflectiveOperationException ex) {
-            plugin.getLogger().warning("Could not apply Citizens SkinTrait to zombie NPC " + npc.getId() + ": " + ex.getMessage());
+            plugin.getLogger().warning(
+                "Could not apply Citizens SkinTrait to zombie NPC " + npc.getId() + ": " + ex.getMessage());
         }
     }
 
@@ -343,15 +451,15 @@ public final class ZombieNPC {
         SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
         sentinel.setInvincible(false);
         sentinel.setHealth(plugin.getConfigManager().getZombieHealth());
-        sentinel.health = plugin.getConfigManager().getZombieHealth();
-        sentinel.damage = 5.5D;
+        sentinel.health      = plugin.getConfigManager().getZombieHealth();
+        sentinel.damage      = 5.5D;
         sentinel.respawnTime = -1;
-        sentinel.chaseRange = 30.0D;
-        sentinel.armor = 0.15D;
+        sentinel.chaseRange  = 30.0D;
+        sentinel.armor       = 0.15D;
         sentinel.protectFromIgnores = false;
-        sentinel.allTargets = new SentinelTargetList();
+        sentinel.allTargets  = new SentinelTargetList();
         sentinel.addTarget("players");
-        sentinel.allIgnores = new SentinelTargetList();
+        sentinel.allIgnores  = new SentinelTargetList();
         npc.setProtected(false);
     }
 
@@ -397,6 +505,10 @@ public final class ZombieNPC {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Controller loop
+    // -------------------------------------------------------------------------
+
     private void startController() {
         controllerTask = new BukkitRunnable() {
             @Override
@@ -412,21 +524,33 @@ public final class ZombieNPC {
             return;
         }
         stateTicks++;
-        if (meleeInfectionCooldown > 0) {
-            meleeInfectionCooldown--;
+        globalTick++;
+        if (meleeCooldown > 0) {
+            meleeCooldown--;
         }
         decrementCooldowns();
         updateLastKnownLocation();
 
+        // Always-on passive effects
+        tickGreenTrail();
+        if (globalTick % HUNGER_DRAIN_INTERVAL == 0) {
+            tickHungerDrain();
+        }
+        if (globalTick % CROP_CHECK_INTERVAL == 0) {
+            tickCropDestruction();
+        }
+
         switch (state) {
             case INFECTED_RAGE -> tickInfectedRage();
-            case COMBAT -> tickCombat();
-            case CASTING -> tickCasting();
-            case RISEN -> tickRisen();
-            case DEAD -> {
-            }
+            case COMBAT        -> tickCombat();
+            case CASTING       -> tickCasting();
+            case DEAD          -> { /* nothing */ }
         }
     }
+
+    // -------------------------------------------------------------------------
+    // State ticks
+    // -------------------------------------------------------------------------
 
     private void tickInfectedRage() {
         LivingEntity entity = getLivingEntity();
@@ -436,10 +560,11 @@ public final class ZombieNPC {
         if (stateTicks == 1) {
             World world = entity.getWorld();
             world.playSound(entity.getLocation(), Sound.ENTITY_ZOMBIE_VILLAGER_CURE, 1.0F, 0.6F);
-            world.playSound(entity.getLocation(), Sound.ENTITY_WARDEN_ROAR, 0.45F, 1.7F);
+            world.playSound(entity.getLocation(), Sound.ENTITY_WARDEN_ROAR,          0.45F, 1.7F);
         }
         if (stateTicks % 6 == 0) {
-            entity.getWorld().spawnParticle(Particle.DUST, entity.getLocation().add(0.0D, 1.1D, 0.0D), 8, 0.4D, 0.45D, 0.4D, 0.0D,
+            entity.getWorld().spawnParticle(Particle.DUST,
+                entity.getLocation().add(0D, 1.1D, 0D), 8, 0.4D, 0.45D, 0.4D, 0D,
                 new Particle.DustOptions(Color.fromRGB(60, 160, 60), 1.0F));
         }
         if (stateTicks >= RAGE_TICKS) {
@@ -451,6 +576,7 @@ public final class ZombieNPC {
 
     private void tickCombat() {
         initializeCombat();
+
         Player player = ensureTarget(52.0D);
         if (player == null) {
             player = findNearestPlayer(getCurrentLocation(), 52.0D);
@@ -462,13 +588,13 @@ public final class ZombieNPC {
         }
 
         target = player;
-        setNavigationSpeed(risenActive ? 1.2F : 1.0F);
+        setNavigationSpeed(1.0F);
         npc.getNavigator().setTarget(player, true);
         npc.faceLocation(player.getEyeLocation());
 
         if (stateTicks % COMBAT_AMBIENT_INTERVAL == 0) {
-            World world = player.getWorld();
-            world.playSound(getCurrentLocation(), Sound.ENTITY_ZOMBIE_AMBIENT, 0.9F, risenActive ? 0.8F : 0.65F);
+            getCurrentLocation().getWorld().playSound(
+                getCurrentLocation(), Sound.ENTITY_ZOMBIE_AMBIENT, 0.9F, 0.65F);
         }
 
         if (stateTicks % COMBAT_ABILITY_INTERVAL == 0) {
@@ -479,26 +605,6 @@ public final class ZombieNPC {
         }
     }
 
-    private void tickRisen() {
-        tickCombat();
-    }
-
-    private void initializeCombat() {
-        if (combatInitialized) {
-            return;
-        }
-        combatInitialized = true;
-        SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
-        sentinel.allTargets = new SentinelTargetList();
-        sentinel.addTarget("players");
-        sentinel.allIgnores = new SentinelTargetList();
-        sentinel.chaseRange = 32.0D;
-        sentinel.respawnTime = -1;
-        if (risenActive) {
-            sentinel.damage *= 1.2D;
-        }
-    }
-
     private void tickCasting() {
         LivingEntity entity = getLivingEntity();
         if (entity == null) {
@@ -506,8 +612,10 @@ public final class ZombieNPC {
         }
         npc.getNavigator().cancelNavigation();
         if (stateTicks == 1) {
-            entity.getWorld().spawnParticle(Particle.SMOKE, entity.getLocation().add(0.0D, 1.0D, 0.0D), 15, 0.4D, 0.5D, 0.4D, 0.03D);
-            entity.getWorld().playSound(entity.getLocation(), Sound.ENTITY_ZOMBIE_AMBIENT, 0.8F, 0.45F);
+            entity.getWorld().spawnParticle(Particle.SMOKE,
+                entity.getLocation().add(0D, 1.0D, 0D), 15, 0.4D, 0.5D, 0.4D, 0.03D);
+            entity.getWorld().playSound(
+                entity.getLocation(), Sound.ENTITY_ZOMBIE_AMBIENT, 0.8F, 0.45F);
         }
         if (stateTicks < castingTicks) {
             return;
@@ -530,240 +638,395 @@ public final class ZombieNPC {
         stateBeforeCasting = state;
         state = ZombieState.CASTING;
         stateTicks = 0;
-        castingTicks = 18;
+        castingTicks = 16;
     }
 
     private void executeAbility(ZombieAbility ability) {
         switch (ability) {
-            case PLAGUE_VOMIT -> castPlagueVomit();
-            case DEAD_WEIGHT -> castDeadWeight();
-            case HORDE_CALL -> castHordeCall();
-            case NECROTIC_SLAM -> castNecroticSlam();
+            case ACID_SPIT  -> castAcidSpit();
+            case ROT_ZONE   -> castRotZone();
+            case POWER_LEAP -> castPowerLeap();
         }
         setCooldown(ability);
     }
 
-    private void castPlagueVomit() {
+    // -------------------------------------------------------------------------
+    // Passive: green movement trail
+    // -------------------------------------------------------------------------
+
+    private void tickGreenTrail() {
+        LivingEntity entity = getLivingEntity();
+        Location current = entity != null ? entity.getLocation() : null;
+
+        // Sample new trail points every TRAIL_SAMPLE_INTERVAL ticks
+        if (globalTick % TRAIL_SAMPLE_INTERVAL == 0 && current != null) {
+            if (lastTrailPoint == null
+                || lastTrailPoint.getWorld() != current.getWorld()
+                || lastTrailPoint.distanceSquared(current) >= 0.09D) {
+                trailSegments.add(new TrailSegment(current, globalTick));
+                lastTrailPoint = current.clone();
+            }
+        }
+
+        // Expire old segments
+        trailSegments.removeIf(seg -> globalTick - seg.birthTick > TRAIL_DURATION_TICKS);
+
+        if (trailSegments.isEmpty()) {
+            return;
+        }
+
+        // Emit particles
+        if (globalTick % TRAIL_PARTICLE_INTERVAL == 0) {
+            for (TrailSegment seg : trailSegments) {
+                World w = seg.loc.getWorld();
+                if (w == null) {
+                    continue;
+                }
+                w.spawnParticle(Particle.DUST,
+                    seg.loc.clone().add(0D, 0.05D, 0D), 1, 0.28D, 0.04D, 0.28D, 0D,
+                    new Particle.DustOptions(Color.fromRGB(40, 200, 40), 1.0F));
+            }
+        }
+
+        // Deal damage to players standing inside the trail
+        if (globalTick % TRAIL_DAMAGE_INTERVAL == 0) {
+            for (TrailSegment seg : trailSegments) {
+                World w = seg.loc.getWorld();
+                if (w == null) {
+                    continue;
+                }
+                for (Player p : w.getPlayers()) {
+                    if (!p.isDead()
+                        && p.getLocation().distanceSquared(seg.loc) <= TRAIL_RADIUS_SQUARED) {
+                        p.damage(0.5D);
+                    }
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Passive: hunger drain aura
+    // -------------------------------------------------------------------------
+
+    private void tickHungerDrain() {
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) {
+            return;
+        }
+        Location center = entity.getLocation();
+        World world = center.getWorld();
+        if (world == null) {
+            return;
+        }
+        double radiusSq = HUNGER_DRAIN_RADIUS * HUNGER_DRAIN_RADIUS;
+        for (Player p : world.getPlayers()) {
+            if (p.isDead()) {
+                continue;
+            }
+            if (p.getLocation().distanceSquared(center) <= radiusSq) {
+                int food = p.getFoodLevel();
+                if (food > 0) {
+                    p.setFoodLevel(Math.max(0, food - 2));
+                    p.setSaturation(Math.max(0F, p.getSaturation() - 1.0F));
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Passive: crop destruction aura
+    // -------------------------------------------------------------------------
+
+    private void tickCropDestruction() {
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) {
+            return;
+        }
+        Location center = entity.getLocation();
+        World world = center.getWorld();
+        if (world == null) {
+            return;
+        }
+        int cx = center.getBlockX();
+        int cy = center.getBlockY();
+        int cz = center.getBlockZ();
+        for (int dx = -CROP_CHECK_RADIUS; dx <= CROP_CHECK_RADIUS; dx++) {
+            for (int dy = -2; dy <= 2; dy++) {
+                for (int dz = -CROP_CHECK_RADIUS; dz <= CROP_CHECK_RADIUS; dz++) {
+                    Block block = world.getBlockAt(cx + dx, cy + dy, cz + dz);
+                    if (!CROPS.contains(block.getType())) {
+                        continue;
+                    }
+                    // Clear the crop, then optionally place a dead bush
+                    block.setType(Material.AIR, false);
+                    Block below = block.getRelative(0, -1, 0);
+                    if (below.getType().isSolid()) {
+                        block.setType(Material.DEAD_BUSH, false);
+                    }
+                    world.spawnParticle(Particle.DUST,
+                        block.getLocation().clone().add(0.5D, 0.5D, 0.5D),
+                        6, 0.3D, 0.3D, 0.3D, 0D,
+                        new Particle.DustOptions(Color.fromRGB(100, 60, 20), 0.9F));
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Active ability: ACID_SPIT
+    // -------------------------------------------------------------------------
+
+    private void castAcidSpit() {
         LivingEntity entity = getLivingEntity();
         Player player = ensureTarget(30.0D);
         if (entity == null || player == null) {
             return;
         }
 
-        Vector dir = player.getEyeLocation().toVector().subtract(entity.getEyeLocation().toVector());
+        Vector dir = player.getEyeLocation().toVector()
+            .subtract(entity.getEyeLocation().toVector());
         if (dir.lengthSquared() < 0.0001D) {
             return;
         }
-        dir.normalize().multiply(1.0D);
+        dir.normalize().multiply(1.4D);
 
-        Slime slime = (Slime) entity.getWorld().spawnEntity(entity.getEyeLocation(), EntityType.SLIME);
-        slime.setSize(1);
-        slime.setInvisible(true);
-        slime.setCollidable(false);
-        slime.setInvulnerable(true);
-        slime.setGravity(true);
-        slime.setAI(false);
-        slime.setMetadata("bloodmoon-zombie-vomit", new FixedMetadataValue(plugin, npc.getId()));
-        slime.setVelocity(dir);
+        Snowball spit = entity.launchProjectile(Snowball.class, dir);
+        spit.setMetadata("bloodmoon-zombie-acid-spit",
+            new FixedMetadataValue(plugin, npc.getId()));
 
-        entity.getWorld().playSound(entity.getLocation(), Sound.ENTITY_DROWNED_SHOOT, 0.9F, 0.72F);
+        entity.getWorld().playSound(entity.getLocation(), Sound.ENTITY_DROWNED_SHOOT, 0.9F, 0.62F);
+        entity.getWorld().spawnParticle(Particle.DUST,
+            entity.getEyeLocation(), 6, 0.1D, 0.1D, 0.1D, 0D,
+            new Particle.DustOptions(Color.fromRGB(50, 220, 50), 0.9F));
 
+        // Particle trail while in flight
         BukkitRunnable trail = new BukkitRunnable() {
             @Override
             public void run() {
-                if (!slime.isValid() || slime.isDead()) {
+                if (!spit.isValid() || spit.isDead()) {
                     cancel();
                     return;
                 }
-                slime.getWorld().spawnParticle(Particle.SNEEZE, slime.getLocation().add(0.0D, 0.3D, 0.0D), 4, 0.12D, 0.12D, 0.12D, 0.0D);
-                slime.getWorld().spawnParticle(Particle.DUST, slime.getLocation().add(0.0D, 0.35D, 0.0D), 3, 0.08D, 0.08D, 0.08D, 0.0D,
-                    new Particle.DustOptions(Color.fromRGB(30, 150, 30), 0.9F));
+                spit.getWorld().spawnParticle(Particle.DUST,
+                    spit.getLocation(), 3, 0.08D, 0.08D, 0.08D, 0D,
+                    new Particle.DustOptions(Color.fromRGB(60, 230, 60), 0.85F));
             }
         };
         ownedTasks.add(trail);
         trail.runTaskTimer(plugin, 1L, 1L);
     }
 
-    public void handleVomitImpact(Projectile projectile, Location location, Player directHitPlayer) {
-        World world = location.getWorld();
-        if (world == null) {
-            return;
-        }
+    // -------------------------------------------------------------------------
+    // Active ability: ROT_ZONE
+    // -------------------------------------------------------------------------
 
-        world.spawnParticle(Particle.SNEEZE, location.clone().add(0.0D, 0.2D, 0.0D), 26, 0.6D, 0.2D, 0.6D, 0.02D);
-        world.playSound(location, Sound.ENTITY_SLIME_SQUISH, 0.9F, 0.65F);
-
-        AreaEffectCloud cloud = (AreaEffectCloud) world.spawnEntity(location, EntityType.AREA_EFFECT_CLOUD);
-        cloud.setRadius(3.0F);
-        cloud.setDuration(80);
-        cloud.setWaitTime(0);
-        cloud.setReapplicationDelay(10);
-        cloud.setParticle(Particle.SNEEZE);
-        cloud.addCustomEffect(new PotionEffect(PotionEffectType.POISON, 80, 1), true);
-
-        if (directHitPlayer != null) {
-            plugin.getInfectionEffect().applyInfection(directHitPlayer);
-        }
-        if (projectile != null) {
-            projectile.remove();
-        }
-    }
-
-    private void castDeadWeight() {
+    private void castRotZone() {
         LivingEntity entity = getLivingEntity();
-        Player player = ensureTarget(24.0D);
+        Player player = ensureTarget(28.0D);
         if (entity == null || player == null) {
             return;
         }
 
-        Location destination = player.getLocation().clone().add(randomDouble(-0.8D, 0.8D), 0.0D, randomDouble(-0.8D, 0.8D));
-        destination.setY(player.getLocation().getY());
-        entity.teleport(destination);
+        Location center = player.getLocation().clone();
+        World world = center.getWorld();
+        if (world == null) {
+            return;
+        }
 
-        player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 80, 6, true, true, true));
-        player.addPotionEffect(new PotionEffect(PotionEffectType.MINING_FATIGUE, 80, 2, true, true, true));
+        world.playSound(center, Sound.ENTITY_ZOMBIE_AMBIENT, 1.0F, 0.38F);
+        world.spawnParticle(Particle.DUST, center.clone().add(0D, 0.8D, 0D),
+            20, 2.0D, 0.5D, 2.0D, 0D,
+            new Particle.DustOptions(Color.fromRGB(40, 180, 40), 1.2F));
 
-        BukkitRunnable gnaw = new BukkitRunnable() {
-            int remaining = 4;
+        // Visual cloud that expands over time
+        AreaEffectCloud cloud = (AreaEffectCloud) world.spawnEntity(center, EntityType.AREA_EFFECT_CLOUD);
+        cloud.setRadius(1.5F);
+        cloud.setRadiusPerTick(0F);
+        cloud.setDuration(200);
+        cloud.setWaitTime(0);
+        cloud.setReapplicationDelay(Integer.MAX_VALUE);
+        cloud.setParticle(Particle.DUST,
+            new Particle.DustOptions(Color.fromRGB(30, 160, 30), 0.8F));
+
+        BukkitRunnable zone = new BukkitRunnable() {
+            int iteration = 0;
+            float currentRadius = 1.5F;
 
             @Override
             public void run() {
-                if (remaining <= 0 || !player.isOnline() || player.isDead() || isDead()) {
+                iteration++;
+                if (iteration > 9 || isDead() || !cloud.isValid()) {
+                    if (cloud.isValid()) {
+                        cloud.remove();
+                    }
                     cancel();
                     return;
                 }
-                player.damage(1.5D);
-                player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ZOMBIE_ATTACK_IRON_DOOR, 0.6F, 1.1F);
-                remaining--;
+
+                // Grow the cloud each second
+                currentRadius = Math.min(6.0F, 1.5F + iteration * 0.55F);
+                cloud.setRadius(currentRadius);
+
+                double radiusSq = (double) currentRadius * currentRadius;
+                for (Player p : world.getPlayers()) {
+                    if (p.isDead()) {
+                        continue;
+                    }
+                    if (p.getLocation().distanceSquared(center) <= radiusSq) {
+                        corruptFoodItem(p);
+                    }
+                }
             }
         };
-        ownedTasks.add(gnaw);
-        gnaw.runTaskTimer(plugin, 0L, 20L);
+        ownedTasks.add(zone);
+        zone.runTaskTimer(plugin, 20L, 20L);
     }
 
-    private void castHordeCall() {
+    /** Converts the first food stack found in the player's inventory into 1× rotten flesh. */
+    private void corruptFoodItem(Player player) {
+        var inv = player.getInventory();
+        for (int i = 0; i < inv.getSize(); i++) {
+            ItemStack item = inv.getItem(i);
+            if (item == null || item.getType().isAir()) {
+                continue;
+            }
+            if (item.getType().isEdible() && item.getType() != Material.ROTTEN_FLESH) {
+                inv.setItem(i, new ItemStack(Material.ROTTEN_FLESH, 1));
+                player.getWorld().playSound(
+                    player.getLocation(), Sound.ENTITY_ZOMBIE_AMBIENT, 0.55F, 0.72F);
+                return;
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Active ability: POWER_LEAP
+    // -------------------------------------------------------------------------
+
+    private void castPowerLeap() {
         LivingEntity entity = getLivingEntity();
-        if (entity == null) {
+        Player player = ensureTarget(20.0D);
+        if (entity == null || player == null) {
             return;
         }
+
+        // Close the gap toward the player
+        Location entityLoc = entity.getLocation();
+        Vector toPlayer = player.getLocation().toVector().subtract(entityLoc.toVector());
+        if (toPlayer.lengthSquared() > 0.01D) {
+            Location dest = entityLoc.clone().add(toPlayer.normalize().clone().multiply(1.0D));
+            dest.setYaw(entityLoc.getYaw());
+            dest.setPitch(entityLoc.getPitch());
+            entity.teleport(dest);
+        }
+
+        // Deal bonus damage
+        player.damage(4.0D);
+
+        // Launch the player outward and upward
+        Vector knockback = player.getLocation().toVector().subtract(entity.getLocation().toVector());
+        if (knockback.lengthSquared() > 0.01D) {
+            knockback.normalize().multiply(1.3D);
+        } else {
+            knockback = new Vector(0D, 0D, 0.5D);
+        }
+        knockback.setY(0.75D);
+        player.setVelocity(knockback);
 
         World world = entity.getWorld();
-        double radius = plugin.getConfigManager().getZombieHordeCallRadius();
-        double radiusSquared = radius * radius;
-        world.playSound(entity.getLocation(), Sound.ENTITY_ZOMBIE_AMBIENT, 1.2F, 0.5F);
+        world.playSound(entity.getLocation(), Sound.ENTITY_ZOMBIE_ATTACK_IRON_DOOR, 1.0F, 0.65F);
+        world.spawnParticle(Particle.CRIT,
+            player.getLocation().add(0D, 1D, 0D), 18, 0.4D, 0.4D, 0.4D, 0.12D);
+        world.spawnParticle(Particle.DUST,
+            player.getLocation().add(0D, 1D, 0D), 12, 0.4D, 0.4D, 0.4D, 0D,
+            new Particle.DustOptions(Color.fromRGB(40, 190, 40), 1.1F));
 
-        Player nearest = findNearestPlayer(entity.getLocation(), radius);
-        for (org.bukkit.entity.Entity nearby : world.getNearbyEntities(entity.getLocation(), radius, radius, radius)) {
-            if (!(nearby instanceof Zombie vanillaZombie) || nearby.hasMetadata("NPC")) {
-                continue;
-            }
-            if (nearby.getLocation().distanceSquared(entity.getLocation()) > radiusSquared) {
-                continue;
-            }
-            vanillaZombie.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 300, 1, true, true, true));
-            vanillaZombie.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 300, 0, true, true, true));
-            if (nearest != null) {
-                vanillaZombie.setTarget(nearest);
-            }
-        }
+        meleeCooldown = MELEE_COOLDOWN;
     }
 
-    private void castNecroticSlam() {
-        LivingEntity entity = getLivingEntity();
-        if (entity == null) {
+    // -------------------------------------------------------------------------
+    // Death explosion + lingering green trail
+    // -------------------------------------------------------------------------
+
+    private void triggerDeathExplosion(Location loc) {
+        if (npc.isSpawned()) {
+            npc.despawn();
+        }
+
+        World world = loc.getWorld();
+        if (world == null) {
             return;
         }
 
-        entity.setVelocity(entity.getVelocity().setY(0.9D));
+        world.playSound(loc, Sound.ENTITY_GENERIC_EXPLODE, 1.2F, 0.5F);
+        world.spawnParticle(Particle.EXPLOSION,
+            loc.clone().add(0D, 0.5D, 0D), 3, 0.5D, 0.3D, 0.5D, 0D);
+        world.spawnParticle(Particle.DUST, loc.clone().add(0D, 0.5D, 0D),
+            70, 2.0D, 1.0D, 2.0D, 0D,
+            new Particle.DustOptions(Color.fromRGB(40, 190, 40), 1.5F));
+        world.spawnParticle(Particle.SMOKE, loc.clone().add(0D, 0.5D, 0D),
+            30, 1.0D, 0.5D, 1.0D, 0.05D);
 
-        BukkitRunnable slam = new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (isDead()) {
-                    cancel();
-                    return;
-                }
-                Location center = getCurrentLocation();
-                World world = center.getWorld();
-                if (world == null) {
-                    cancel();
-                    return;
-                }
-
-                world.playSound(center, Sound.ENTITY_ZOMBIE_BREAK_WOODEN_DOOR, 1.0F, 0.7F);
-                world.spawnParticle(Particle.BLOCK, center, 30, 1.1D, 0.2D, 1.1D, Material.SOUL_SOIL.createBlockData());
-                world.spawnParticle(Particle.DUST, center.clone().add(0.0D, 0.1D, 0.0D), 18, 1.3D, 0.15D, 1.3D, 0.0D,
-                    new Particle.DustOptions(Color.fromRGB(30, 30, 30), 1.1F));
-
-                for (Player nearby : world.getPlayers()) {
-                    if (nearby.isDead()) {
-                        continue;
-                    }
-                    if (nearby.getLocation().distanceSquared(center) <= 16.0D) {
-                        nearby.damage(4.0D);
-                    }
-                }
-
-                spawnNecroticPatch(center);
-            }
-        };
-        ownedTasks.add(slam);
-        slam.runTaskLater(plugin, 16L);
-    }
-
-    private void spawnNecroticPatch(Location center) {
-        BukkitRunnable patch = new BukkitRunnable() {
-            int remaining = 16;
-
-            @Override
-            public void run() {
-                if (remaining <= 0 || isDead()) {
-                    cancel();
-                    return;
-                }
-                World world = center.getWorld();
-                if (world == null) {
-                    cancel();
-                    return;
-                }
-
-                world.spawnParticle(Particle.DUST, center.clone().add(0.0D, 0.05D, 0.0D), 10, 2.4D, 0.05D, 2.4D, 0.0D,
-                    new Particle.DustOptions(Color.fromRGB(40, 40, 40), 0.9F));
-
-                for (Player nearby : world.getPlayers()) {
-                    if (nearby.isDead()) {
-                        continue;
-                    }
-                    if (nearby.getLocation().distanceSquared(center) <= 6.25D) {
-                        nearby.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 120, 1, true, true, true));
-                    }
-                }
-                remaining--;
-            }
-        };
-        ownedTasks.add(patch);
-        patch.runTaskTimer(plugin, 0L, 10L);
-    }
-
-    private void triggerPlagueBurst(World world, Location location) {
-        double radius = plugin.getConfigManager().getZombiePlagueBurstRadius();
-        double radiusSquared = radius * radius;
-        world.playSound(location, Sound.ENTITY_GENERIC_EXPLODE, 1.0F, 0.55F);
-        world.spawnParticle(Particle.SNEEZE, location.clone().add(0.0D, 0.8D, 0.0D), 36, 1.1D, 0.6D, 1.1D, 0.03D);
-        world.spawnParticle(Particle.CRIT, location.clone().add(0.0D, 0.8D, 0.0D), 28, 1.0D, 0.5D, 1.0D, 0.15D);
-
-        for (Player player : world.getPlayers()) {
-            if (player.isDead()) {
-                continue;
-            }
-            if (player.getLocation().distanceSquared(location) <= radiusSquared) {
-                plugin.getInfectionEffect().applyInfection(player);
-                player.addPotionEffect(new PotionEffect(PotionEffectType.WITHER, 100, 0, true, true, true));
+        // Blast damage (4 block radius)
+        for (Player p : world.getPlayers()) {
+            if (!p.isDead() && p.getLocation().distanceSquared(loc) <= 16.0D) {
+                p.damage(5.0D);
             }
         }
+
+        spawnDeathTrail(world, loc);
     }
 
+    /** Lingers for ~6 seconds after the death explosion, damaging players inside. */
+    private void spawnDeathTrail(World world, Location center) {
+        BukkitRunnable deathTrail = new BukkitRunnable() {
+            int tick = 0;
+
+            @Override
+            public void run() {
+                tick++;
+                if (tick > 120) {
+                    cancel();
+                    return;
+                }
+
+                // Expanding ring of green particles
+                if (tick % 2 == 0) {
+                    for (int i = 0; i < 16; i++) {
+                        double angle = (Math.PI * 2D / 16D) * i;
+                        double x = Math.cos(angle) * 2.5D;
+                        double z = Math.sin(angle) * 2.5D;
+                        world.spawnParticle(Particle.DUST,
+                            center.clone().add(x, 0.1D, z), 1, 0.1D, 0.05D, 0.1D, 0D,
+                            new Particle.DustOptions(Color.fromRGB(40, 210, 40), 1.0F));
+                    }
+                    world.spawnParticle(Particle.SNEEZE,
+                        center.clone().add(0D, 0.05D, 0D), 2, 1.5D, 0.05D, 1.5D, 0D);
+                }
+
+                // Damage every 0.5 s (10 ticks), 3 block radius
+                if (tick % 10 == 0) {
+                    for (Player p : world.getPlayers()) {
+                        if (!p.isDead() && p.getLocation().distanceSquared(center) <= 9.0D) {
+                            p.damage(0.5D);
+                        }
+                    }
+                }
+            }
+        };
+        ownedTasks.add(deathTrail);
+        deathTrail.runTaskTimer(plugin, 1L, 1L);
+    }
+
+    // -------------------------------------------------------------------------
+    // Loot drop
+    // -------------------------------------------------------------------------
+
     private void dropLoot(World world, Location location) {
+        if (world == null) {
+            return;
+        }
         if (random.nextDouble() <= 0.75D) {
             world.dropItemNaturally(location, new ItemStack(Material.ROTTEN_FLESH, randomRange(2, 5)));
         }
@@ -802,10 +1065,13 @@ public final class ZombieNPC {
         if (random.nextDouble() <= 0.03D) {
             world.dropItemNaturally(location, new ItemStack(Material.ZOMBIE_HEAD, 1));
         }
-
-        ExperienceOrb orb = world.spawn(location.clone().add(0.0D, 0.25D, 0.0D), ExperienceOrb.class);
+        ExperienceOrb orb = world.spawn(location.clone().add(0D, 0.25D, 0D), ExperienceOrb.class);
         orb.setExperience(randomRange(35, 55));
     }
+
+    // -------------------------------------------------------------------------
+    // Ability helpers
+    // -------------------------------------------------------------------------
 
     private Player ensureTarget(double radius) {
         if (target == null || !target.isOnline() || target.isDead()) {
@@ -813,7 +1079,8 @@ public final class ZombieNPC {
             return null;
         }
         Location current = getCurrentLocation();
-        if (current.getWorld() != target.getWorld() || current.distanceSquared(target.getLocation()) > radius * radius) {
+        if (current.getWorld() != target.getWorld()
+            || current.distanceSquared(target.getLocation()) > radius * radius) {
             target = null;
             return null;
         }
@@ -850,10 +1117,9 @@ public final class ZombieNPC {
 
     private void setCooldown(ZombieAbility ability) {
         switch (ability) {
-            case PLAGUE_VOMIT -> cooldowns.put(ability, PLAGUE_VOMIT_COOLDOWN);
-            case DEAD_WEIGHT -> cooldowns.put(ability, DEAD_WEIGHT_COOLDOWN);
-            case HORDE_CALL -> cooldowns.put(ability, HORDE_CALL_COOLDOWN);
-            case NECROTIC_SLAM -> cooldowns.put(ability, NECROTIC_SLAM_COOLDOWN);
+            case ACID_SPIT  -> cooldowns.put(ability, ACID_SPIT_COOLDOWN);
+            case ROT_ZONE   -> cooldowns.put(ability, ROT_ZONE_COOLDOWN);
+            case POWER_LEAP -> cooldowns.put(ability, POWER_LEAP_COOLDOWN);
         }
     }
 
@@ -864,6 +1130,23 @@ public final class ZombieNPC {
                 entry.setValue(value - 1);
             }
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Utility
+    // -------------------------------------------------------------------------
+
+    private void initializeCombat() {
+        if (combatInitialized) {
+            return;
+        }
+        combatInitialized = true;
+        SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
+        sentinel.allTargets  = new SentinelTargetList();
+        sentinel.addTarget("players");
+        sentinel.allIgnores  = new SentinelTargetList();
+        sentinel.chaseRange  = 32.0D;
+        sentinel.respawnTime = -1;
     }
 
     private void updateLastKnownLocation() {
@@ -890,20 +1173,11 @@ public final class ZombieNPC {
         return livingEntity;
     }
 
-    private double getMaxHealth(LivingEntity entity) {
-        var attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
-        return attr == null ? plugin.getConfigManager().getZombieHealth() : attr.getBaseValue();
-    }
-
     private int randomRange(int min, int max) {
         if (max <= min) {
             return min;
         }
         return min + random.nextInt(max - min + 1);
-    }
-
-    private double randomDouble(double min, double max) {
-        return min + (random.nextDouble() * (max - min));
     }
 
     private void cancelControllerOnly() {

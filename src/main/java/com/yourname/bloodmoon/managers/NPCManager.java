@@ -116,18 +116,18 @@ public final class NPCManager {
         return spawnClown(location);
     }
 
-    public boolean spawnZombieNear(Player player) {
+    public Optional<ZombieNPC> spawnZombieNear(Player player) {
         if (player == null || !player.isOnline()) {
-            return false;
+            return Optional.empty();
         }
         if (countZombiesNear(player, 96.0D) >= plugin.getConfigManager().getZombieMaxPerPlayer()) {
-            return false;
+            return Optional.empty();
         }
         Location location = findSpawnLocationNear(player, plugin.getConfigManager().getZombieSpawnRadius());
         if (location == null) {
-            return false;
+            return Optional.empty();
         }
-        return spawnShamblingZombie(location, player);
+        return spawnZombie(location, player);
     }
 
     public Optional<WitchNPC> spawnWitchNear(Player player) {
@@ -224,6 +224,27 @@ public final class NPCManager {
         WitchNPC controller = new WitchNPC(plugin, npc, location, initialTarget);
         activeNpcIds.add(npc.getId());
         witches.put(npc.getId(), controller);
+        return Optional.of(controller);
+    }
+
+    public Optional<ZombieNPC> spawnZombie(Location location, Player initialTarget) {
+        if (!citizensInitialized) {
+            initializeCitizens();
+        }
+        if (!isCitizensReady() || location == null || location.getWorld() == null) {
+            return Optional.empty();
+        }
+
+        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        if (registry == null) {
+            return Optional.empty();
+        }
+
+        location.getWorld().strikeLightningEffect(location);
+        NPC npc = registry.createNPC(EntityType.PLAYER, "§2Infected");
+        ZombieNPC controller = new ZombieNPC(plugin, npc, location, initialTarget);
+        activeNpcIds.add(npc.getId());
+        zombies.put(npc.getId(), controller);
         return Optional.of(controller);
     }
 

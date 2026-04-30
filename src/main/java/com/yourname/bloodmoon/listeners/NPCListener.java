@@ -47,13 +47,10 @@ public final class NPCListener implements Listener {
 
         ZombieNPC zombie = plugin.getNPCManager().getZombie(event.getNPC());
         if (zombie != null) {
-            if (zombie.tryTriggerUndeadResilience(event.getDamage())) {
-                event.setCancelled(true);
-                event.setDamage(0.0D);
-                return;
-            }
             if (event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
-                event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_ZOMBIE_HURT, 0.9F, 0.8F);
+                event.getNPC().getEntity().getWorld().playSound(
+                    event.getNPC().getEntity().getLocation(),
+                    Sound.ENTITY_ZOMBIE_HURT, 0.9F, 0.8F);
             }
             return;
         }
