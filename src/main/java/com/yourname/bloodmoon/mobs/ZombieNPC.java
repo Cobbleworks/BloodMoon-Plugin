@@ -103,7 +103,7 @@ public final class ZombieNPC {
 
     private static final int ACID_SPIT_COOLDOWN  = 180;
     private static final int ROT_ZONE_COOLDOWN   = 320;
-    private static final int POWER_LEAP_COOLDOWN = 120;
+    private static final int POWER_LEAP_COOLDOWN = 220;
 
     private static final int MELEE_COOLDOWN = 20;
 
@@ -262,7 +262,7 @@ public final class ZombieNPC {
         onMeleeHit(player);
 
         // Occasionally trigger POWER_LEAP directly from melee outside a casting state
-        if (state != ZombieState.CASTING && meleeCooldown <= 0 && random.nextDouble() < 0.18D) {
+        if (state != ZombieState.CASTING && meleeCooldown <= 0 && random.nextDouble() < 0.08D) {
             if (canUseAbility(ZombieAbility.POWER_LEAP)) {
                 startCasting(ZombieAbility.POWER_LEAP);
             }
@@ -588,7 +588,7 @@ public final class ZombieNPC {
         }
 
         target = player;
-        setNavigationSpeed(1.0F);
+        setNavigationSpeed(0.88F);
         npc.getNavigator().setTarget(player, true);
         npc.faceLocation(player.getEyeLocation());
 
@@ -610,7 +610,10 @@ public final class ZombieNPC {
         if (entity == null) {
             return;
         }
-        npc.getNavigator().cancelNavigation();
+        // Keep slowly drifting toward the last known target instead of standing frozen
+        if (target != null && target.isOnline() && !target.isDead()) {
+            npc.getNavigator().setTarget(target, true);
+        }
         if (stateTicks == 1) {
             entity.getWorld().spawnParticle(Particle.SMOKE,
                 entity.getLocation().add(0D, 1.0D, 0D), 15, 0.4D, 0.5D, 0.4D, 0.03D);
@@ -638,7 +641,7 @@ public final class ZombieNPC {
         stateBeforeCasting = state;
         state = ZombieState.CASTING;
         stateTicks = 0;
-        castingTicks = 16;
+        castingTicks = 10;
     }
 
     private void executeAbility(ZombieAbility ability) {
