@@ -222,15 +222,17 @@ public final class ConfigManager {
     }
 
     public String getScarecrowSkinName() {
-        return getConfig().getString("scarecrow.skin-name", "bloodmoon_scarecrow");
+        return getConfig().getString("scarecrow.skin-name", "bloodmoon_scarecrow_akgdmu");
     }
 
     public String getScarecrowSkinTexture() {
-        return getConfig().getString("scarecrow.skin-texture", "");
+        return getConfig().getString("scarecrow.skin-texture",
+            "ewogICJ0aW1lc3RhbXAiIDogMTc3NzU3NjAyOTE1NCwKICAicHJvZmlsZUlkIiA6ICIwMmU5OGQ0MzU1MzQ0NWNkOGEwNWIzYWFlYmIzOWJmMSIsCiAgInByb2ZpbGVOYW1lIiA6ICJha2dkbXUiLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYjRkMWVkZGVhYzgzMGQ5ZGVhMTJiODg4OTk3YjI4OWZhODRiNjljOTAxZjJjNTc0NGFmOTc1ZmM0OTRlYmUzIgogICAgfQogIH0KfQ==");
     }
 
     public String getScarecrowSkinSignature() {
-        return getConfig().getString("scarecrow.skin-signature", "");
+        return getConfig().getString("scarecrow.skin-signature",
+            "ScY77wYvapORK2ZC2kRpHKOINuYz3+iAn6qWHnUiIDe/e4oBXCD2jFNqHBL/N/mNYVNOXmyIH+4fMD1WV4EBIySRvwsSdK4KWvUJgnic28rb8c9lsgbPghgyk15ZFi0YTYfJ7NwfPA4RPtI3Zwg51Nm/IBdNbjaN9RV4APxoANTmPLoC206f0inH37RQvfimervD7v5A+rHiZavOQNs2+zrg9E0FefN4EJYl3OllQgn5HFcOiTibSYlAt11lTNvOvvM5gP2H5NnVSng47CHO8yWD1gigJx1Xe0hq9AiaH8JDOl+lCMQxq5sM+kkyn1p0XJ6ruteV5a1KeS2ZcbfZp3+rQ8uwmvvAhQ0kp09KABMSre3BUM5o1iSZy7hKVWi3Ru/Q+HqjRc8UvkkVAwfLFp9UJHFCAKC+/i4Q2lZ1N2LIwHvCKIEEpCEyf1bKdphkgdrOQUzGifXhrd620if61U8Lzijg7KZg5kinEV+gHa6Oh98RQs4o13gG6JMzZtrNMIV/U6iybBG2nUmBS/EhMliGkvuKGPZ86UvQ2c8OeSECJO7K01gECSSdVVf1dcrss2/8kKS/IjsTB5qsr+FS5JZziQY8kQaT3JtIUDleo50vZMOF4SHJoMq10H/ejMFXbVXbqn6GQHIZolnsPOmNb8EHoComq4MNwNRty6hN+o0=");
     }
 
     public double getBleedChance() {
@@ -311,9 +313,11 @@ public final class ConfigManager {
         config.addDefault("scarecrow.health", 42.0D);
         config.addDefault("scarecrow.max-per-player", 1);
         config.addDefault("scarecrow.spawn-radius", 48);
-        config.addDefault("scarecrow.skin-name", "bloodmoon_scarecrow");
-        config.addDefault("scarecrow.skin-texture", "");
-        config.addDefault("scarecrow.skin-signature", "");
+        config.addDefault("scarecrow.skin-name", "bloodmoon_scarecrow_akgdmu");
+        config.addDefault("scarecrow.skin-texture",
+            "ewogICJ0aW1lc3RhbXAiIDogMTc3NzU3NjAyOTE1NCwKICAicHJvZmlsZUlkIiA6ICIwMmU5OGQ0MzU1MzQ0NWNkOGEwNWIzYWFlYmIzOWJmMSIsCiAgInByb2ZpbGVOYW1lIiA6ICJha2dkbXUiLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYjRkMWVkZGVhYzgzMGQ5ZGVhMTJiODg4OTk3YjI4OWZhODRiNjljOTAxZjJjNTc0NGFmOTc1ZmM0OTRlYmUzIgogICAgfQogIH0KfQ==");
+        config.addDefault("scarecrow.skin-signature",
+            "ScY77wYvapORK2ZC2kRpHKOINuYz3+iAn6qWHnUiIDe/e4oBXCD2jFNqHBL/N/mNYVNOXmyIH+4fMD1WV4EBIySRvwsSdK4KWvUJgnic28rb8c9lsgbPghgyk15ZFi0YTYfJ7NwfPA4RPtI3Zwg51Nm/IBdNbjaN9RV4APxoANTmPLoC206f0inH37RQvfimervD7v5A+rHiZavOQNs2+zrg9E0FefN4EJYl3OllQgn5HFcOiTibSYlAt11lTNvOvvM5gP2H5NnVSng47CHO8yWD1gigJx1Xe0hq9AiaH8JDOl+lCMQxq5sM+kkyn1p0XJ6ruteV5a1KeS2ZcbfZp3+rQ8uwmvvAhQ0kp09KABMSre3BUM5o1iSZy7hKVWi3Ru/Q+HqjRc8UvkkVAwfLFp9UJHFCAKC+/i4Q2lZ1N2LIwHvCKIEEpCEyf1bKdphkgdrOQUzGifXhrd620if61U8Lzijg7KZg5kinEV+gHa6Oh98RQs4o13gG6JMzZtrNMIV/U6iybBG2nUmBS/EhMliGkvuKGPZ86UvQ2c8OeSECJO7K01gECSSdVVf1dcrss2/8kKS/IjsTB5qsr+FS5JZziQY8kQaT3JtIUDleo50vZMOF4SHJoMq10H/ejMFXbVXbqn6GQHIZolnsPOmNb8EHoComq4MNwNRty6hN+o0=");
         config.addDefault("bleed.chance", 0.4D);
         config.addDefault("bleed.damage-per-tick", 1.0D);
         config.addDefault("bleed.interval-ticks", 40);
