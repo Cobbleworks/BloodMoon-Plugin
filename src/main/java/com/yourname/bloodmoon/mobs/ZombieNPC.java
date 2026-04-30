@@ -78,7 +78,8 @@ public final class ZombieNPC {
     public enum ZombieAbility {
         ACID_SPIT(22),
         ROT_ZONE(20),
-        POWER_LEAP(18);
+        POWER_LEAP(18),
+        CHARGE_LEAP(16);
 
         private final int weight;
 
@@ -104,6 +105,7 @@ public final class ZombieNPC {
     private static final int ACID_SPIT_COOLDOWN  = 180;
     private static final int ROT_ZONE_COOLDOWN   = 320;
     private static final int POWER_LEAP_COOLDOWN = 220;
+    private static final int CHARGE_LEAP_COOLDOWN = 260;
 
     private static final int MELEE_COOLDOWN = 20;
 
@@ -180,6 +182,7 @@ public final class ZombieNPC {
     private boolean cleanedUp;
     private boolean deathSequenceStarted;
     private boolean combatInitialized;
+    private boolean leaping;
 
     // -------------------------------------------------------------------------
     // Constructor
@@ -589,6 +592,9 @@ public final class ZombieNPC {
 
         target = player;
         setNavigationSpeed(0.88F);
+        if (leaping) {
+            return; // paused during charge leap arc
+        }
         npc.getNavigator().setTarget(player, true);
         npc.faceLocation(player.getEyeLocation());
 
@@ -641,14 +647,15 @@ public final class ZombieNPC {
         stateBeforeCasting = state;
         state = ZombieState.CASTING;
         stateTicks = 0;
-        castingTicks = 10;
+        castingTicks = ability == ZombieAbility.CHARGE_LEAP ? 25 : 10;
     }
 
     private void executeAbility(ZombieAbility ability) {
         switch (ability) {
-            case ACID_SPIT  -> castAcidSpit();
-            case ROT_ZONE   -> castRotZone();
-            case POWER_LEAP -> castPowerLeap();
+            case ACID_SPIT   -> castAcidSpit();
+            case ROT_ZONE    -> castRotZone();
+            case POWER_LEAP  -> castPowerLeap();
+            case CHARGE_LEAP -> castChargeLeap();
         }
         setCooldown(ability);
     }
@@ -904,6 +911,130 @@ public final class ZombieNPC {
     }
 
     // -------------------------------------------------------------------------
+    // Active ability: CHARGE_LEAP
+    // -------------------------------------------------------------------------
+
+    private void castChargeLeap() {
+        LivingEntity entity = getLivingEntity();
+        Player player = ensureTarget(32.0D);
+        if (entity == null || player == null) {
+            return;
+        }
+
+        Location start = entity.getLocation().clone();
+        Location end   = player.getLocation().clone();
+
+        // Windup cue
+        entity.getWorld().playSound(start, Sound.ENTITY_ZOMBIE_VILLAGER_CURE, 0.9F, 0.45F);
+        entity.getWorld().spawnParticle(Particle.DUST,
+            start.clone().add(0D, 1D, 0D), 25, 0.45D, 0.5D, 0.45D, 0D,
+            new Particle.DustOptions(Color.fromRGB(40, 210, 40), 1.3F));
+
+        leaping = true;
+        npc.getNavigator().cancelNavigation();
+
+        final int TOTAL_TICKS = 16;
+        final double JUMP_HEIGHT = 4.5D;
+        final double totalDist = start.distance(end);
+        final double dx = (end.getX() - start.getX()) / TOTAL_TICKS;
+        final double dz = (end.getZ() - start.getZ()) / TOTAL_TICKS;
+
+        BukkitRunnable leap = new BukkitRunnable() {
+            int tick = 0;
+
+            @Override
+            public void run() {
+                tick++;
+
+                if (tick > TOTAL_TICKS || isDead()) {
+                    leaping = false;
+                    Location landing = isDead() ? start : entity.getLocation().clone();
+                    triggerChargeLeapShockwave(landing, player);
+                    cancel();
+                    return;
+                }
+
+                // Parabolic arc: horizontal lerp + sine-based vertical
+                double progress = (double) tick / TOTAL_TICKS;
+                double arcY = Math.sin(Math.PI * progress) * JUMP_HEIGHT;
+                Location next = start.clone().add(dx * tick, arcY, dz * tick);
+                next.setYaw(entity.getLocation().getYaw());
+                next.setPitch(-25F);
+                entity.teleport(next);
+
+                // Green trail during flight
+                entity.getWorld().spawnParticle(Particle.DUST,
+                    next.clone().add(0D, 0.5D, 0D), 5, 0.2D, 0.2D, 0.2D, 0D,
+                    new Particle.DustOptions(Color.fromRGB(50, 220, 50), 1.0F));
+            }
+        };
+        ownedTasks.add(leap);
+        leap.runTaskTimer(plugin, 1L, 1L);
+    }
+
+    private void triggerChargeLeapShockwave(Location landingLoc, Player targetPlayer) {
+        World world = landingLoc.getWorld();
+        if (world == null) {
+            return;
+        }
+
+        // Impact sounds
+        world.playSound(landingLoc, Sound.ENTITY_WARDEN_SONIC_BOOM,    0.7F, 0.45F);
+        world.playSound(landingLoc, Sound.ENTITY_GENERIC_EXPLODE,      0.55F, 1.4F);
+        world.playSound(landingLoc, Sound.ENTITY_ZOMBIE_BREAK_WOODEN_DOOR, 1.0F, 0.7F);
+
+        // Expanding shockwave ring
+        BukkitRunnable ring = new BukkitRunnable() {
+            int tick = 0;
+
+            @Override
+            public void run() {
+                tick++;
+                if (tick > 14) {
+                    cancel();
+                    return;
+                }
+                double radius = tick * 0.45D;
+                for (int i = 0; i < 24; i++) {
+                    double angle = (Math.PI * 2D / 24D) * i;
+                    double x = Math.cos(angle) * radius;
+                    double z = Math.sin(angle) * radius;
+                    Location ringLoc = landingLoc.clone().add(x, 0.1D, z);
+                    world.spawnParticle(Particle.DUST, ringLoc, 1, 0.05D, 0.02D, 0.05D, 0D,
+                        new Particle.DustOptions(Color.fromRGB(50, 215, 50), 1.1F));
+                    world.spawnParticle(Particle.BLOCK, ringLoc, 1, 0.05D, 0.02D, 0.05D, 0.01D,
+                        Material.GRASS_BLOCK.createBlockData());
+                }
+            }
+        };
+        ownedTasks.add(ring);
+        ring.runTaskTimer(plugin, 1L, 1L);
+
+        // Knockback + damage all players in shockwave radius
+        double shockwaveRadiusSq = 25.0D; // 5 block radius
+        double closeSq           = 4.0D;  // 2 block radius — harder hit
+        for (Player p : world.getPlayers()) {
+            if (p.isDead()) {
+                continue;
+            }
+            double distSq = p.getLocation().distanceSquared(landingLoc);
+            if (distSq > shockwaveRadiusSq) {
+                continue;
+            }
+            // Outward + upward knockback
+            Vector kbDir = p.getLocation().toVector().subtract(landingLoc.toVector());
+            if (kbDir.lengthSquared() > 0.01D) {
+                kbDir.normalize().multiply(1.4D);
+            } else {
+                kbDir = new Vector(0D, 0D, 0.5D);
+            }
+            kbDir.setY(0.85D);
+            p.setVelocity(kbDir);
+            p.damage(distSq <= closeSq ? 4.5D : 2.5D);
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Active ability: POWER_LEAP
     // -------------------------------------------------------------------------
 
@@ -1120,9 +1251,10 @@ public final class ZombieNPC {
 
     private void setCooldown(ZombieAbility ability) {
         switch (ability) {
-            case ACID_SPIT  -> cooldowns.put(ability, ACID_SPIT_COOLDOWN);
-            case ROT_ZONE   -> cooldowns.put(ability, ROT_ZONE_COOLDOWN);
-            case POWER_LEAP -> cooldowns.put(ability, POWER_LEAP_COOLDOWN);
+            case ACID_SPIT   -> cooldowns.put(ability, ACID_SPIT_COOLDOWN);
+            case ROT_ZONE    -> cooldowns.put(ability, ROT_ZONE_COOLDOWN);
+            case POWER_LEAP  -> cooldowns.put(ability, POWER_LEAP_COOLDOWN);
+            case CHARGE_LEAP -> cooldowns.put(ability, CHARGE_LEAP_COOLDOWN);
         }
     }
 
