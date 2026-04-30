@@ -23,6 +23,7 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.ExperienceOrb;
 import org.bukkit.entity.Firework;
 import org.bukkit.entity.FishHook;
+import org.bukkit.entity.FallingBlock;
 import org.bukkit.entity.Chicken;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Parrot;
@@ -336,6 +337,7 @@ public final class ClownNPC {
                 world.spawnParticle(Particle.DUST, loc.clone().add(0,1,0), 4, 0.3, 0.3, 0.3, 0, JESTER_CYAN);
             }
         }
+        if (stateTicks % 50 == 0 && player != null) playTrollTune(player.getLocation());
         if (stateTicks % COMBAT_ABILITY_INTERVAL == 0) { ClownAbility a = chooseAbility(); if (a != null && canUseAbility(a)) startCasting(a); }
     }
 
@@ -379,6 +381,7 @@ public final class ClownNPC {
                 world.spawnParticle(Particle.FIREWORK, loc, 10, 0.4, 0.4, 0.4, 0.06);
             }
         }
+        if (stateTicks % 36 == 0 && player != null) playTrollTune(player.getLocation());
         int interval = (int) Math.max(20, COMBAT_ABILITY_INTERVAL * plugin.getConfigManager().getClownManicCooldownMultiplier());
         if (stateTicks % interval == 0) { ClownAbility a = chooseAbility(); if (a != null && canUseAbility(a)) startCasting(a); }
     }
@@ -860,6 +863,47 @@ public final class ClownNPC {
             if (feet.getBlock().isPassable() && head.getBlock().isPassable()) return feet;
         }
         return base;
+    }
+
+    private void castAnvilPrank() {
+        Player player = ensureTarget(35.0D); LivingEntity caster = getLivingEntity();
+        if (player == null || caster == null) { return; }
+        Location spawn = player.getLocation().clone().add(0, 9.0, 0);
+        World world = spawn.getWorld();
+        if (world == null) { return; }
+        FallingBlock anvil = world.spawnFallingBlock(spawn, Material.ANVIL.createBlockData());
+        anvil.setDropItem(false);
+        anvil.setHurtEntities(true);
+        try { anvil.setCancelDrop(true); } catch (NoSuchMethodError ignored) {}
+        world.playSound(spawn, Sound.BLOCK_ANVIL_PLACE, 0.65F, 0.8F);
+
+        BukkitRunnable task = new BukkitRunnable() {
+            int age = 0;
+            @Override
+            public void run() {
+                age++;
+                if (!anvil.isValid() || anvil.isDead() || age > 60 || anvil.isOnGround()) {
+                    Location impact = anvil.getLocation();
+                    if (anvil.isValid()) anvil.remove();
+                    world.spawnParticle(Particle.BLOCK, impact, 20, 0.35, 0.2, 0.35, Material.ANVIL.createBlockData());
+                    world.playSound(impact, Sound.BLOCK_ANVIL_LAND, 0.9F, 1.0F);
+                    cancel();
+                    return;
+                }
+            }
+        };
+        ownedTasks.add(task);
+        task.runTaskTimer(plugin, 1L, 1L);
+    }
+
+    private void playTrollTune(Location at) {
+        World world = at.getWorld();
+        if (world == null) return;
+        float pitchA = 0.7F + random.nextFloat() * 1.3F;
+        float pitchB = 0.7F + random.nextFloat() * 1.3F;
+        world.playSound(at, Sound.BLOCK_NOTE_BLOCK_BELL, 0.35F, pitchA);
+        world.playSound(at, Sound.BLOCK_NOTE_BLOCK_BIT, 0.3F, pitchB);
+        if (random.nextDouble() < 0.35D) castAnvilPrank();
     }
     private void returnToCombat() {
         if (state == ClownState.CASTING) { state = stateBeforeCasting; stateTicks = 0; }
