@@ -8,9 +8,10 @@ import net.citizensnpcs.api.npc.NPC;
 import net.citizensnpcs.api.trait.Trait;
 import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
-import org.bukkit.block.Block;
 import org.bukkit.entity.*;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -23,15 +24,57 @@ import org.mcmonkey.sentinel.events.SentinelAttackEvent;
 import org.mcmonkey.sentinel.targeting.SentinelTargetList;
 
 public final class WitchNPC {
-    private enum WitchState { COMBAT, CASTING, DEAD }
-    private enum WitchAbility { MIRROR, HEX, SHACKLE, BLAST, CAULDRON, MIND }
 
+    // ─── Appearance constants ─────────────────────────────────────────────────
+    private static final Particle.DustOptions DUST_CRIMSON = new Particle.DustOptions(Color.fromRGB(180, 10,  10),  1.2F);
+    private static final Particle.DustOptions DUST_VIOLET  = new Particle.DustOptions(Color.fromRGB(140,  0, 200),  1.0F);
+    private static final Particle.DustOptions DUST_BLACK   = new Particle.DustOptions(Color.fromRGB( 30,   0,  30),  1.2F);
+    private static final Particle.DustOptions DUST_AMBER   = new Particle.DustOptions(Color.fromRGB(255, 140,  20),  1.0F);
+    private static final Particle.DustOptions DUST_FROST   = new Particle.DustOptions(Color.fromRGB(160, 220, 255),  1.1F);
+    private static final Particle.DustOptions DUST_GOLD    = new Particle.DustOptions(Color.fromRGB(255, 200,   0),  1.0F);
+    private static final Particle.DustOptions DUST_PINK    = new Particle.DustOptions(Color.fromRGB(255,  90, 200),  0.9F);
+
+    // ─── Armor tier downgrade map (Netherite → Diamond → Iron → Gold → Leather)
+    private static final Map<Material, Material> ARMOR_TIER_DOWN = new HashMap<>();
+    static {
+        String[] slots = {"HELMET", "CHESTPLATE", "LEGGINGS", "BOOTS"};
+        String[] tiers = {"NETHERITE", "DIAMOND", "IRON", "GOLDEN", "LEATHER"};
+        for (String slot : slots) {
+            for (int i = 0; i < tiers.length - 1; i++) {
+                Material from = Material.matchMaterial(tiers[i]     + "_" + slot);
+                Material to   = Material.matchMaterial(tiers[i + 1] + "_" + slot);
+                if (from != null && to != null) ARMOR_TIER_DOWN.put(from, to);
+            }
+        }
+    }
+
+    // ─── Enums ────────────────────────────────────────────────────────────────
+    private enum WitchState { COMBAT, CASTING, DEAD }
+    private enum WitchAbility {
+        // Signature
+        SHARED_VESSEL, DEADLY_SPELL, HEX_CIRCLE, MIRROR_IMAGE,
+        // Control
+        ARMOR_CURSE, FREEZING_SPELL, VOID_CAGE, CURSE_OF_SILENCE, SWITCHING_SPELL, INVENTORY_SPELL,
+        // Damage
+        LIGHTNING_MARK, FIRE_SPELL, WILL_O_WISP, RAPID_FIRE, LIFE_DRAIN,
+        // Utility / Summon
+        POTION_VOLLEY, RUNE_TRAPS, ZOMBIFYING
+    }
+
+    // ─── Fields ───────────────────────────────────────────────────────────────
     private final BloodMoonPlugin plugin;
     private final NPC npc;
     private final Location spawnLocation;
     private final Random random = new Random();
     private final Map<WitchAbility, Integer> cooldowns = new EnumMap<>(WitchAbility.class);
     private final List<BukkitRunnable> tasks = new ArrayList<>();
+    private final List<Witch> clones = new ArrayList<>();
+    private final List<Location> runeLocations = new ArrayList<>();
+
+    // Deadly Spell accumulator
+    private double deadlySpellAccumulated = 0.0D;
+    private boolean brandActive = false;
+
     private WitchState state = WitchState.COMBAT;
     private WitchState beforeCast = WitchState.COMBAT;
     private WitchAbility pending;
@@ -43,6 +86,7 @@ public final class WitchNPC {
     private boolean cleaned;
     private boolean deathStarted;
 
+    // ─── Constructor ──────────────────────────────────────────────────────────
     public WitchNPC(BloodMoonPlugin plugin, NPC npc, Location spawnLocation, Player initialTarget) {
         this.plugin = plugin;
         this.npc = npc;
@@ -53,13 +97,28 @@ public final class WitchNPC {
         startController();
     }
 
+    // ─── Public API ───────────────────────────────────────────────────────────
     public boolean isDead() { return state == WitchState.DEAD || cleaned || deathStarted; }
+
     public Location getCurrentLocation() {
         LivingEntity e = getLivingEntity();
         return e != null ? e.getLocation() : (lastKnownLocation == null ? spawnLocation.clone() : lastKnownLocation.clone());
     }
-    public void onTraitTick() { LivingEntity e = getLivingEntity(); if (e != null) lastKnownLocation = e.getLocation(); }
-    public void onNpcSpawn() { LivingEntity e = getLivingEntity(); if (e != null) applyConfiguredHealth(e); }
+
+    public void onTraitTick() {
+        LivingEntity e = getLivingEntity();
+        if (e != null) lastKnownLocation = e.getLocation();
+    }
+
+    public void onNpcSpawn() {
+        LivingEntity e = getLivingEntity();
+        if (e != null) applyConfiguredHealth(e);
+    }
+
+    /** Called by NPCListener when the witch takes a hit – feeds the Deadly Spell accumulator. */
+    public void onTakeDamage(double damage) {
+        if (brandActive && damage > 0) deadlySpellAccumulated += damage;
+    }
 
     public void handleSentinelAttack(SentinelAttackEvent event) {
         if (!(event.getTarget() instanceof Player player) || state == WitchState.DEAD) return;
@@ -73,17 +132,23 @@ public final class WitchNPC {
         state = WitchState.DEAD;
         cancelControllerOnly();
         cancelTasks();
+        brandActive = false;
+        runeLocations.clear();
+        clones.forEach(c -> { if (c.isValid()) c.remove(); });
+        clones.clear();
         Location death = getCurrentLocation();
         World world = death.getWorld();
         if (world != null) {
             world.playSound(death, Sound.ENTITY_WITCH_DEATH, 1.0F, 0.9F);
-            world.spawnParticle(Particle.WITCH, death.clone().add(0,1,0), 30, 0.5, 0.6, 0.5, 0.2);
+            world.spawnParticle(Particle.WITCH, death.clone().add(0, 1, 0), 30, 0.5, 0.6, 0.5, 0.2);
             if (random.nextDouble() <= 0.5) world.dropItemNaturally(death, new ItemStack(Material.REDSTONE, 3));
             if (random.nextDouble() <= 0.2) world.dropItemNaturally(death, new ItemStack(Material.GHAST_TEAR, 1));
-            ExperienceOrb orb = world.spawn(death.clone().add(0,0.25,0), ExperienceOrb.class);
+            ExperienceOrb orb = world.spawn(death.clone().add(0, 0.25, 0), ExperienceOrb.class);
             orb.setExperience(45 + random.nextInt(20));
         }
-        BukkitRunnable cleanupTask = new BukkitRunnable() { @Override public void run() { cleanup(); } };
+        BukkitRunnable cleanupTask = new BukkitRunnable() {
+            @Override public void run() { cleanup(); }
+        };
         tasks.add(cleanupTask);
         cleanupTask.runTaskLater(plugin, 60L);
     }
@@ -93,6 +158,10 @@ public final class WitchNPC {
         cleaned = true;
         cancelControllerOnly();
         cancelTasks();
+        brandActive = false;
+        runeLocations.clear();
+        clones.forEach(c -> { if (c.isValid()) c.remove(); });
+        clones.clear();
         if (npc.isSpawned()) npc.despawn();
         npc.destroy();
         plugin.getNPCManager().unregisterWitch(npc.getId());
@@ -100,11 +169,14 @@ public final class WitchNPC {
 
     public void handleCloneHit(Entity entity) {
         if (entity instanceof Witch witch) {
-            witch.getWorld().spawnParticle(Particle.SMOKE, witch.getLocation().add(0,1,0), 14, 0.2, 0.3, 0.2, 0.03);
+            witch.getWorld().spawnParticle(Particle.SMOKE, witch.getLocation().add(0, 1, 0), 14, 0.2, 0.3, 0.2, 0.03);
+            witch.getWorld().playSound(witch.getLocation(), Sound.ENTITY_WITCH_HURT, 0.7F, 1.3F);
             witch.remove();
+            clones.remove(witch);
         }
     }
 
+    // ─── NPC Setup ────────────────────────────────────────────────────────────
     private void configureNpc() {
         npc.data().set("bloodmoon-witch", true);
         npc.data().set("nameplate-visible", false);
@@ -116,25 +188,22 @@ public final class WitchNPC {
         configureSentinel();
         if (!npc.isSpawned()) npc.spawn(spawnLocation.clone());
         LivingEntity e = getLivingEntity();
-        if (e != null) {
-            applyConfiguredHealth(e);
-            hideNameplate(e);
-        }
+        if (e != null) { applyConfiguredHealth(e); hideNameplate(e); }
     }
 
     private void configureSkin() {
-        String skinName = plugin.getConfigManager().getWitchSkinName();
-        String texture = plugin.getConfigManager().getWitchSkinTexture();
+        String skinName  = plugin.getConfigManager().getWitchSkinName();
+        String texture   = plugin.getConfigManager().getWitchSkinTexture();
         String signature = plugin.getConfigManager().getWitchSkinSignature();
         if ((skinName == null || skinName.isBlank()) && (texture == null || texture.isBlank())) return;
         try {
             Class<? extends Trait> skinTraitClass = Class.forName("net.citizensnpcs.trait.SkinTrait").asSubclass(Trait.class);
             Trait skinTrait = npc.getOrAddTrait(skinTraitClass);
             skinTraitClass.getMethod("setShouldUpdateSkins", boolean.class).invoke(skinTrait, false);
-            skinTraitClass.getMethod("setFetchDefaultSkin", boolean.class).invoke(skinTrait, false);
+            skinTraitClass.getMethod("setFetchDefaultSkin",  boolean.class).invoke(skinTrait, false);
             if (texture != null && !texture.isBlank() && signature != null && !signature.isBlank()) {
-                Method setSkinPersistent = skinTraitClass.getMethod("setSkinPersistent", String.class, String.class, String.class);
-                setSkinPersistent.invoke(skinTrait, skinName, signature, texture);
+                skinTraitClass.getMethod("setSkinPersistent", String.class, String.class, String.class)
+                              .invoke(skinTrait, skinName, signature, texture);
                 return;
             }
             if (skinName != null && !skinName.isBlank()) {
@@ -174,14 +243,12 @@ public final class WitchNPC {
     }
 
     private void applyConfiguredHealth(LivingEntity entity) {
-        double hp = plugin.getConfigManager().getWitchHealth();
-        var attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
-        if (attr != null) {
-            attr.setBaseValue(hp);
-            entity.setHealth(Math.min(hp, entity.getHealth()));
-        }
+        double hp   = plugin.getConfigManager().getWitchHealth();
+        var    attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        if (attr != null) { attr.setBaseValue(hp); entity.setHealth(Math.min(hp, entity.getHealth())); }
     }
 
+    // ─── Combat loop ──────────────────────────────────────────────────────────
     private void startController() {
         controllerTask = new BukkitRunnable() { @Override public void run() { tick(); } };
         controllerTask.runTaskTimer(plugin, 1L, 1L);
@@ -196,17 +263,17 @@ public final class WitchNPC {
         if (state == WitchState.CASTING) { tickCasting(); return; }
         if (state != WitchState.COMBAT) return;
 
+        // Rune trap proximity check (every 4 ticks)
+        if (!runeLocations.isEmpty() && stateTicks % 4 == 0) checkRuneProximity();
+
         Player player = ensureTarget(48.0D);
-        if (player == null) {
-            player = findNearestPlayer(getCurrentLocation(), 48.0D);
-            target = player;
-        }
+        if (player == null) { player = findNearestPlayer(getCurrentLocation(), 48.0D); target = player; }
         if (player == null) return;
 
         npc.getNavigator().setTarget(player, true);
         npc.faceLocation(player.getEyeLocation());
         if (stateTicks % 24 == 0) player.getWorld().playSound(getCurrentLocation(), Sound.ENTITY_WITCH_AMBIENT, 0.8F, 0.8F);
-        if (stateTicks % 35 == 0) {
+        if (stateTicks % 30 == 0) {
             WitchAbility ability = chooseAbility();
             if (ability != null) startCasting(ability);
         }
@@ -224,157 +291,870 @@ public final class WitchNPC {
 
     private void startCasting(WitchAbility ability) {
         if (state == WitchState.CASTING || state == WitchState.DEAD) return;
-        pending = ability;
+        pending  = ability;
         beforeCast = state;
-        state = WitchState.CASTING;
+        state    = WitchState.CASTING;
         stateTicks = 0;
-        castTicks = 20;
+        castTicks  = switch (ability) {
+            case SHARED_VESSEL, DEADLY_SPELL, HEX_CIRCLE, MIRROR_IMAGE -> 35;
+            default -> 20;
+        };
+        Location loc = getCurrentLocation();
+        if (loc.getWorld() != null) loc.getWorld().playSound(loc, Sound.ENTITY_WITCH_CELEBRATE, 0.6F, 0.8F + random.nextFloat() * 0.4F);
     }
 
     private WitchAbility chooseAbility() {
-        List<WitchAbility> options = new ArrayList<>();
-        for (WitchAbility a : WitchAbility.values()) if (cooldowns.getOrDefault(a, 0) <= 0) options.add(a);
-        return options.isEmpty() ? null : options.get(random.nextInt(options.size()));
+        // Weighted pool: Signature weight 1, Control/Utility weight 2, Damage weight 3
+        List<WitchAbility> pool = new ArrayList<>();
+        for (WitchAbility a : WitchAbility.values()) {
+            if (cooldowns.getOrDefault(a, 0) > 0) continue;
+            int weight = switch (a) {
+                case SHARED_VESSEL, DEADLY_SPELL, HEX_CIRCLE, MIRROR_IMAGE -> 1;
+                case ARMOR_CURSE, FREEZING_SPELL, VOID_CAGE, CURSE_OF_SILENCE, SWITCHING_SPELL, INVENTORY_SPELL -> 2;
+                case LIGHTNING_MARK, FIRE_SPELL, WILL_O_WISP, RAPID_FIRE, LIFE_DRAIN -> 3;
+                case POTION_VOLLEY, RUNE_TRAPS, ZOMBIFYING -> 2;
+            };
+            for (int i = 0; i < weight; i++) pool.add(a);
+        }
+        return pool.isEmpty() ? null : pool.get(random.nextInt(pool.size()));
     }
 
     private void executeAbility(WitchAbility ability) {
         switch (ability) {
-            case MIRROR -> castMirrorCurse();
-            case HEX -> castHexMark();
-            case SHACKLE -> castSoulShackle();
-            case BLAST -> castBlasts(false);
-            case CAULDRON -> castCauldronSummon();
-            case MIND -> castMindHex();
+            case SHARED_VESSEL    -> castSharedVessel();
+            case DEADLY_SPELL     -> castDeadlySpell();
+            case HEX_CIRCLE       -> castHexCircle();
+            case MIRROR_IMAGE     -> castMirrorImage();
+            case ARMOR_CURSE      -> castArmorCurse();
+            case FREEZING_SPELL   -> castFreezingSpell();
+            case VOID_CAGE        -> castVoidCage();
+            case CURSE_OF_SILENCE -> castCurseOfSilence();
+            case SWITCHING_SPELL  -> castSwitchingSpell();
+            case INVENTORY_SPELL  -> castInventorySpell();
+            case LIGHTNING_MARK   -> castLightningMark();
+            case FIRE_SPELL       -> castFireSpell();
+            case WILL_O_WISP      -> castWillOWisp();
+            case RAPID_FIRE       -> castRapidFire();
+            case LIFE_DRAIN       -> castLifeDrain();
+            case POTION_VOLLEY    -> castPotionVolley();
+            case RUNE_TRAPS       -> castRuneTraps();
+            case ZOMBIFYING       -> castZombifying();
         }
         cooldowns.put(ability, switch (ability) {
-            case MIRROR -> 220;
-            case HEX -> 260;
-            case SHACKLE -> 180;
-            case BLAST -> 150;
-            case CAULDRON -> 340;
-            case MIND -> 220;
+            case SHARED_VESSEL    -> 400;
+            case DEADLY_SPELL     -> 300;
+            case HEX_CIRCLE       -> 250;
+            case MIRROR_IMAGE     -> 320;
+            case ARMOR_CURSE      -> 280;
+            case FREEZING_SPELL   -> 160;
+            case VOID_CAGE        -> 200;
+            case CURSE_OF_SILENCE -> 180;
+            case SWITCHING_SPELL  -> 220;
+            case INVENTORY_SPELL  -> 240;
+            case LIGHTNING_MARK   -> 140;
+            case FIRE_SPELL       -> 100;
+            case WILL_O_WISP      -> 160;
+            case RAPID_FIRE       -> 120;
+            case LIFE_DRAIN       -> 200;
+            case POTION_VOLLEY    -> 180;
+            case RUNE_TRAPS       -> 280;
+            case ZOMBIFYING       -> 500;
         });
     }
 
-    private void castMirrorCurse() {
-        LivingEntity e = getLivingEntity();
-        if (e == null) return;
-        Location b = e.getLocation();
-        Location t = b.clone().add(randomDouble(-4, 4), 0, randomDouble(-4, 4));
-        t.setY(b.getWorld().getHighestBlockYAt(t) + 1.0D);
-        e.teleport(t);
-        Location c = b.clone().add(randomDouble(-4, 4), 0, randomDouble(-4, 4));
-        c.setY(b.getWorld().getHighestBlockYAt(c) + 1.0D);
-        Witch clone = (Witch) b.getWorld().spawnEntity(c, EntityType.WITCH);
-        clone.setAI(false);
-        clone.setSilent(true);
-        clone.setMetadata("bloodmoon-witch-clone", new FixedMetadataValue(plugin, npc.getId()));
-        castBlasts(true);
-        BukkitRunnable vanish = new BukkitRunnable() { @Override public void run() { if (clone.isValid()) clone.remove(); } };
-        tasks.add(vanish);
-        vanish.runTaskLater(plugin, 120L);
-    }
+    // ─── SIGNATURE ABILITIES ─────────────────────────────────────────────────
 
-    private void castHexMark() {
-        Player p = ensureTarget(35.0D);
-        if (p == null) return;
-        Location c = p.getLocation();
-        World w = c.getWorld();
-        if (w == null) return;
-        for (int i = 0; i < 32; i++) {
-            double a = (Math.PI * 2.0D) * i / 32.0D;
-            Location pt = c.clone().add(Math.cos(a) * 3.0D, 0.1D, Math.sin(a) * 3.0D);
-            w.spawnParticle(Particle.DUST, pt, 1, 0, 0, 0, 0, new Particle.DustOptions(Color.fromRGB(70, 240, 240), 1.0F));
+    /** Shared Vessel – crimson thread binds nearby players; damage one, all receive it. */
+    private void castSharedVessel() {
+        Location casterLoc = getCurrentLocation();
+        World world = casterLoc.getWorld();
+        if (world == null) return;
+        List<Player> nearby = new ArrayList<>();
+        for (Player p : world.getPlayers()) {
+            if (!p.isDead() && p.getLocation().distanceSquared(casterLoc) <= 36.0D * 36.0D) nearby.add(p);
         }
-        BukkitRunnable drop = new BukkitRunnable() {
+        if (nearby.size() < 2) return;
+        if (nearby.size() > 3) nearby.subList(3, nearby.size()).clear();
+        List<Player> linked = List.copyOf(nearby);
+        world.playSound(casterLoc, Sound.ENTITY_WITHER_AMBIENT,   0.7F, 1.8F);
+        world.playSound(casterLoc, Sound.BLOCK_BEACON_ACTIVATE, 0.5F, 0.5F);
+
+        Map<UUID, Double> lastHealth = new HashMap<>();
+        for (Player p : linked) lastHealth.put(p.getUniqueId(), p.getHealth());
+        Set<UUID> mirroringNow = new HashSet<>();
+
+        BukkitRunnable task = new BukkitRunnable() {
+            int t = 0;
             @Override public void run() {
-                for (Player x : w.getPlayers()) {
-                    if (x.isDead()) continue;
-                    if (x.getLocation().distanceSquared(c) <= 9.5D) {
-                        x.setVelocity(new Vector(0, -2.0D, 0));
-                        x.damage(8.0D);
-                        plugin.getDecayPlagueEffect().applyStack(x);
+                t++;
+                if (t > 200 || isDead()) { cancel(); return; }
+                // Pulsing crimson thread between linked players
+                if (t % 2 == 0) {
+                    for (int i = 0; i < linked.size(); i++) {
+                        for (int j = i + 1; j < linked.size(); j++) {
+                            Player a = linked.get(i); Player b = linked.get(j);
+                            if (a.isOnline() && b.isOnline()) drawLine(a.getEyeLocation(), b.getEyeLocation(), DUST_CRIMSON);
+                        }
+                    }
+                }
+                // Health-delta mirroring
+                for (Player p : linked) {
+                    if (!p.isOnline() || p.isDead()) continue;
+                    double now  = p.getHealth();
+                    double last = lastHealth.getOrDefault(p.getUniqueId(), now);
+                    lastHealth.put(p.getUniqueId(), now);
+                    double delta = now - last;
+                    if (delta < -0.05D && mirroringNow.add(p.getUniqueId())) {
+                        for (Player other : linked) {
+                            if (other == p || !other.isOnline() || other.isDead() || !mirroringNow.add(other.getUniqueId())) continue;
+                            other.damage(-delta);
+                            other.getWorld().spawnParticle(Particle.DUST, other.getLocation().add(0, 1, 0), 5, 0.2, 0.3, 0.2, 0, DUST_CRIMSON);
+                        }
+                        Bukkit.getScheduler().runTaskLater(plugin, () -> mirroringNow.clear(), 1L);
                     }
                 }
             }
         };
-        tasks.add(drop);
-        drop.runTaskLater(plugin, 60L);
+        tasks.add(task);
+        task.runTaskTimer(plugin, 1L, 1L);
     }
 
-    private void castSoulShackle() {
-        Player p = ensureTarget(30.0D);
-        if (p == null) return;
-        p.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 45, 1, true, true, true));
-        plugin.getDecayPlagueEffect().applyStack(p);
+    /** Deadly Spell – brand target with a curse mark; detonates at 5 s dealing direct + 50% absorbed witch-damage. */
+    private void castDeadlySpell() {
+        Player player = ensureTarget(35.0D);
+        LivingEntity caster = getLivingEntity();
+        if (player == null || caster == null) return;
+        World world = player.getWorld();
+        world.spawnParticle(Particle.DUST, player.getLocation().add(0, 1, 0), 20, 0.3, 0.4, 0.3, 0, DUST_CRIMSON);
+        world.spawnParticle(Particle.DUST, player.getLocation().add(0, 1, 0), 10, 0.3, 0.4, 0.3, 0, DUST_BLACK);
+        world.playSound(player.getLocation(), Sound.ENTITY_WITHER_SHOOT, 0.8F, 1.8F);
+        brandActive = true;
+        deadlySpellAccumulated = 0.0D;
+        // Pulsing brand visual
+        BukkitRunnable brandVisual = new BukkitRunnable() {
+            int t = 0;
+            @Override public void run() {
+                t++;
+                if (t > 100 || !player.isOnline() || player.isDead()) { cancel(); return; }
+                if (t % 10 == 0) {
+                    player.getWorld().spawnParticle(Particle.DUST, player.getLocation().add(0, 0.5, 0), 8, 0.25, 0.3, 0.25, 0, DUST_CRIMSON);
+                    player.getWorld().spawnParticle(Particle.DUST, player.getLocation().add(0, 1.5, 0), 5, 0.15, 0.1,  0.15, 0, DUST_BLACK);
+                }
+            }
+        };
+        tasks.add(brandVisual);
+        brandVisual.runTaskTimer(plugin, 1L, 1L);
+        // Detonation after 100 ticks (5 s)
+        BukkitRunnable detonate = new BukkitRunnable() {
+            @Override public void run() {
+                brandActive = false;
+                if (!player.isOnline() || player.isDead() || isDead()) return;
+                double total = 6.0D + deadlySpellAccumulated * 0.5D;
+                player.damage(total, caster);
+                world.spawnParticle(Particle.FIREWORK, player.getLocation().add(0, 1, 0), 30, 0.4, 0.4, 0.4, 0.08);
+                world.spawnParticle(Particle.DUST,     player.getLocation().add(0, 1, 0), 40, 0.5, 0.5, 0.5, 0, DUST_CRIMSON);
+                world.playSound(player.getLocation(), Sound.ENTITY_FIREWORK_ROCKET_BLAST, 1.0F, 0.5F);
+                world.playSound(player.getLocation(), Sound.ENTITY_WITHER_SHOOT,          0.8F, 0.6F);
+            }
+        };
+        tasks.add(detonate);
+        detonate.runTaskLater(plugin, 100L);
     }
 
-    private void castBlasts(boolean visualOnly) {
-        Player p = ensureTarget(36.0D);
-        Location s = getCurrentLocation().add(0, 1.2D, 0);
-        World w = s.getWorld();
-        if (p == null || w == null) return;
-        int shots = 4 + random.nextInt(4);
-        BukkitRunnable r = new BukkitRunnable() {
+    /** Hex Circle – slow-forming runic ring around player; seals and violently launches all inside. */
+    private void castHexCircle() {
+        Player player = ensureTarget(35.0D);
+        if (player == null) return;
+        Location center = player.getLocation().clone();
+        World world = center.getWorld();
+        if (world == null) return;
+        double radius = 3.5D;
+        world.playSound(center, Sound.BLOCK_BEACON_AMBIENT, 1.0F, 0.5F);
+        BukkitRunnable task = new BukkitRunnable() {
+            int t = 0;
+            @Override public void run() {
+                t++;
+                if (isDead()) { cancel(); return; }
+                if (t > 80) {
+                    // Seal: launch everything inside
+                    world.playSound(center, Sound.ENTITY_ENDER_DRAGON_GROWL,    0.8F, 1.8F);
+                    world.playSound(center, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 1.0F, 0.7F);
+                    for (Entity e : world.getNearbyEntities(center, radius, 3.0D, radius)) {
+                        if (e instanceof Player p && !p.isDead()) {
+                            p.setVelocity(new Vector(0, 2.2D, 0));
+                            p.damage(5.0D);
+                        } else if (e instanceof LivingEntity le) {
+                            le.setVelocity(new Vector(0, 1.8D, 0));
+                        }
+                    }
+                    world.spawnParticle(Particle.DUST, center.clone().add(0, 0.5, 0), 80, radius, 0.3, radius, 0, DUST_VIOLET);
+                    cancel(); return;
+                }
+                // Animated runic ring – density and colour shift over time
+                int numPoints = 32 + t / 4;
+                for (int i = 0; i < numPoints; i++) {
+                    double angle = (Math.PI * 2.0D) * i / numPoints;
+                    Location pt = center.clone().add(Math.cos(angle) * radius, 0.05D, Math.sin(angle) * radius);
+                    world.spawnParticle(Particle.DUST, pt, 1, 0, 0, 0, 0, t < 40 ? DUST_VIOLET : DUST_CRIMSON);
+                }
+                // Inner rune glyphs, slowly rotating
+                if (t % 8 == 0) {
+                    for (int i = 0; i < 6; i++) {
+                        double a = (Math.PI * 2.0D) * i / 6.0D + t * 0.05D;
+                        Location rune = center.clone().add(Math.cos(a) * radius * 0.5D, 0.05D, Math.sin(a) * radius * 0.5D);
+                        world.spawnParticle(Particle.DUST, rune, 3, 0.1, 0.05, 0.1, 0, DUST_CRIMSON);
+                    }
+                    world.playSound(center, Sound.BLOCK_NOTE_BLOCK_CHIME, 0.3F, 0.5F + (t / 80.0F) * 1.5F);
+                }
+            }
+        };
+        tasks.add(task);
+        task.runTaskTimer(plugin, 1L, 1L);
+    }
+
+    /** Mirror Image – spawns 2-3 indistinguishable phantom witches that cast weakened spells. */
+    private void castMirrorImage() {
+        LivingEntity caster = getLivingEntity();
+        if (caster == null) return;
+        Location base = caster.getLocation();
+        World world = base.getWorld();
+        if (world == null) return;
+        // Despawn existing clones first
+        clones.forEach(c -> { if (c.isValid()) c.remove(); });
+        clones.clear();
+        world.playSound(base, Sound.ENTITY_ENDERMAN_TELEPORT, 0.9F, 1.3F);
+        world.spawnParticle(Particle.SMOKE, base.clone().add(0, 1, 0), 25, 0.4, 0.4, 0.4, 0.04);
+        int count = 2 + (random.nextDouble() < 0.4D ? 1 : 0); // 2 or 3
+        for (int i = 0; i < count; i++) {
+            Location spawnLoc = base.clone().add(randomDouble(-4, 4), 0, randomDouble(-4, 4));
+            spawnLoc.setY(world.getHighestBlockYAt(spawnLoc) + 1.0D);
+            Witch clone = world.spawn(spawnLoc, Witch.class);
+            clone.setAI(false);
+            clone.setSilent(true);
+            clone.setMetadata("bloodmoon-witch-clone", new FixedMetadataValue(plugin, npc.getId()));
+            clones.add(clone);
+            world.spawnParticle(Particle.DUST, spawnLoc.clone().add(0, 1, 0), 15, 0.3, 0.4, 0.3, 0, DUST_VIOLET);
+        }
+        // Clones periodically fire weakened bolts
+        BukkitRunnable cloneTask = new BukkitRunnable() {
+            int t = 0;
+            @Override public void run() {
+                t++;
+                clones.removeIf(c -> !c.isValid());
+                if (t > 160 || clones.isEmpty() || isDead()) {
+                    clones.forEach(c -> {
+                        if (c.isValid()) {
+                            c.getWorld().spawnParticle(Particle.SMOKE, c.getLocation().add(0, 1, 0), 10, 0.2, 0.3, 0.2, 0.03);
+                            c.remove();
+                        }
+                    });
+                    clones.clear();
+                    cancel(); return;
+                }
+                if (t % 25 == 0) {
+                    Player nearestPlayer = findNearestPlayer(getCurrentLocation(), 40.0D);
+                    for (Witch clone : clones) {
+                        if (!clone.isValid() || nearestPlayer == null || nearestPlayer.isDead()) continue;
+                        Vector dir = nearestPlayer.getLocation().add(0, 1, 0).toVector().subtract(clone.getLocation().toVector());
+                        if (dir.lengthSquared() > 0.001D) dir.normalize();
+                        Location cur = clone.getLocation().clone().add(0, 1.2, 0);
+                        World w = clone.getWorld();
+                        for (int i = 0; i < 12; i++) {
+                            cur.add(dir.clone().multiply(0.4D));
+                            w.spawnParticle(Particle.DUST, cur, 1, 0.04, 0.04, 0.04, 0, DUST_VIOLET);
+                        }
+                        if (nearestPlayer.getLocation().distanceSquared(cur) <= 8.0D) nearestPlayer.damage(1.2D);
+                    }
+                }
+            }
+        };
+        tasks.add(cloneTask);
+        cloneTask.runTaskTimer(plugin, 1L, 1L);
+    }
+
+    // ─── CONTROL ABILITIES ────────────────────────────────────────────────────
+
+    /** Armor Curse – black mist at player's location degrades armor tier-by-tier while inside. */
+    private void castArmorCurse() {
+        Player player = ensureTarget(30.0D);
+        if (player == null) return;
+        Location mistCenter = player.getLocation().clone();
+        World world = mistCenter.getWorld();
+        if (world == null) return;
+        double mistRadius = 3.5D;
+        world.playSound(mistCenter, Sound.ENTITY_WITHER_AMBIENT, 0.7F, 1.6F);
+        BukkitRunnable task = new BukkitRunnable() {
+            int t = 0;
+            @Override public void run() {
+                t++;
+                if (t > 220 || isDead()) { cancel(); return; }
+                // Black mist visual
+                if (t % 3 == 0) {
+                    for (int i = 0; i < 8; i++) {
+                        double dx = randomDouble(-mistRadius, mistRadius);
+                        double dz = randomDouble(-mistRadius, mistRadius);
+                        if (dx * dx + dz * dz > mistRadius * mistRadius) continue;
+                        world.spawnParticle(Particle.SMOKE, mistCenter.clone().add(dx, random.nextDouble() * 1.5D, dz), 1, 0.1, 0.05, 0.1, 0.003);
+                        world.spawnParticle(Particle.DUST,  mistCenter.clone().add(dx, random.nextDouble() * 1.0D, dz), 1, 0, 0, 0, 0, DUST_BLACK);
+                    }
+                }
+                // Armor degradation every 30 ticks while player is in mist
+                if (t % 30 == 0) {
+                    for (Player p : world.getPlayers()) {
+                        if (!p.isDead() && p.getLocation().distanceSquared(mistCenter) <= mistRadius * mistRadius) {
+                            degradeArmor(p, world);
+                        }
+                    }
+                }
+            }
+        };
+        tasks.add(task);
+        task.runTaskTimer(plugin, 1L, 1L);
+    }
+
+    private void degradeArmor(Player player, World world) {
+        ItemStack[] armor = player.getInventory().getArmorContents();
+        boolean degraded = false;
+        for (int i = 0; i < armor.length; i++) {
+            ItemStack piece = armor[i];
+            if (piece == null || piece.getType().isAir()) continue;
+            Material down = ARMOR_TIER_DOWN.get(piece.getType());
+            if (down == null) continue;
+            ItemStack replacement = new ItemStack(down, 1);
+            ItemMeta newMeta = replacement.getItemMeta();
+            if (newMeta != null && piece.getItemMeta() != null) {
+                piece.getItemMeta().getEnchants().forEach((ench, level) -> newMeta.addEnchant(ench, level, true));
+                replacement.setItemMeta(newMeta);
+            }
+            armor[i] = replacement;
+            degraded  = true;
+        }
+        if (degraded) {
+            player.getInventory().setArmorContents(armor);
+            world.spawnParticle(Particle.CRIT, player.getLocation().add(0, 1, 0), 12, 0.3, 0.3, 0.3, 0.05);
+            world.playSound(player.getLocation(), Sound.ENTITY_ITEM_BREAK, 0.9F, 0.8F);
+            player.sendMessage("\u00a75Your armor has been cursed by the witch!");
+        }
+    }
+
+    /** Freezing Spell – slow icy projectile; flash-freezes target for 2 s on contact. */
+    private void castFreezingSpell() {
+        Player player = ensureTarget(30.0D);
+        LivingEntity caster = getLivingEntity();
+        if (player == null || caster == null) return;
+        Location from = caster.getEyeLocation();
+        World world = from.getWorld();
+        if (world == null) return;
+        world.playSound(from, Sound.BLOCK_POWDER_SNOW_STEP, 1.0F, 0.5F);
+        world.playSound(from, Sound.ENTITY_GUARDIAN_ATTACK,  0.5F, 1.8F);
+        // Slow simulated projectile (0.28 blocks/tick ≈ 5.6 m/s)
+        Vector vel = player.getEyeLocation().toVector().subtract(from.toVector()).normalize().multiply(0.28D);
+        Location[] pos = { from.clone() };
+        BukkitRunnable task = new BukkitRunnable() {
+            int t = 0;
+            @Override public void run() {
+                t++;
+                if (t > 90 || isDead()) { cancel(); return; }
+                pos[0].add(vel);
+                world.spawnParticle(Particle.DUST, pos[0], 4, 0.10, 0.10, 0.10, 0, DUST_FROST);
+                world.spawnParticle(Particle.DUST, pos[0], 2, 0.06, 0.06, 0.06, 0, new Particle.DustOptions(Color.WHITE, 0.8F));
+                for (Player p : world.getPlayers()) {
+                    if (!p.isDead() && p.getLocation().add(0, 1, 0).distanceSquared(pos[0]) <= 1.0D) {
+                        p.setFreezeTicks(40);
+                        p.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 40, 4, true, true, true));
+                        world.spawnParticle(Particle.DUST, p.getLocation().add(0, 1, 0), 30, 0.5, 0.8, 0.5, 0, DUST_FROST);
+                        world.playSound(p.getLocation(), Sound.BLOCK_GLASS_BREAK, 1.0F, 0.6F);
+                        cancel(); return;
+                    }
+                }
+                if (pos[0].getBlock().getType().isSolid()) { cancel(); }
+            }
+        };
+        tasks.add(task);
+        task.runTaskTimer(plugin, 1L, 1L);
+    }
+
+    /** Void Cage – invisible arcane barrier traps player for 3-4 s. Enforced by PlayerListener. */
+    private void castVoidCage() {
+        Player player = ensureTarget(30.0D);
+        if (player == null) return;
+        World world = player.getWorld();
+        if (world == null) return;
+        Location cageCenter = player.getLocation().clone();
+        double cageRadius   = 2.5D;
+        int    duration     = 60 + random.nextInt(20);
+        // Encode cage data as metadata on the player
+        player.setMetadata("bloodmoon-witch-void-cage",
+            new FixedMetadataValue(plugin,
+                cageCenter.getX() + "," + cageCenter.getY() + "," + cageCenter.getZ() + "," + cageRadius));
+        world.playSound(cageCenter, Sound.BLOCK_BEACON_ACTIVATE, 0.8F, 1.8F);
+        // Visual outline + auto-remove
+        BukkitRunnable task = new BukkitRunnable() {
+            int t = 0;
+            @Override public void run() {
+                t++;
+                if (t > duration || isDead() || !player.isOnline()) {
+                    player.removeMetadata("bloodmoon-witch-void-cage", plugin);
+                    cancel(); return;
+                }
+                if (t % 4 == 0) {
+                    for (int i = 0; i < 24; i++) {
+                        double a = (Math.PI * 2.0D) * i / 24.0D;
+                        world.spawnParticle(Particle.DUST, cageCenter.clone().add(Math.cos(a) * cageRadius, 0.05D, Math.sin(a) * cageRadius), 1, 0, 0, 0, 0, DUST_VIOLET);
+                        world.spawnParticle(Particle.DUST, cageCenter.clone().add(Math.cos(a) * cageRadius, 1.50D, Math.sin(a) * cageRadius), 1, 0, 0, 0, 0, DUST_VIOLET);
+                    }
+                }
+            }
+        };
+        tasks.add(task);
+        task.runTaskTimer(plugin, 1L, 1L);
+    }
+
+    /** Curse of Silence – strips player of hotbar/item control for 3 s. Enforced by PlayerListener. */
+    private void castCurseOfSilence() {
+        Player player = ensureTarget(30.0D);
+        if (player == null) return;
+        World world = player.getWorld();
+        if (world == null) return;
+        long expiry = System.currentTimeMillis() + 3000L;
+        player.setMetadata("bloodmoon-witch-silenced", new FixedMetadataValue(plugin, expiry));
+        world.playSound(player.getLocation(), Sound.ENTITY_WITHER_AMBIENT, 0.7F, 1.9F);
+        world.spawnParticle(Particle.DUST, player.getLocation().add(0, 1.5, 0), 15, 0.3, 0.2, 0.3, 0, DUST_BLACK);
+        // Auto-cleanup slightly after expiry
+        BukkitRunnable cleanup = new BukkitRunnable() {
+            @Override public void run() {
+                if (player.isOnline()) player.removeMetadata("bloodmoon-witch-silenced", plugin);
+            }
+        };
+        tasks.add(cleanup);
+        cleanup.runTaskLater(plugin, 63L);
+    }
+
+    /** Switching Spell – instantly swap positions; witch absorbs copies of player's active potion effects. */
+    private void castSwitchingSpell() {
+        Player player = ensureTarget(30.0D);
+        LivingEntity caster = getLivingEntity();
+        if (player == null || caster == null) return;
+        Location witchLoc  = caster.getLocation().clone();
+        Location playerLoc = player.getLocation().clone();
+        World world = witchLoc.getWorld();
+        if (world == null) return;
+        // Absorb player's potion effects
+        for (PotionEffect effect : new ArrayList<>(player.getActivePotionEffects())) {
+            caster.addPotionEffect(new PotionEffect(effect.getType(), effect.getDuration(), effect.getAmplifier(), true, false));
+        }
+        // Swap
+        player.teleport(witchLoc);
+        npc.teleport(playerLoc, PlayerTeleportEvent.TeleportCause.PLUGIN);
+        world.spawnParticle(Particle.DUST, witchLoc.clone().add(0,  1, 0), 30, 0.5, 0.7, 0.5, 0, DUST_VIOLET);
+        world.spawnParticle(Particle.DUST, playerLoc.clone().add(0, 1, 0), 30, 0.5, 0.7, 0.5, 0, DUST_VIOLET);
+        world.playSound(witchLoc,  Sound.ENTITY_ENDERMAN_TELEPORT, 1.0F, 0.7F);
+        world.playSound(playerLoc, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0F, 1.3F);
+    }
+
+    /** Inventory Spell – large slow projectile that scatters the player's entire inventory on impact. */
+    private void castInventorySpell() {
+        Player player = ensureTarget(32.0D);
+        LivingEntity caster = getLivingEntity();
+        if (player == null || caster == null) return;
+        Location from = caster.getEyeLocation();
+        World world = from.getWorld();
+        if (world == null) return;
+        world.playSound(from, Sound.ENTITY_WITCH_THROW, 1.0F, 0.6F);
+        Vector vel = player.getEyeLocation().toVector().subtract(from.toVector()).normalize().multiply(0.22D);
+        Location[] pos = { from.clone() };
+        BukkitRunnable task = new BukkitRunnable() {
+            int t = 0;
+            @Override public void run() {
+                t++;
+                if (t > 120 || isDead()) { cancel(); return; }
+                pos[0].add(vel);
+                world.spawnParticle(Particle.WITCH,  pos[0], 4, 0.15, 0.15, 0.15, 0.01);
+                world.spawnParticle(Particle.DUST,   pos[0], 2, 0.10, 0.10, 0.10, 0, DUST_VIOLET);
+                for (Player p : world.getPlayers()) {
+                    if (!p.isDead() && p.getLocation().add(0, 1, 0).distanceSquared(pos[0]) <= 1.5D) {
+                        scatterInventory(p);
+                        p.damage(3.5D, caster);
+                        world.spawnParticle(Particle.FIREWORK, pos[0], 20, 0.3, 0.3, 0.3, 0.05);
+                        world.playSound(pos[0], Sound.ENTITY_WITCH_THROW, 1.0F, 0.4F);
+                        cancel(); return;
+                    }
+                }
+                if (pos[0].getBlock().getType().isSolid()) { cancel(); }
+            }
+        };
+        tasks.add(task);
+        task.runTaskTimer(plugin, 1L, 1L);
+    }
+
+    private void scatterInventory(Player player) {
+        World world = player.getWorld();
+        Location center = player.getLocation();
+        List<ItemStack> items = new ArrayList<>();
+        for (ItemStack item : player.getInventory().getContents()) {
+            if (item != null && !item.getType().isAir()) items.add(item.clone());
+        }
+        for (ItemStack item : player.getInventory().getArmorContents()) {
+            if (item != null && !item.getType().isAir()) items.add(item.clone());
+        }
+        ItemStack offhand = player.getInventory().getItemInOffHand();
+        if (!offhand.getType().isAir()) items.add(offhand.clone());
+        player.getInventory().clear();
+        player.getInventory().setArmorContents(new ItemStack[4]);
+        player.getInventory().setItemInOffHand(null);
+        for (ItemStack item : items) {
+            Location dropLoc = center.clone().add(randomDouble(-4, 4), 0.3D, randomDouble(-4, 4));
+            Item dropped = world.dropItem(dropLoc, item);
+            dropped.setVelocity(new Vector(
+                randomDouble(-0.3, 0.3),
+                0.3D + random.nextDouble() * 0.3D,
+                randomDouble(-0.3, 0.3)));
+        }
+        world.playSound(center, Sound.ENTITY_ITEM_PICKUP, 1.0F, 0.4F);
+        world.spawnParticle(Particle.WITCH, center.clone().add(0, 1, 0), 20, 0.5, 0.5, 0.5, 0.02);
+    }
+
+    // ─── DAMAGE ABILITIES ─────────────────────────────────────────────────────
+
+    /** Lightning Mark – glowing sigils on 2-4 blocks near player; delayed energy strike, area damage + ignition. */
+    private void castLightningMark() {
+        Player player = ensureTarget(35.0D);
+        LivingEntity caster = getLivingEntity();
+        if (player == null || caster == null) return;
+        World world = player.getWorld();
+        int count = 2 + random.nextInt(3);
+        List<Location> marks = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            Location markLoc = player.getLocation().clone().add(randomDouble(-3.5D, 3.5D), 0, randomDouble(-3.5D, 3.5D));
+            markLoc.setY(world.getHighestBlockYAt(markLoc) + 0.1D);
+            marks.add(markLoc);
+        }
+        world.playSound(player.getLocation(), Sound.BLOCK_BEACON_AMBIENT, 0.8F, 1.8F);
+        BukkitRunnable task = new BukkitRunnable() {
+            int t = 0;
+            @Override public void run() {
+                t++;
+                if (isDead()) { cancel(); return; }
+                for (Location mark : marks) {
+                    world.spawnParticle(Particle.DUST,  mark, 5, 0.3, 0.05, 0.3, 0, t < 30 ? DUST_GOLD : DUST_CRIMSON);
+                    if (t % 6 == 0) world.spawnParticle(Particle.CRIT, mark.clone().add(0, 0.1, 0), 3, 0.2, 0.05, 0.2, 0.02);
+                }
+                if (t >= 50) {
+                    for (Location mark : marks) {
+                        world.strikeLightningEffect(mark);
+                        world.getBlockAt(mark.getBlockX(), mark.getBlockY() - 1, mark.getBlockZ()).setType(Material.FIRE);
+                        world.spawnParticle(Particle.CRIT, mark.clone().add(0, 0.5, 0), 25, 0.5, 0.8, 0.5, 0.1);
+                        for (Player p : world.getPlayers()) {
+                            if (!p.isDead() && p.getLocation().distanceSquared(mark) <= 9.0D) {
+                                p.damage(5.5D, caster);
+                                p.setFireTicks(Math.max(p.getFireTicks(), 40));
+                            }
+                        }
+                    }
+                    cancel();
+                }
+            }
+        };
+        tasks.add(task);
+        task.runTaskTimer(plugin, 1L, 1L);
+    }
+
+    /** Fire Spell – arcing amber-trail fireball; impact damage + 2 s ablaze. */
+    private void castFireSpell() {
+        Player player = ensureTarget(32.0D);
+        LivingEntity caster = getLivingEntity();
+        if (player == null || caster == null) return;
+        Location from = caster.getEyeLocation();
+        World world = from.getWorld();
+        if (world == null) return;
+        world.playSound(from, Sound.ENTITY_BLAZE_SHOOT, 1.0F, 0.8F);
+        // Horizontal velocity toward target with slight upward arc
+        Vector base = player.getLocation().add(0, 1, 0).toVector().subtract(from.toVector()).normalize().multiply(0.55D);
+        double[] vy = { base.getY() + 0.06D };
+        double gravity = -0.006D;
+        Location[] pos = { from.clone() };
+        BukkitRunnable task = new BukkitRunnable() {
+            int t = 0;
+            @Override public void run() {
+                t++;
+                if (t > 65 || isDead()) { cancel(); return; }
+                vy[0] += gravity;
+                pos[0].add(base.getX(), vy[0], base.getZ());
+                world.spawnParticle(Particle.FLAME, pos[0], 5, 0.10, 0.10, 0.10, 0.01);
+                world.spawnParticle(Particle.DUST,  pos[0], 3, 0.08, 0.08, 0.08, 0, DUST_AMBER);
+                world.spawnParticle(Particle.LAVA,  pos[0], 1, 0.05, 0.05, 0.05, 0.01);
+                for (Player p : world.getPlayers()) {
+                    if (!p.isDead() && p.getLocation().add(0, 1, 0).distanceSquared(pos[0]) <= 1.2D) {
+                        p.damage(6.0D, caster);
+                        p.setFireTicks(Math.max(p.getFireTicks(), 40));
+                        world.spawnParticle(Particle.FLAME, pos[0], 20, 0.4, 0.4, 0.4, 0.05);
+                        cancel(); return;
+                    }
+                }
+                if (pos[0].getBlock().getType().isSolid()) { cancel(); }
+            }
+        };
+        tasks.add(task);
+        task.runTaskTimer(plugin, 1L, 1L);
+    }
+
+    /** Will-O-Wisp – homing blue flame that burns target for 5 s on contact. */
+    private void castWillOWisp() {
+        Player player = ensureTarget(35.0D);
+        LivingEntity caster = getLivingEntity();
+        if (player == null || caster == null) return;
+        Location casterLoc = caster.getLocation();
+        World world = casterLoc.getWorld();
+        if (world == null) return;
+        int count = 1 + (random.nextDouble() < 0.4D ? 1 : 0);
+        world.playSound(casterLoc, Sound.ENTITY_BLAZE_AMBIENT, 0.8F, 1.8F);
+        for (int w = 0; w < count; w++) {
+            Location[] pos = { casterLoc.clone().add(randomDouble(-2, 2), 1.5D, randomDouble(-2, 2)) };
+            BukkitRunnable task = new BukkitRunnable() {
+                int t = 0;
+                @Override public void run() {
+                    t++;
+                    if (t > 160 || isDead() || !player.isOnline() || player.isDead()) { cancel(); return; }
+                    // Home toward player
+                    Vector step = player.getLocation().add(0, 1, 0).toVector().subtract(pos[0].toVector());
+                    double len = step.length();
+                    if (len > 0.01D) pos[0].add(step.normalize().multiply(Math.min(0.18D, len)));
+                    world.spawnParticle(Particle.SOUL_FIRE_FLAME, pos[0], 4, 0.08, 0.08, 0.08, 0.005);
+                    world.spawnParticle(Particle.DUST,            pos[0], 2, 0.05, 0.05, 0.05, 0, DUST_FROST);
+                    if (pos[0].distanceSquared(player.getLocation().add(0, 1, 0)) <= 0.7D) {
+                        player.setFireTicks(Math.max(player.getFireTicks(), 100));
+                        player.damage(2.5D, caster);
+                        world.spawnParticle(Particle.SOUL_FIRE_FLAME, pos[0], 20, 0.4, 0.4, 0.4, 0.02);
+                        world.playSound(pos[0], Sound.ENTITY_BLAZE_SHOOT, 0.7F, 1.6F);
+                        cancel();
+                    }
+                }
+            };
+            tasks.add(task);
+            task.runTaskTimer(plugin, 2L * w + 1L, 1L);
+        }
+    }
+
+    /** Rapid Fire – 3-7 pinkish arcane bolts in quick succession, each dealing light damage. */
+    private void castRapidFire() {
+        Player player = ensureTarget(36.0D);
+        LivingEntity caster = getLivingEntity();
+        if (player == null) return;
+        Location from = getCurrentLocation().clone().add(0, 1.2D, 0);
+        World world = from.getWorld();
+        if (world == null) return;
+        int shots = 3 + random.nextInt(5);
+        BukkitRunnable task = new BukkitRunnable() {
             int left = shots;
             @Override public void run() {
-                if (left-- <= 0 || p.isDead() || isDead()) { cancel(); return; }
-                Vector dir = p.getLocation().toVector().subtract(s.toVector());
+                if (left-- <= 0 || player.isDead() || isDead()) { cancel(); return; }
+                Vector dir = player.getLocation().add(0, 1, 0).toVector().subtract(from.toVector());
                 if (dir.lengthSquared() > 0.001D) dir.normalize();
-                Location cur = s.clone();
-                for (int i = 0; i < 14; i++) {
-                    cur.add(dir.clone().multiply(0.45D));
-                    w.spawnParticle(Particle.DUST, cur, 1, 0.05D, 0.05D, 0.05D, 0, new Particle.DustOptions(Color.fromRGB(255, 90, 190), 0.95F));
+                dir.add(new Vector(randomDouble(-0.06, 0.06), randomDouble(-0.03, 0.03), randomDouble(-0.06, 0.06)));
+                Location cur = from.clone();
+                for (int i = 0; i < 16; i++) {
+                    cur.add(dir.clone().multiply(0.5D));
+                    world.spawnParticle(Particle.DUST, cur, 1, 0.04, 0.04, 0.04, 0, DUST_PINK);
                 }
-                if (!visualOnly && p.getLocation().distanceSquared(cur) <= 6.0D) {
-                    p.damage(2.2D);
-                    plugin.getDecayPlagueEffect().applyStack(p);
+                if (caster != null && player.getLocation().distanceSquared(cur) <= 6.0D) {
+                    player.damage(2.0D, caster);
+                    plugin.getDecayPlagueEffect().applyStack(player);
                 }
+                world.playSound(from, Sound.BLOCK_NOTE_BLOCK_PLING, 0.3F, 1.5F + random.nextFloat() * 0.5F);
             }
         };
-        tasks.add(r);
-        r.runTaskTimer(plugin, 0L, 8L);
+        tasks.add(task);
+        task.runTaskTimer(plugin, 0L, 7L);
     }
 
-    private void castCauldronSummon() {
-        Location c = getCurrentLocation();
-        World w = c.getWorld();
-        if (w == null) return;
-        Vector f = c.getDirection();
-        Location cauldron = c.clone().add(f.clone().multiply(2.0D));
-        Block b = cauldron.getBlock();
-        Material old = b.getType();
-        if (old.isAir()) b.setType(Material.CAULDRON, false);
-        BukkitRunnable r = new BukkitRunnable() {
+    /** Life Drain – dark energy beam that heals witch equal to damage dealt; interrupted by range or LOS break. */
+    private void castLifeDrain() {
+        Player player = ensureTarget(14.0D);
+        LivingEntity caster = getLivingEntity();
+        if (player == null || caster == null) return;
+        World world = caster.getWorld();
+        if (world == null) return;
+        world.playSound(caster.getLocation(), Sound.ENTITY_WITHER_AMBIENT, 0.8F, 1.4F);
+        BukkitRunnable task = new BukkitRunnable() {
+            int t = 0;
             @Override public void run() {
-                Location l = c.clone().add(-2, 0, 0);
-                Location rr = c.clone().add(2, 0, 0);
-                w.strikeLightningEffect(l);
-                w.strikeLightningEffect(rr);
-                plugin.getNPCManager().spawnShamblingZombie(l, findNearestPlayer(c, 40.0D));
-                plugin.getNPCManager().spawnShamblingZombie(rr, findNearestPlayer(c, 40.0D));
-                if (b.getType() == Material.CAULDRON) b.setType(old, false);
+                t++;
+                LivingEntity e = getLivingEntity();
+                if (t > 80 || isDead() || e == null) { cancel(); return; }
+                if (!player.isOnline() || player.isDead()) { cancel(); return; }
+                if (e.getLocation().distanceSquared(player.getLocation()) > 196.0D || !e.hasLineOfSight(player)) { cancel(); return; }
+                drawLine(e.getEyeLocation(), player.getEyeLocation(), DUST_BLACK);
+                if (t % 8 == 0) {
+                    double dmg = 1.5D;
+                    player.damage(dmg, e);
+                    var attr = e.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+                    if (attr != null) e.setHealth(Math.min(attr.getValue(), e.getHealth() + dmg));
+                    world.spawnParticle(Particle.DUST, e.getLocation().add(0, 1.2, 0), 6, 0.3, 0.3, 0.3, 0, DUST_CRIMSON);
+                }
             }
         };
-        tasks.add(r);
-        r.runTaskLater(plugin, 40L);
+        tasks.add(task);
+        task.runTaskTimer(plugin, 1L, 1L);
     }
 
-    private void castMindHex() {
-        Player p = ensureTarget(30.0D);
-        if (p == null) return;
-        plugin.getMindHexEffect().apply(p, 80);
-        plugin.getDecayPlagueEffect().applyStack(p);
-        p.getWorld().spawnParticle(Particle.DUST, p.getLocation().add(0, 1, 0), 10, 0.2D, 0.3D, 0.2D, 0,
-            new Particle.DustOptions(Color.fromRGB(0, 220, 220), 1.0F));
+    // ─── UTILITY / SUMMON ABILITIES ───────────────────────────────────────────
+
+    /** Potion Volley – spread of Slowness, Weakness, and Poison potions in a wide arc. */
+    private void castPotionVolley() {
+        LivingEntity caster = getLivingEntity();
+        Player player = ensureTarget(32.0D);
+        if (caster == null || player == null) return;
+        World world = caster.getWorld();
+        if (world == null) return;
+        world.playSound(caster.getLocation(), Sound.ENTITY_WITCH_THROW, 1.0F, 0.9F);
+        PotionEffectType[] types = { PotionEffectType.SLOWNESS, PotionEffectType.WEAKNESS, PotionEffectType.POISON };
+        Vector base = player.getLocation().add(0, 1, 0).toVector().subtract(caster.getEyeLocation().toVector()).normalize().multiply(0.6D);
+        for (int i = 0; i < 5; i++) {
+            double spread = randomDouble(-0.15D, 0.15D);
+            Vector vel = base.clone().add(new Vector(spread, randomDouble(0, 0.12D), spread));
+            PotionEffectType chosenType = types[random.nextInt(types.length)];
+            BukkitRunnable task = new BukkitRunnable() {
+                final Location pos = caster.getEyeLocation().clone();
+                int t = 0;
+                @Override public void run() {
+                    t++;
+                    if (t > 55 || isDead()) { cancel(); return; }
+                    pos.add(vel);
+                    world.spawnParticle(Particle.WITCH, pos, 3, 0.10, 0.10, 0.10, 0.01);
+                    for (Player p : world.getPlayers()) {
+                        if (!p.isDead() && p.getLocation().add(0, 1, 0).distanceSquared(pos) <= 2.5D) {
+                            int dur = chosenType == PotionEffectType.POISON ? 80 : 60;
+                            p.addPotionEffect(new PotionEffect(chosenType, dur, 0, true, true, true));
+                            world.spawnParticle(Particle.WITCH, pos, 15, 0.3, 0.3, 0.3, 0.02);
+                            cancel(); return;
+                        }
+                    }
+                    if (pos.getBlock().getType().isSolid()) { cancel(); }
+                }
+            };
+            tasks.add(task);
+            task.runTaskTimer(plugin, (long)(i * 3), 1L);
+        }
+    }
+
+    /** Rune Traps – silently places 3-5 invisible runes; triggers Slowness, Blindness, or damage on step. */
+    private void castRuneTraps() {
+        LivingEntity caster = getLivingEntity();
+        if (caster == null) return;
+        Player player = ensureTarget(35.0D);
+        Location base = player != null ? player.getLocation() : getCurrentLocation();
+        World world = base.getWorld();
+        if (world == null) return;
+        int count = 3 + random.nextInt(3);
+        for (int i = 0; i < count; i++) {
+            Location rune = base.clone().add(randomDouble(-5D, 5D), 0, randomDouble(-5D, 5D));
+            rune.setY(world.getHighestBlockYAt(rune) + 0.05D);
+            runeLocations.add(rune.clone());
+        }
+        world.playSound(base, Sound.BLOCK_ENCHANTMENT_TABLE_USE, 0.7F, 0.6F);
+    }
+
+    private void checkRuneProximity() {
+        World world = spawnLocation.getWorld();
+        if (world == null) return;
+        Iterator<Location> iter = runeLocations.iterator();
+        while (iter.hasNext()) {
+            Location rune = iter.next();
+            if (!Objects.equals(rune.getWorld(), world)) { iter.remove(); continue; }
+            boolean triggered = false;
+            for (Player p : world.getPlayers()) {
+                if (!p.isDead() && p.getLocation().distanceSquared(rune) <= 1.0D) {
+                    triggerRune(rune, p);
+                    triggered = true;
+                    break;
+                }
+            }
+            if (triggered) { iter.remove(); continue; }
+            // Very subtle ambient particle so rune isn't completely invisible (reward for sharp eyes)
+            if (random.nextDouble() < 0.08D) world.spawnParticle(Particle.DUST, rune, 1, 0.04, 0.02, 0.04, 0, DUST_VIOLET);
+        }
+    }
+
+    private void triggerRune(Location rune, Player player) {
+        World world = rune.getWorld();
+        if (world == null) return;
+        world.spawnParticle(Particle.DUST, rune.clone().add(0, 0.5, 0), 20, 0.4, 0.3, 0.4, 0, DUST_VIOLET);
+        world.playSound(rune, Sound.BLOCK_ENCHANTMENT_TABLE_USE, 1.0F, 1.5F);
+        LivingEntity caster = getLivingEntity();
+        switch (random.nextInt(3)) {
+            case 0 -> player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 60, 1, true, true, true));
+            case 1 -> {
+                player.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 40, 0, true, true, true));
+                world.playSound(rune, Sound.ENTITY_ENDERMAN_SCREAM, 0.5F, 1.6F);
+            }
+            case 2 -> {
+                if (caster != null) player.damage(4.0D, caster);
+                world.spawnParticle(Particle.CRIT, player.getLocation().add(0, 1, 0), 12, 0.3, 0.3, 0.3, 0.04);
+            }
+        }
+    }
+
+    /** Zombifying – channels briefly then corrupts nearby villagers into hostile Zombie Villagers. */
+    private void castZombifying() {
+        Location casterLoc = getCurrentLocation();
+        World world = casterLoc.getWorld();
+        if (world == null) return;
+        List<Villager> villagers = new ArrayList<>();
+        for (Entity e : world.getNearbyEntities(casterLoc, 20, 10, 20)) {
+            if (e instanceof Villager v && !v.isDead()) villagers.add(v);
+        }
+        if (villagers.isEmpty()) return;
+        world.playSound(casterLoc, Sound.ENTITY_WITHER_SPAWN, 0.6F, 1.8F);
+        for (Villager villager : villagers) {
+            BukkitRunnable channelFx = new BukkitRunnable() {
+                int t = 0;
+                @Override public void run() {
+                    t++;
+                    if (t > 30 || !villager.isValid()) { cancel(); return; }
+                    villager.getWorld().spawnParticle(Particle.DUST,  villager.getLocation().add(0, 1, 0),   6, 0.3, 0.4, 0.3, 0, DUST_BLACK);
+                    villager.getWorld().spawnParticle(Particle.SMOKE, villager.getLocation().add(0, 0.5, 0), 3, 0.2, 0.2, 0.2, 0.02);
+                }
+            };
+            tasks.add(channelFx);
+            channelFx.runTaskTimer(plugin, 1L, 1L);
+            BukkitRunnable convert = new BukkitRunnable() {
+                @Override public void run() {
+                    if (!villager.isValid() || isDead()) return;
+                    Location vl = villager.getLocation();
+                    villager.remove();
+                    ZombieVillager zv = (ZombieVillager) vl.getWorld().spawnEntity(vl, EntityType.ZOMBIE_VILLAGER);
+                    Player nearest = findNearestPlayer(vl, 40.0D);
+                    if (nearest != null) zv.setTarget(nearest);
+                    vl.getWorld().playSound(vl, Sound.ENTITY_ZOMBIE_VILLAGER_CONVERTED, 1.0F, 0.9F);
+                    vl.getWorld().spawnParticle(Particle.SMOKE, vl.clone().add(0, 1, 0), 20, 0.3, 0.4, 0.3, 0.03);
+                }
+            };
+            tasks.add(convert);
+            convert.runTaskLater(plugin, 30L);
+        }
+    }
+
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    /** Draws a particle line between two locations. */
+    private void drawLine(Location a, Location b, Particle.DustOptions dust) {
+        if (!Objects.equals(a.getWorld(), b.getWorld()) || a.getWorld() == null) return;
+        double dist  = a.distance(b);
+        if (dist < 0.1D) return;
+        int    steps = (int)(dist / 0.5D);
+        Vector dir   = b.toVector().subtract(a.toVector()).normalize().multiply(0.5D);
+        Location cur = a.clone();
+        for (int i = 0; i < steps; i++) {
+            cur.add(dir);
+            cur.getWorld().spawnParticle(Particle.DUST, cur, 1, 0, 0, 0, 0, dust);
+        }
     }
 
     private Player ensureTarget(double radius) {
         if (target == null || !target.isOnline() || target.isDead()) { target = null; return null; }
         Location cur = getCurrentLocation();
-        if (cur.getWorld() != target.getWorld() || cur.distanceSquared(target.getLocation()) > radius * radius) {
-            target = null;
-            return null;
+        if (!Objects.equals(cur.getWorld(), target.getWorld()) || cur.distanceSquared(target.getLocation()) > radius * radius) {
+            target = null; return null;
         }
         return target;
     }
@@ -384,13 +1164,14 @@ public final class WitchNPC {
         double rs = radius * radius;
         return location.getWorld().getPlayers().stream()
             .filter(p -> !p.isDead())
+            .filter(p -> Objects.equals(p.getWorld(), location.getWorld()))
             .filter(p -> p.getLocation().distanceSquared(location) <= rs)
             .min(Comparator.comparingDouble(p -> p.getLocation().distanceSquared(location)))
             .orElse(null);
     }
 
     private LivingEntity getLivingEntity() { return npc.isSpawned() && npc.getEntity() instanceof LivingEntity le ? le : null; }
-    private double randomDouble(double min, double max) { return min + (random.nextDouble() * (max - min)); }
+    private double randomDouble(double min, double max) { return min + random.nextDouble() * (max - min); }
     private void cancelControllerOnly() { if (controllerTask != null) { controllerTask.cancel(); controllerTask = null; } }
-    private void cancelTasks() { for (BukkitRunnable task : tasks) { try { task.cancel(); } catch (Exception ignored) {} } tasks.clear(); }
+    private void cancelTasks() { for (BukkitRunnable t : tasks) { try { t.cancel(); } catch (Exception ignored) {} } tasks.clear(); }
 }

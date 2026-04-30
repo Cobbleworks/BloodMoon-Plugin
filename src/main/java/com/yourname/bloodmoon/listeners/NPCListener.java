@@ -59,6 +59,7 @@ public final class NPCListener implements Listener {
         WitchNPC witch = plugin.getNPCManager().getWitch(event.getNPC());
         if (witch != null && event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
             event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_WITCH_HURT, 0.95F, 1.05F);
+            witch.onTakeDamage(event.getDamage());
         }
     }
 

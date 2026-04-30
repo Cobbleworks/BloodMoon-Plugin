@@ -23,6 +23,9 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
+import org.bukkit.Location;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 
@@ -221,6 +224,26 @@ public final class PlayerListener implements Listener {
             return;
         }
 
+        // Void Cage enforcement
+        Player vPlayer = event.getPlayer();
+        if (vPlayer.hasMetadata("bloodmoon-witch-void-cage")) {
+            String data = vPlayer.getMetadata("bloodmoon-witch-void-cage").get(0).asString();
+            String[] parts = data.split(",");
+            if (parts.length == 4) {
+                double cx = Double.parseDouble(parts[0]);
+                double cy = Double.parseDouble(parts[1]);
+                double cz = Double.parseDouble(parts[2]);
+                double r  = Double.parseDouble(parts[3]);
+                Location to = event.getTo();
+                double dx = to.getX() - cx;
+                double dz = to.getZ() - cz;
+                if (dx * dx + dz * dz > r * r) {
+                    event.setTo(event.getFrom());
+                    return;
+                }
+            }
+        }
+
         long now = System.currentTimeMillis();
         UUID uuid = event.getPlayer().getUniqueId();
         if (now - proximityChecks.getOrDefault(uuid, 0L) < 250L) {
@@ -232,11 +255,38 @@ public final class PlayerListener implements Listener {
         plugin.getMindHexEffect().tick(event.getPlayer(), event.getFrom(), event.getTo());
     }
 
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onPlayerInteract(PlayerInteractEvent event) {
+        Player player = event.getPlayer();
+        if (!player.hasMetadata("bloodmoon-witch-silenced")) return;
+        long expiry = player.getMetadata("bloodmoon-witch-silenced").get(0).asLong();
+        if (System.currentTimeMillis() < expiry) {
+            event.setCancelled(true);
+        } else {
+            player.removeMetadata("bloodmoon-witch-silenced", plugin);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+        if (!player.hasMetadata("bloodmoon-witch-silenced")) return;
+        long expiry = player.getMetadata("bloodmoon-witch-silenced").get(0).asLong();
+        if (System.currentTimeMillis() < expiry) {
+            event.setCancelled(true);
+        } else {
+            player.removeMetadata("bloodmoon-witch-silenced", plugin);
+        }
+    }
+
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
-        plugin.getBleedEffect().cancelBleed(event.getEntity());
-        plugin.getInfectionEffect().cancelInfection(event.getEntity());
-        plugin.getDecayPlagueEffect().cancel(event.getEntity());
-        plugin.getMindHexEffect().cancel(event.getEntity());
+        Player p = event.getEntity();
+        plugin.getBleedEffect().cancelBleed(p);
+        plugin.getInfectionEffect().cancelInfection(p);
+        plugin.getDecayPlagueEffect().cancel(p);
+        plugin.getMindHexEffect().cancel(p);
+        p.removeMetadata("bloodmoon-witch-void-cage", plugin);
+        p.removeMetadata("bloodmoon-witch-silenced", plugin);
     }
 }
