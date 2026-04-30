@@ -3,7 +3,9 @@ package com.yourname.bloodmoon;
 import com.yourname.bloodmoon.commands.BloodMoonCommand;
 import com.yourname.bloodmoon.commands.BloodMoonTabCompleter;
 import com.yourname.bloodmoon.effects.BleedEffect;
+import com.yourname.bloodmoon.effects.DecayPlagueEffect;
 import com.yourname.bloodmoon.effects.InfectionEffect;
+import com.yourname.bloodmoon.effects.MindHexEffect;
 import com.yourname.bloodmoon.listeners.BloodMoonListener;
 import com.yourname.bloodmoon.listeners.NPCListener;
 import com.yourname.bloodmoon.listeners.PlayerListener;
@@ -28,6 +30,8 @@ public final class BloodMoonPlugin extends JavaPlugin {
     private NPCManager npcManager;
     private BleedEffect bleedEffect;
     private InfectionEffect infectionEffect;
+    private DecayPlagueEffect decayPlagueEffect;
+    private MindHexEffect mindHexEffect;
     private VampireHealthBarManager vampireHealthBarManager;
 
     /**
@@ -53,6 +57,8 @@ public final class BloodMoonPlugin extends JavaPlugin {
 
         bleedEffect = new BleedEffect(this);
         infectionEffect = new InfectionEffect(this);
+        decayPlagueEffect = new DecayPlagueEffect(this);
+        mindHexEffect = new MindHexEffect(this);
         npcManager = new NPCManager(this);
         bloodMoonManager = new BloodMoonManager(this);
         vampireHealthBarManager = new VampireHealthBarManager(this);
@@ -77,6 +83,12 @@ public final class BloodMoonPlugin extends JavaPlugin {
         }
         if (infectionEffect != null) {
             infectionEffect.cancelAll();
+        }
+        if (decayPlagueEffect != null) {
+            decayPlagueEffect.cancelAll();
+        }
+        if (mindHexEffect != null) {
+            mindHexEffect.cancelAll();
         }
         if (vampireHealthBarManager != null) {
             vampireHealthBarManager.stop();
@@ -127,6 +139,14 @@ public final class BloodMoonPlugin extends JavaPlugin {
 
     public InfectionEffect getInfectionEffect() {
         return infectionEffect;
+    }
+
+    public DecayPlagueEffect getDecayPlagueEffect() {
+        return decayPlagueEffect;
+    }
+
+    public MindHexEffect getMindHexEffect() {
+        return mindHexEffect;
     }
 
     public VampireHealthBarManager getVampireHealthBarManager() {

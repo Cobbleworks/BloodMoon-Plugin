@@ -3,9 +3,11 @@ package com.yourname.bloodmoon.listeners;
 import com.yourname.bloodmoon.BloodMoonPlugin;
 import com.yourname.bloodmoon.mobs.ClownNPC;
 import com.yourname.bloodmoon.mobs.VampireNPC;
+import com.yourname.bloodmoon.mobs.WitchNPC;
 import com.yourname.bloodmoon.mobs.ZombieNPC;
 import com.yourname.bloodmoon.traits.ClownTrait;
 import com.yourname.bloodmoon.traits.VampireTrait;
+import com.yourname.bloodmoon.traits.WitchTrait;
 import com.yourname.bloodmoon.traits.ZombieTrait;
 import net.citizensnpcs.api.event.NPCDamageEvent;
 import net.citizensnpcs.api.event.NPCDeathEvent;
@@ -53,6 +55,12 @@ public final class NPCListener implements Listener {
             if (event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
                 event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_ZOMBIE_HURT, 0.9F, 0.8F);
             }
+            return;
+        }
+
+        WitchNPC witch = plugin.getNPCManager().getWitch(event.getNPC());
+        if (witch != null && event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
+            event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_WITCH_HURT, 0.95F, 1.05F);
         }
     }
 
@@ -79,6 +87,14 @@ public final class NPCListener implements Listener {
             event.getDrops().clear();
             event.setDroppedExp(0);
             zombie.startDeathSequence();
+            return;
+        }
+
+        WitchNPC witch = plugin.getNPCManager().getWitch(event.getNPC());
+        if (witch != null) {
+            event.getDrops().clear();
+            event.setDroppedExp(0);
+            witch.startDeathSequence();
         }
 
     }
@@ -97,6 +113,11 @@ public final class NPCListener implements Listener {
         }
         if (event.getNPC().hasTrait(ZombieTrait.class)) {
             ZombieTrait trait = event.getNPC().getOrAddTrait(ZombieTrait.class);
+            trait.handleSentinelAttack(event);
+            return;
+        }
+        if (event.getNPC().hasTrait(WitchTrait.class)) {
+            WitchTrait trait = event.getNPC().getOrAddTrait(WitchTrait.class);
             trait.handleSentinelAttack(event);
         }
     }

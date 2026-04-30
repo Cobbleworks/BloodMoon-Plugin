@@ -2,6 +2,7 @@ package com.yourname.bloodmoon.listeners;
 
 import com.yourname.bloodmoon.BloodMoonPlugin;
 import com.yourname.bloodmoon.mobs.VampireNPC;
+import com.yourname.bloodmoon.mobs.WitchNPC;
 import com.yourname.bloodmoon.mobs.ZombieNPC;
 import java.util.HashMap;
 import java.util.Map;
@@ -36,6 +37,20 @@ public final class PlayerListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
+        if (event.getEntity().hasMetadata("bloodmoon-witch-clone")) {
+            int npcId = event.getEntity().getMetadata("bloodmoon-witch-clone").isEmpty()
+                ? -1
+                : event.getEntity().getMetadata("bloodmoon-witch-clone").get(0).asInt();
+            WitchNPC witch = plugin.getNPCManager().getWitch(npcId);
+            if (witch != null) {
+                witch.handleCloneHit(event.getEntity());
+            } else {
+                event.getEntity().remove();
+            }
+            event.setCancelled(true);
+            return;
+        }
+
         Entity damager = event.getDamager();
         boolean bloodMoonBat = plugin.getNPCManager().getActiveBatIds().contains(damager.getUniqueId());
         VampireNPC vampire = plugin.getNPCManager().getVampire(damager);
@@ -90,10 +105,13 @@ public final class PlayerListener implements Listener {
         if (event.getItem().getType() == Material.MILK_BUCKET) {
             plugin.getBleedEffect().cancelBleed(event.getPlayer());
             plugin.getInfectionEffect().cancelInfection(event.getPlayer());
+            plugin.getDecayPlagueEffect().cancel(event.getPlayer());
+            plugin.getMindHexEffect().cancel(event.getPlayer());
             return;
         }
         if (event.getItem().getType() == Material.GOLDEN_APPLE || event.getItem().getType() == Material.ENCHANTED_GOLDEN_APPLE) {
             plugin.getInfectionEffect().cancelInfection(event.getPlayer());
+            plugin.getDecayPlagueEffect().cancel(event.getPlayer());
         }
     }
 
@@ -131,15 +149,19 @@ public final class PlayerListener implements Listener {
         long now = System.currentTimeMillis();
         UUID uuid = event.getPlayer().getUniqueId();
         if (now - proximityChecks.getOrDefault(uuid, 0L) < 250L) {
+            plugin.getMindHexEffect().tick(event.getPlayer(), event.getFrom(), event.getTo());
             return;
         }
         proximityChecks.put(uuid, now);
         plugin.getNPCManager().checkDisguisedProximity(event.getPlayer());
+        plugin.getMindHexEffect().tick(event.getPlayer(), event.getFrom(), event.getTo());
     }
 
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
         plugin.getBleedEffect().cancelBleed(event.getEntity());
         plugin.getInfectionEffect().cancelInfection(event.getEntity());
+        plugin.getDecayPlagueEffect().cancel(event.getEntity());
+        plugin.getMindHexEffect().cancel(event.getEntity());
     }
 }

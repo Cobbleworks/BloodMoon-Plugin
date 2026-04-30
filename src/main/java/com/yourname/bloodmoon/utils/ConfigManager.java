@@ -183,6 +183,32 @@ public final class ConfigManager {
             "Y9cLhQ0f2QwfqjsjCKHHAAWiPtwhVoitGTSiy6zXe9C1aM38fLWin08dD5taRvPmfW+dVDTO9Udt/IXYY9XTZMwvrWDqZ17/vwlncwEFXQg/V9ax5mHQySUWafE/7E7VR7XPBV7QDVIxRZzO8gSzcHQyuo+ONyuz16E+cnaJNKi0Aotw+jsfTMhLUQ1JnjbCwG1mf+WTelNB3JxbykBQ062cp4dEQWfDHCn6bZiWzOwh/ldfYFIY/xVldOYhmNpoHH3BPvjxiEROezMMHY4R/jK2yqP82wWIra73xu6JWSQTFsefImcoTxcBhkrUz7pNu+oZwI7FAZwJpy+EvYBajmSxCGRopvu2xfpjp4GsBrZ4/HmSEZPcGl2AM2b3ITIz2rsaaBs2aWeKsUbXmrefKQXRgy/fAp8mvm5nlevLq3sv3+/auBC2MUmwC+9/fBoP8UpuYTDnrz9Q4Sqt00K4KxwmkwdfTH5vsNwxOpbhHDfNLDAb4ayJoSykTNEF6dwRqZsu9AiayMA7YoKoWUCeNKcVz+4OCKE2RfNK+v1lMgh5l9xeFy+bQfBrwv5pwkxqXg8xVoW6YcUS5avlmpvXNw/KV3cBmyf9JCViCI9t9oK5FqmpLsWodpKcoTOMKhibBE+CK81jPLj3JoXLOEJwB1lPWKFl7UQ13fjQvbDl3yc=");
     }
 
+    public double getWitchHealth() {
+        return Math.max(1.0D, getConfig().getDouble("witch.health", 46.0D));
+    }
+
+    public int getWitchMaxPerPlayer() {
+        return Math.max(0, getConfig().getInt("witch.max-per-player", 1));
+    }
+
+    public int getWitchSpawnRadius() {
+        return Math.max(8, getConfig().getInt("witch.spawn-radius", 48));
+    }
+
+    public String getWitchSkinName() {
+        return getConfig().getString("witch.skin-name", "bloodmoon_witch_9b19c47ec1b068a5");
+    }
+
+    public String getWitchSkinTexture() {
+        return getConfig().getString("witch.skin-texture",
+            "ewogICJ0aW1lc3RhbXAiIDogMTY4MzgxNTIwMzQyMiwKICAicHJvZmlsZUlkIiA6ICI1NWQ4NzcyODJmMDc0MWM5ODMyNjBhZDQ3OGE4ODNhMSIsCiAgInByb2ZpbGVOYW1lIiA6ICJUYW1ha2lfSXJvaGExIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzljNWZhYzlkMjE2NGM4NTEwZTYzZDA3NmU5MDBmYWZhZGNjNDcxNWQ4MDQyMTQzNGNjZTJmZGZkMGJiMDE1OCIsCiAgICAgICJtZXRhZGF0YSIgOiB7CiAgICAgICAgIm1vZGVsIiA6ICJzbGltIgogICAgICB9CiAgICB9CiAgfQp9");
+    }
+
+    public String getWitchSkinSignature() {
+        return getConfig().getString("witch.skin-signature",
+            "rhzvhjIEuVPiVeh6n0YPLphl3CDbClnNiKE4QUUX0Zbsm4kxMT0xvjAWC8ELt9y0oFt6IDoP2bBd3Gyrm90Zbn6G4P8fcFI8HPMeDKzjPm1R/vVqtBsy9c4yhQuR0Lc2LaeLMIOp9vXgTTX0/2GraXtRzhP6KjtV+Mt5eZe+zqca66k5ZlJkEuIibPpKtyN3EHiitLhZzUIpJcahy1v3XV5RTkEbAhRs/y5MeyK94t04wLBwAlA9jdgaQZB0Um1jj8n+yB8DninFtJc7kQKjcQlLpnmR7qCj7X03pOVJAlIFfgEfkhmo8w27qwbw+Or1Mbc5/i8fGJmDqQ+HUHEy9UgBDRla87B2gVVp5wdqLTp/fSPHMttBI36QryQDMX8EOIztKnlq3cKv6u8P/mjLEG7NEvAFLDsniPo6D6IkYEENqbdJNvuKmmNtOlNWxVKMH8JbiYV1jgDwD8T6F9AFv9CysYHuel2SP57QM4qjctFiZtztEj4reYE8TbyvpIZqCirqgsg7IjFyHTekiOPqg2L1JKseD44FFgcKFM+27A9i20j3qa+jH6fecd/7uBtV9Ea/mb0O28f9/2vdg0zK9HM7FFsVWiPufrMP8+xGkiSHDPFDlKsqSK2F81WX+795CKxNPcI9aI8aS8y8gVfQQurG+BwcWnJ/f3ZkPfF/0Pw=");
+    }
+
     public double getBleedChance() {
         return Math.max(0.0D, Math.min(1.0D, getConfig().getDouble("bleed.chance", 0.4D)));
     }
@@ -250,6 +276,14 @@ public final class ConfigManager {
             "ewogICJ0aW1lc3RhbXAiIDogMTcyOTM0MTA2NTk5NSwKICAicHJvZmlsZUlkIiA6ICJhMWQzNzljMjhhODA0ZTMxYjY3YjcyMDcyNWE0ZjI3NSIsCiAgInByb2ZpbGVOYW1lIiA6ICJDeXNwZWN0IiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzY4Y2QxYmE3OGU5OTFkYmM4MWNiMDIyOTYyYzA1MzVmYTg5MjEyNzRmMGYzZTJjNDI1NzcxOWE5YWE2MDNiOWUiLAogICAgICAibWV0YWRhdGEiIDogewogICAgICAgICJtb2RlbCIgOiAic2xpbSIKICAgICAgfQogICAgfQogIH0KfQ==");
         config.addDefault("zombie.skin-signature",
             "Y9cLhQ0f2QwfqjsjCKHHAAWiPtwhVoitGTSiy6zXe9C1aM38fLWin08dD5taRvPmfW+dVDTO9Udt/IXYY9XTZMwvrWDqZ17/vwlncwEFXQg/V9ax5mHQySUWafE/7E7VR7XPBV7QDVIxRZzO8gSzcHQyuo+ONyuz16E+cnaJNKi0Aotw+jsfTMhLUQ1JnjbCwG1mf+WTelNB3JxbykBQ062cp4dEQWfDHCn6bZiWzOwh/ldfYFIY/xVldOYhmNpoHH3BPvjxiEROezMMHY4R/jK2yqP82wWIra73xu6JWSQTFsefImcoTxcBhkrUz7pNu+oZwI7FAZwJpy+EvYBajmSxCGRopvu2xfpjp4GsBrZ4/HmSEZPcGl2AM2b3ITIz2rsaaBs2aWeKsUbXmrefKQXRgy/fAp8mvm5nlevLq3sv3+/auBC2MUmwC+9/fBoP8UpuYTDnrz9Q4Sqt00K4KxwmkwdfTH5vsNwxOpbhHDfNLDAb4ayJoSykTNEF6dwRqZsu9AiayMA7YoKoWUCeNKcVz+4OCKE2RfNK+v1lMgh5l9xeFy+bQfBrwv5pwkxqXg8xVoW6YcUS5avlmpvXNw/KV3cBmyf9JCViCI9t9oK5FqmpLsWodpKcoTOMKhibBE+CK81jPLj3JoXLOEJwB1lPWKFl7UQ13fjQvbDl3yc=");
+        config.addDefault("witch.health", 46.0D);
+        config.addDefault("witch.max-per-player", 1);
+        config.addDefault("witch.spawn-radius", 48);
+        config.addDefault("witch.skin-name", "bloodmoon_witch_9b19c47ec1b068a5");
+        config.addDefault("witch.skin-texture",
+            "ewogICJ0aW1lc3RhbXAiIDogMTY4MzgxNTIwMzQyMiwKICAicHJvZmlsZUlkIiA6ICI1NWQ4NzcyODJmMDc0MWM5ODMyNjBhZDQ3OGE4ODNhMSIsCiAgInByb2ZpbGVOYW1lIiA6ICJUYW1ha2lfSXJvaGExIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzljNWZhYzlkMjE2NGM4NTEwZTYzZDA3NmU5MDBmYWZhZGNjNDcxNWQ4MDQyMTQzNGNjZTJmZGZkMGJiMDE1OCIsCiAgICAgICJtZXRhZGF0YSIgOiB7CiAgICAgICAgIm1vZGVsIiA6ICJzbGltIgogICAgICB9CiAgICB9CiAgfQp9");
+        config.addDefault("witch.skin-signature",
+            "rhzvhjIEuVPiVeh6n0YPLphl3CDbClnNiKE4QUUX0Zbsm4kxMT0xvjAWC8ELt9y0oFt6IDoP2bBd3Gyrm90Zbn6G4P8fcFI8HPMeDKzjPm1R/vVqtBsy9c4yhQuR0Lc2LaeLMIOp9vXgTTX0/2GraXtRzhP6KjtV+Mt5eZe+zqca66k5ZlJkEuIibPpKtyN3EHiitLhZzUIpJcahy1v3XV5RTkEbAhRs/y5MeyK94t04wLBwAlA9jdgaQZB0Um1jj8n+yB8DninFtJc7kQKjcQlLpnmR7qCj7X03pOVJAlIFfgEfkhmo8w27qwbw+Or1Mbc5/i8fGJmDqQ+HUHEy9UgBDRla87B2gVVp5wdqLTp/fSPHMttBI36QryQDMX8EOIztKnlq3cKv6u8P/mjLEG7NEvAFLDsniPo6D6IkYEENqbdJNvuKmmNtOlNWxVKMH8JbiYV1jgDwD8T6F9AFv9CysYHuel2SP57QM4qjctFiZtztEj4reYE8TbyvpIZqCirqgsg7IjFyHTekiOPqg2L1JKseD44FFgcKFM+27A9i20j3qa+jH6fecd/7uBtV9Ea/mb0O28f9/2vdg0zK9HM7FFsVWiPufrMP8+xGkiSHDPFDlKsqSK2F81WX+795CKxNPcI9aI8aS8y8gVfQQurG+BwcWnJ/f3ZkPfF/0Pw=");
         config.addDefault("bleed.chance", 0.4D);
         config.addDefault("bleed.damage-per-tick", 1.0D);
         config.addDefault("bleed.interval-ticks", 40);
