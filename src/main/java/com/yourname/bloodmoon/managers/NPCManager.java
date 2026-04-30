@@ -3,6 +3,7 @@ package com.yourname.bloodmoon.managers;
 import com.yourname.bloodmoon.BloodMoonPlugin;
 import com.yourname.bloodmoon.mobs.ClownNPC;
 import com.yourname.bloodmoon.mobs.VampireNPC;
+import com.yourname.bloodmoon.traits.ClownTrait;
 import com.yourname.bloodmoon.traits.VampireTrait;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -58,6 +59,9 @@ public final class NPCManager {
         TraitFactory factory = CitizensAPI.getTraitFactory();
         if (factory != null && factory.getTraitClass("bloodmoon_vampire") == null) {
             factory.registerTrait(TraitInfo.create(VampireTrait.class).withName("bloodmoon_vampire"));
+        }
+        if (factory != null && factory.getTraitClass("bloodmoon_clown") == null) {
+            factory.registerTrait(TraitInfo.create(ClownTrait.class).withName("bloodmoon_clown"));
         }
 
         registerSentinelIntegration();

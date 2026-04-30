@@ -3,6 +3,7 @@ package com.yourname.bloodmoon.listeners;
 import com.yourname.bloodmoon.BloodMoonPlugin;
 import com.yourname.bloodmoon.mobs.ClownNPC;
 import com.yourname.bloodmoon.mobs.VampireNPC;
+import com.yourname.bloodmoon.traits.ClownTrait;
 import com.yourname.bloodmoon.traits.VampireTrait;
 import net.citizensnpcs.api.event.NPCDamageEvent;
 import net.citizensnpcs.api.event.NPCDeathEvent;
@@ -62,10 +63,14 @@ public final class NPCListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onSentinelAttack(SentinelAttackEvent event) {
-        if (!event.getNPC().hasTrait(VampireTrait.class)) {
+        if (event.getNPC().hasTrait(VampireTrait.class)) {
+            VampireTrait trait = event.getNPC().getOrAddTrait(VampireTrait.class);
+            trait.handleSentinelAttack(event);
             return;
         }
-        VampireTrait trait = event.getNPC().getOrAddTrait(VampireTrait.class);
-        trait.handleSentinelAttack(event);
+        if (event.getNPC().hasTrait(ClownTrait.class)) {
+            ClownTrait trait = event.getNPC().getOrAddTrait(ClownTrait.class);
+            trait.handleSentinelAttack(event);
+        }
     }
 }

@@ -174,9 +174,11 @@ public final class ConfigManager {
         config.addDefault("clown.balloon-cap", 6);
         config.addDefault("clown.twisted-teleport-hops", 3);
         config.addDefault("clown.twisted-teleport-interval-ticks", 40);
-        config.addDefault("clown.skin-name", "6be48e115844e11c");
-        config.addDefault("clown.skin-texture", "");
-        config.addDefault("clown.skin-signature", "");
+        config.addDefault("clown.skin-name", "bloodmoon_clown");
+        config.addDefault("clown.skin-texture",
+            "ewogICJ0aW1lc3RhbXAiIDogMTcyNDAxNDk5NjE4NiwKICAicHJvZmlsZUlkIiA6ICI4NGE2YjhmZjk2ZWI0ZTdkYTI0NThiYWMzNGQ4YzNjMiIsCiAgInByb2ZpbGVOYW1lIiA6ICJEQU9SNzc3IiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzViYWYyZTJiMDE5MzRkNzA3NzU5YWFhZjA4Mjk1ZDU1NzExOWU1Njg5ZTk2MDFmOTM5NDIwYzMxZjM2YTg2ZGIiCiAgICB9CiAgfQp9");
+        config.addDefault("clown.skin-signature",
+            "WQV6nonlKCWVCWIwFaUoRwr04OckFCm3hopEEieKdsLFhFf5MzW7tiQEeACUUf/HjcTU2wtfigmopt2luWa8FsrvFCV0csjq0cZruUU/lMx3BZkuWlMnMcH5AhR2tIyx9zNzuCdBMy2roDSfTiecn+ZG8NMBPjSQIFt9o5BpkzBaR3EzFKRZpgSjgFJugYOdk6xr4AFR5QAPPRiN1UYvEXmQDgXujEQ7eOTvu+DhyJL/9MSv4SXjLQz8+rzPS3/XyBnXAU7LjxGtl1wlwL9I0lg9afNzfrAwlYkM2q6StcsVKLUJHpS0VHJMflOoS6ktd157I/h+dOFOgMuB/k8c47YBIXGCejIJL06Ha+jpDW0Gj+3bcxg8MoYnaTV+b4UMvOwlbXC9hhXbkRI2q0HzN3e7DjLp95cFgRlFfZmgXLEpzjyJbb2yFeCuWcD47yD3amHmgpR/rvSJ1lE/wwhbwR6QgbGWaQjJlrdzimsspHou+/h3JA3dlUX2oCs4GpLDBbBODmVLUy/2aK8x/vGucJqBdncXJjShwHMqtAxy+EikZgNKx8RLw6MwQIcOOGHVC7crTIQ2fUcluxbsQ35HK+8nyKh99c6zAhuB1/9puxyqVtuaQS8B3Qndpnz8CtOlwTbnbBC4JtWQ3fM7D0DTVZXWMVPrVNONkKe1jBxrwG0=");
         config.addDefault("bleed.chance", 0.4D);
         config.addDefault("bleed.damage-per-tick", 1.0D);
         config.addDefault("bleed.interval-ticks", 40);
