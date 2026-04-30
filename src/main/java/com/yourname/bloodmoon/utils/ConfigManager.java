@@ -79,6 +79,54 @@ public final class ConfigManager {
         return getConfig().getString("vampire.skin-url", "");
     }
 
+    public double getClownHealth() {
+        return Math.max(1.0D, getConfig().getDouble("clown.health", 32.0D));
+    }
+
+    public int getClownMaxPerPlayer() {
+        return Math.max(0, getConfig().getInt("clown.max-per-player", 1));
+    }
+
+    public int getClownSpawnRadius() {
+        return Math.max(8, getConfig().getInt("clown.spawn-radius", 48));
+    }
+
+    public double getClownSnapRadius() {
+        return Math.max(1.0D, getConfig().getDouble("clown.snap-radius", 6.0D));
+    }
+
+    public double getClownManicHpThreshold() {
+        return Math.max(0.05D, Math.min(0.95D, getConfig().getDouble("clown.manic-hp-threshold", 0.4D)));
+    }
+
+    public double getClownManicCooldownMultiplier() {
+        return Math.max(0.1D, Math.min(1.0D, getConfig().getDouble("clown.manic-cooldown-multiplier", 0.5D)));
+    }
+
+    public int getClownBalloonCap() {
+        return Math.max(1, getConfig().getInt("clown.balloon-cap", 6));
+    }
+
+    public int getClownTwistedTeleportHops() {
+        return Math.max(1, getConfig().getInt("clown.twisted-teleport-hops", 3));
+    }
+
+    public int getClownTwistedTeleportIntervalTicks() {
+        return Math.max(10, getConfig().getInt("clown.twisted-teleport-interval-ticks", 40));
+    }
+
+    public String getClownSkinName() {
+        return getConfig().getString("clown.skin-name", "6be48e115844e11c");
+    }
+
+    public String getClownSkinTexture() {
+        return getConfig().getString("clown.skin-texture", "");
+    }
+
+    public String getClownSkinSignature() {
+        return getConfig().getString("clown.skin-signature", "");
+    }
+
     public double getBleedChance() {
         return Math.max(0.0D, Math.min(1.0D, getConfig().getDouble("bleed.chance", 0.4D)));
     }
@@ -117,6 +165,18 @@ public final class ConfigManager {
         config.addDefault("vampire.skin-signature",
             "wYc8PrLfnZyMfsRSHyTBP/CeBQRwzDG66MSQVlsUnghqwxvJdF47pwWlNPcI7yhU1+/Vwi+OYCVF/Ur7Pf+PP/Lx1U9z4x2jm0T50os8MzPh5VbRP54n82Qd727p9iSVJE9YUTrAG+nbqJ5joy0O5JLP9fBjZNA9RLsj6fFwnYccTc4zIV2QVamj0MNuYHihNHYiBh4lWTR8pLi+WH+/qS0Ll5And0QraSLLQdKdpsVl1IPJjghjGmqaRtUlQ+KaOhQBzcYnxxR7Dq4/IEOrkJUyq1/y/BmVuPpQldk9l6iQ8YVBEjJNHd9Ji9vkeplEJw+XxtWkh+yTbDz6XeszGUyIZ5CbY28VIDJYMmRWLMfgg37eK46xTrKzk+N9Yw2/qOrJtGHQ4n2cbbi76OAGv92eGsOWbR7Dw36zVBRHuUdn6+YqKChW3sqL3ES8JqA3KSwgs76GQMkDK/WlxR0LdE/ekaTLRYxKcBxbtverWhqCWt4Mt0zGraPfdNyQs9fNE6dqs2zHh0WCY0bPZ9gdcwBnzEQdgFMkNPGtVdFsCdU64hUzA/BgFGPLL4cWSss5IDNgJ3o+VxXS8u3wANIemvZIhHozEt04uNla7X6/VWhdm6D/k8PC1F8IhAwD8byY1wkYx2Q4ocgdVIGT4pq1gEWWtJahQFPfyzHHvP512H0=");
         config.addDefault("vampire.skin-url", "");
+        config.addDefault("clown.health", 32.0D);
+        config.addDefault("clown.max-per-player", 1);
+        config.addDefault("clown.spawn-radius", 48);
+        config.addDefault("clown.snap-radius", 6.0D);
+        config.addDefault("clown.manic-hp-threshold", 0.4D);
+        config.addDefault("clown.manic-cooldown-multiplier", 0.5D);
+        config.addDefault("clown.balloon-cap", 6);
+        config.addDefault("clown.twisted-teleport-hops", 3);
+        config.addDefault("clown.twisted-teleport-interval-ticks", 40);
+        config.addDefault("clown.skin-name", "6be48e115844e11c");
+        config.addDefault("clown.skin-texture", "");
+        config.addDefault("clown.skin-signature", "");
         config.addDefault("bleed.chance", 0.4D);
         config.addDefault("bleed.damage-per-tick", 1.0D);
         config.addDefault("bleed.interval-ticks", 40);

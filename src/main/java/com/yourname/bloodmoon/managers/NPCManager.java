@@ -1,6 +1,7 @@
 package com.yourname.bloodmoon.managers;
 
 import com.yourname.bloodmoon.BloodMoonPlugin;
+import com.yourname.bloodmoon.mobs.ClownNPC;
 import com.yourname.bloodmoon.mobs.VampireNPC;
 import com.yourname.bloodmoon.traits.VampireTrait;
 import java.util.ArrayList;
@@ -40,6 +41,7 @@ public final class NPCManager {
     private final Set<Integer> activeNpcIds = new HashSet<>();
     private final Set<UUID> activeBatIds = new HashSet<>();
     private final Map<Integer, VampireNPC> vampires = new HashMap<>();
+    private final Map<Integer, ClownNPC> clowns = new HashMap<>();
     private final Random random = new Random();
     private boolean citizensInitialized;
     private boolean sentinelIntegrationRegistered;
@@ -75,11 +77,25 @@ public final class NPCManager {
         if (countVampiresNear(player, 96.0D) >= plugin.getConfigManager().getMaxVampiresPerPlayer()) {
             return Optional.empty();
         }
-        Location location = findSpawnLocationNear(player);
+        Location location = findSpawnLocationNear(player, plugin.getConfigManager().getVampireSpawnRadius());
         if (location == null) {
             return Optional.empty();
         }
         return spawnVampire(location, null);
+    }
+
+    public Optional<ClownNPC> spawnClownNear(Player player) {
+        if (player == null || !player.isOnline()) {
+            return Optional.empty();
+        }
+        if (countClownsNear(player, 96.0D) >= plugin.getConfigManager().getClownMaxPerPlayer()) {
+            return Optional.empty();
+        }
+        Location location = findSpawnLocationNear(player, plugin.getConfigManager().getClownSpawnRadius());
+        if (location == null) {
+            return Optional.empty();
+        }
+        return spawnClown(location);
     }
 
     public Optional<VampireNPC> spawnVampire(Location location, Player initialTarget) {
@@ -100,6 +116,26 @@ public final class NPCManager {
         activeNpcIds.add(npc.getId());
         vampires.put(npc.getId(), vampire);
         return Optional.of(vampire);
+    }
+
+    public Optional<ClownNPC> spawnClown(Location location) {
+        if (!citizensInitialized) {
+            initializeCitizens();
+        }
+        if (!isCitizensReady() || location == null || location.getWorld() == null) {
+            return Optional.empty();
+        }
+
+        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        if (registry == null) {
+            return Optional.empty();
+        }
+
+        NPC npc = registry.createNPC(EntityType.PLAYER, "§dClown");
+        ClownNPC clown = new ClownNPC(plugin, npc, location);
+        activeNpcIds.add(npc.getId());
+        clowns.put(npc.getId(), clown);
+        return Optional.of(clown);
     }
 
     public void checkDisguisedProximity(Player player) {
@@ -127,8 +163,27 @@ public final class NPCManager {
         return getVampire(registry.getNPC(entity));
     }
 
+    public ClownNPC getClown(int npcId) {
+        return clowns.get(npcId);
+    }
+
+    public ClownNPC getClown(NPC npc) {
+        return npc == null ? null : clowns.get(npc.getId());
+    }
+
+    public ClownNPC getClown(Entity entity) {
+        if (entity == null || !entity.hasMetadata("NPC") || !isCitizensReady()) {
+            return null;
+        }
+        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        if (registry == null || !registry.isNPC(entity)) {
+            return null;
+        }
+        return getClown(registry.getNPC(entity));
+    }
+
     public boolean isBloodMoonNpc(Entity entity) {
-        return getVampire(entity) != null;
+        return getVampire(entity) != null || getClown(entity) != null;
     }
 
     public void registerBat(Bat bat) {
@@ -153,6 +208,10 @@ public final class NPCManager {
 
     public List<VampireNPC> getActiveVampires() {
         return List.copyOf(vampires.values());
+    }
+
+    public List<ClownNPC> getActiveClowns() {
+        return List.copyOf(clowns.values());
     }
 
     public int countVampires(World world) {
@@ -183,16 +242,42 @@ public final class NPCManager {
         return count;
     }
 
+    public int countClownsNear(Player player, double radius) {
+        if (player == null) {
+            return 0;
+        }
+        int count = 0;
+        double radiusSquared = radius * radius;
+        for (ClownNPC clown : clowns.values()) {
+            Location location = clown.getCurrentLocation();
+            if (location != null
+                && location.getWorld() == player.getWorld()
+                && location.distanceSquared(player.getLocation()) <= radiusSquared) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     public void unregisterVampire(int npcId) {
         activeNpcIds.remove(npcId);
         vampires.remove(npcId);
+    }
+
+    public void unregisterClown(int npcId) {
+        activeNpcIds.remove(npcId);
+        clowns.remove(npcId);
     }
 
     public void cleanupAll() {
         for (VampireNPC vampire : new ArrayList<>(vampires.values())) {
             vampire.cleanup();
         }
+        for (ClownNPC clown : new ArrayList<>(clowns.values())) {
+            clown.cleanup();
+        }
         vampires.clear();
+        clowns.clear();
         activeNpcIds.clear();
         cleanupTrackedBats();
     }
@@ -206,8 +291,16 @@ public final class NPCManager {
                 toRemove.add(entry.getKey());
             }
         }
+        for (Map.Entry<Integer, ClownNPC> entry : new ArrayList<>(clowns.entrySet())) {
+            Location location = entry.getValue().getCurrentLocation();
+            if (location != null && location.getWorld() == world) {
+                entry.getValue().cleanup();
+                toRemove.add(entry.getKey());
+            }
+        }
         toRemove.forEach(id -> {
             vampires.remove(id);
+            clowns.remove(id);
             activeNpcIds.remove(id);
         });
         activeBatIds.removeIf(uid -> {
@@ -232,9 +325,8 @@ public final class NPCManager {
         activeBatIds.clear();
     }
 
-    private Location findSpawnLocationNear(Player player) {
+    private Location findSpawnLocationNear(Player player, int radius) {
         World world = player.getWorld();
-        int radius = plugin.getConfigManager().getVampireSpawnRadius();
         double minDistanceSquared = 24.0D * 24.0D;
         Location playerLocation = player.getLocation();
         for (int attempt = 0; attempt < 64; attempt++) {

@@ -1,6 +1,7 @@
 package com.yourname.bloodmoon.listeners;
 
 import com.yourname.bloodmoon.BloodMoonPlugin;
+import com.yourname.bloodmoon.mobs.ClownNPC;
 import com.yourname.bloodmoon.mobs.VampireNPC;
 import com.yourname.bloodmoon.traits.VampireTrait;
 import net.citizensnpcs.api.event.NPCDamageEvent;
@@ -33,6 +34,10 @@ public final class NPCListener implements Listener {
             return;
         }
 
+        ClownNPC clown = plugin.getNPCManager().getClown(event.getNPC());
+        if (clown != null && event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
+            event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_WITCH_HURT, 0.9F, 1.2F);
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -42,6 +47,14 @@ public final class NPCListener implements Listener {
             event.getDrops().clear();
             event.setDroppedExp(0);
             vampire.startDeathSequence();
+            return;
+        }
+
+        ClownNPC clown = plugin.getNPCManager().getClown(event.getNPC());
+        if (clown != null) {
+            event.getDrops().clear();
+            event.setDroppedExp(0);
+            clown.startDeathSequence();
             return;
         }
 

@@ -92,7 +92,8 @@ public final class BloodMoonCommand implements CommandExecutor {
         MessageUtils.send(sender, "§7Active worlds: §f" + (activeWorlds.isEmpty() ? "none" : activeWorlds.stream().map(World::getName).toList()));
         MessageUtils.send(sender, "§7Chance: §f1-in-" + plugin.getBloodMoonManager().getCurrentChance()
             + (plugin.getBloodMoonManager().hasChanceOverride() ? " §e(temporary override)" : ""));
-        MessageUtils.send(sender, "§7Active vampires: §f" + plugin.getNPCManager().getActiveNpcIds().size());
+        MessageUtils.send(sender, "§7Active vampires: §f" + plugin.getNPCManager().getActiveVampires().size());
+        MessageUtils.send(sender, "§7Active clowns: §f" + plugin.getNPCManager().getActiveClowns().size());
         MessageUtils.send(sender, "§7Tracked bats: §f" + plugin.getNPCManager().getActiveBatIds().size());
         MessageUtils.send(sender, "§7System mode: §fNPC-only enemies");
         for (World world : Bukkit.getWorlds()) {
@@ -118,7 +119,10 @@ public final class BloodMoonCommand implements CommandExecutor {
             case "vampire" -> plugin.getNPCManager().spawnVampireNear(player).ifPresentOrElse(
                 v -> MessageUtils.send(sender, "§aSpawned vampire near §e" + player.getName() + "§a."),
                 () -> MessageUtils.send(sender, "§cCould not spawn. Citizens/Sentinel may not be ready."));
-            default -> MessageUtils.send(sender, "§cUnknown type. Use: vampire.");
+            case "clown" -> plugin.getNPCManager().spawnClownNear(player).ifPresentOrElse(
+                c -> MessageUtils.send(sender, "§aSpawned clown near §e" + player.getName() + "§a."),
+                () -> MessageUtils.send(sender, "§cCould not spawn clown here right now."));
+            default -> MessageUtils.send(sender, "§cUnknown type. Use: vampire or clown.");
         }
     }
 
@@ -221,7 +225,7 @@ public final class BloodMoonCommand implements CommandExecutor {
         MessageUtils.send(sender, "§7/bloodmoon start [world]");
         MessageUtils.send(sender, "§7/bloodmoon stop [world]");
         MessageUtils.send(sender, "§7/bloodmoon status");
-        MessageUtils.send(sender, "§7/bloodmoon spawn vampire <player>");
+        MessageUtils.send(sender, "§7/bloodmoon spawn <vampire|clown> <player>");
 
         MessageUtils.send(sender, "§7/bloodmoon clear [world]");
         MessageUtils.send(sender, "§7/bloodmoon reload");

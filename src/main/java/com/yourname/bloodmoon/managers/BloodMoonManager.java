@@ -363,6 +363,12 @@ public final class BloodMoonManager {
                 }
                 plugin.getNPCManager().spawnVampireNear(player);
             }
+            for (int index = 0; index < Math.max(1, plugin.getConfigManager().getClownMaxPerPlayer()); index++) {
+                if (plugin.getNPCManager().countClownsNear(player, 96.0D) >= plugin.getConfigManager().getClownMaxPerPlayer()) {
+                    break;
+                }
+                plugin.getNPCManager().spawnClownNear(player);
+            }
         }
     }
 
@@ -398,11 +404,13 @@ public final class BloodMoonManager {
             return;
         }
         for (Player player : world.getPlayers()) {
-            if (plugin.getNPCManager().countVampiresNear(player, 96.0D) >= plugin.getConfigManager().getMaxVampiresPerPlayer()) {
-                continue;
-            }
-            if (random.nextDouble() <= 0.18D) {
+            if (plugin.getNPCManager().countVampiresNear(player, 96.0D) < plugin.getConfigManager().getMaxVampiresPerPlayer()
+                && random.nextDouble() <= 0.18D) {
                 plugin.getNPCManager().spawnVampireNear(player);
+            }
+            if (plugin.getNPCManager().countClownsNear(player, 96.0D) < plugin.getConfigManager().getClownMaxPerPlayer()
+                && random.nextDouble() <= 0.12D) {
+                plugin.getNPCManager().spawnClownNear(player);
             }
         }
     }

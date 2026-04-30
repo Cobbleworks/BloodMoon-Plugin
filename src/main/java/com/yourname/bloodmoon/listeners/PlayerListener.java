@@ -50,6 +50,11 @@ public final class PlayerListener implements Listener {
         if (vampire != null && event.getEntity() instanceof Player player) {
             vampire.onMeleeHit(player);
         }
+
+        if (plugin.getNPCManager().getClown(event.getEntity()) != null) {
+            // First hit should force the jester into snapped combat mode.
+            plugin.getNPCManager().getClown(event.getEntity()).triggerSnapFromDamage();
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
