@@ -116,17 +116,17 @@ public final class ConfigManager {
     }
 
     public String getClownSkinName() {
-        return getConfig().getString("clown.skin-name", "bloodmoon_clown_26f4f083cb84eb01");
+        return getConfig().getString("clown.skin-name", "bloodmoon_clown_tdexterious");
     }
 
     public String getClownSkinTexture() {
         return getConfig().getString("clown.skin-texture",
-            "ewogICJ0aW1lc3RhbXAiIDogMTc3NzU1NTU0OTc3MCwKICAicHJvZmlsZUlkIiA6ICJlZGUyYzdhMGFjNjM0MTNiYjA5ZDNmMGJlZTllYzhlYyIsCiAgInByb2ZpbGVOYW1lIiA6ICJ0aGVEZXZKYWRlIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlL2NlMmRmZTNlYmVmYTBmZDViNDg4Nzg5ZmJiN2NhOWFhMDRkZjYwZjI0MjFlNWMzYmQzZGQ2MWE2YjM0Nzk2ZGQiLAogICAgICAibWV0YWRhdGEiIDogewogICAgICAgICJtb2RlbCIgOiAic2xpbSIKICAgICAgfQogICAgfQogIH0KfQ==");
+            "ewogICJ0aW1lc3RhbXAiIDogMTc3NzU1NzM5MDEwMSwKICAicHJvZmlsZUlkIiA6ICJjMmYxYWZkZmU3NGU0Zjk4YmFmN2MxNWI2YjVlYzFhYSIsCiAgInByb2ZpbGVOYW1lIiA6ICJ0ZGV4dGVyaW91cyIsCiAgInNpZ25hdHVyZVJlcXVpcmVkIiA6IHRydWUsCiAgInRleHR1cmVzIiA6IHsKICAgICJTS0lOIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS84Njg2YjFlNGRiM2VlZTEzZTMwMmIwMzY2YWIxOTg2ODcwZThiNTcxMTJhYzI2YmMwOWY5NDVkNDc5YzAzMTkyIiwKICAgICAgIm1ldGFkYXRhIiA6IHsKICAgICAgICAibW9kZWwiIDogInNsaW0iCiAgICAgIH0KICAgIH0KICB9Cn0=");
     }
 
     public String getClownSkinSignature() {
         return getConfig().getString("clown.skin-signature",
-            "dZBFGsVZLOIS5cClZzu53+wGuKXmqxrDgIdm63b3VlYA3gi+9dhIoDhFcZ9IdKn4V93xwBmSZNgIqHt2B1q1Shp8Nc+hajKhwUfEuknvh/mIQQOMRvK0kBCMGKGNHTga6XENSKGKVHO9Ny9cOiG+uCF2YYb0Ct6jnEBfdCXQ7eQKdNrM0kwL7nRK4ZHcXF+tMrC5/yqjEtMCN/95w5O06tBilhQZk/r398h3X2n8dXDPPqY74eA0P2pqAaSJ0pjL/uD4bCe+SxMu2X8Q//t+aG0AM0z6Hf4okCcl/eFA2NLGGj3QdqeHuvfzTWFqGMe1/NwS3QMawG7ABBZ0wZJGU6zxexFWYDcJ9yJsXSZb9bw4CI6W2Iwjxk6MabF3nvCGIXUOZ87WUEhPVZGKsqOhfDltOXvFVRIhx65N3hia0DJQrKephywpuTMkjjd/AYyGqvW4r368g4GeuitRhktUS07MKZnhc7OFo9PBfWDEH1t7QkCqM+EoN9qBnZl0PcdDJTTbasM7mEQAKpK3NwcZjUZpR5o+Wz49yYH1shhdg+Ji5ripJnW9Lb6B1XJ2kh2UAHhzGSfWQ58q5JymZAgzXV+O7WWIKA05pINWDccB/rbBcKp4C7PSpQdMy4vra0eb0n6lkcuBviNwwbZJzBruFf3WTaYVviZhqPhGDQl48ko=");
+            "AqNWXbfduDlOYFxlql5nRs6JxVttd3URTQmjHPvc6N73XNHNWYfc4SaTZ6vWwzp2JHgutcXGrSLAg+U3YDIf4TGSlXMWxLbxR7yL57ca4xo1Vhkvfzkr0j1770TEAAYm23exnkw/g7CaRWU/Y3VN0c3xAG5wmWgXSs+wunLqF0rnKyCeuW//JYSWNDKPRghlOQltxpQ4OJAvT3/3HDIPXgigx1UP6bMJx4YkbcZ1nNlB0Ka06LxXfR7xp21ZKvGYi8XHW35VEpofGhwXfeDIj8TdX41bRVTlFiXuL7FIauHmhrhPS5FqPi97AahTGOvuRvK2BiyGbkLZt5dBB4KRizhz8c5b4LBc/U+sJs/f0FAF84NF+C/hHVTspNY5hj1o7xyyqJKzh4jtzutxyRbrGIkG9MR44TsO6qNPYV2szkEGPWMu8GxC2yw6czPy8Q1EnPvqL3goiTek6isWeba3DDtfkKfKQ7YcFwN/VMgN/0Xr2H/Jlbc3U7U3i2G3EfWB4mfNcq4xdR2GS8gvO0DpFrMNQATitZqWE+W0X430Lr0Ojji6KtaiFwBI3WjL2fwxzwrxbK1UJNPU3Qi28c/+Iz6z0tXCRTjqhNF5vDxBVWfvyysQTkS/yNh2d46/bm/ERqdA2BfXDDqiHuJOLqyhOnoRcBzfa/02aLx4sEeZkIU=");
     }
 
     public double getZombieHealth() {
@@ -256,11 +256,11 @@ public final class ConfigManager {
         config.addDefault("clown.balloon-cap", 6);
         config.addDefault("clown.twisted-teleport-hops", 3);
         config.addDefault("clown.twisted-teleport-interval-ticks", 40);
-        config.addDefault("clown.skin-name", "bloodmoon_clown_26f4f083cb84eb01");
+        config.addDefault("clown.skin-name", "bloodmoon_clown_tdexterious");
         config.addDefault("clown.skin-texture",
-            "ewogICJ0aW1lc3RhbXAiIDogMTc3NzU1NTU0OTc3MCwKICAicHJvZmlsZUlkIiA6ICJlZGUyYzdhMGFjNjM0MTNiYjA5ZDNmMGJlZTllYzhlYyIsCiAgInByb2ZpbGVOYW1lIiA6ICJ0aGVEZXZKYWRlIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlL2NlMmRmZTNlYmVmYTBmZDViNDg4Nzg5ZmJiN2NhOWFhMDRkZjYwZjI0MjFlNWMzYmQzZGQ2MWE2YjM0Nzk2ZGQiLAogICAgICAibWV0YWRhdGEiIDogewogICAgICAgICJtb2RlbCIgOiAic2xpbSIKICAgICAgfQogICAgfQogIH0KfQ==");
+            "ewogICJ0aW1lc3RhbXAiIDogMTc3NzU1NzM5MDEwMSwKICAicHJvZmlsZUlkIiA6ICJjMmYxYWZkZmU3NGU0Zjk4YmFmN2MxNWI2YjVlYzFhYSIsCiAgInByb2ZpbGVOYW1lIiA6ICJ0ZGV4dGVyaW91cyIsCiAgInNpZ25hdHVyZVJlcXVpcmVkIiA6IHRydWUsCiAgInRleHR1cmVzIiA6IHsKICAgICJTS0lOIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS84Njg2YjFlNGRiM2VlZTEzZTMwMmIwMzY2YWIxOTg2ODcwZThiNTcxMTJhYzI2YmMwOWY5NDVkNDc5YzAzMTkyIiwKICAgICAgIm1ldGFkYXRhIiA6IHsKICAgICAgICAibW9kZWwiIDogInNsaW0iCiAgICAgIH0KICAgIH0KICB9Cn0=");
         config.addDefault("clown.skin-signature",
-            "dZBFGsVZLOIS5cClZzu53+wGuKXmqxrDgIdm63b3VlYA3gi+9dhIoDhFcZ9IdKn4V93xwBmSZNgIqHt2B1q1Shp8Nc+hajKhwUfEuknvh/mIQQOMRvK0kBCMGKGNHTga6XENSKGKVHO9Ny9cOiG+uCF2YYb0Ct6jnEBfdCXQ7eQKdNrM0kwL7nRK4ZHcXF+tMrC5/yqjEtMCN/95w5O06tBilhQZk/r398h3X2n8dXDPPqY74eA0P2pqAaSJ0pjL/uD4bCe+SxMu2X8Q//t+aG0AM0z6Hf4okCcl/eFA2NLGGj3QdqeHuvfzTWFqGMe1/NwS3QMawG7ABBZ0wZJGU6zxexFWYDcJ9yJsXSZb9bw4CI6W2Iwjxk6MabF3nvCGIXUOZ87WUEhPVZGKsqOhfDltOXvFVRIhx65N3hia0DJQrKephywpuTMkjjd/AYyGqvW4r368g4GeuitRhktUS07MKZnhc7OFo9PBfWDEH1t7QkCqM+EoN9qBnZl0PcdDJTTbasM7mEQAKpK3NwcZjUZpR5o+Wz49yYH1shhdg+Ji5ripJnW9Lb6B1XJ2kh2UAHhzGSfWQ58q5JymZAgzXV+O7WWIKA05pINWDccB/rbBcKp4C7PSpQdMy4vra0eb0n6lkcuBviNwwbZJzBruFf3WTaYVviZhqPhGDQl48ko=");
+            "AqNWXbfduDlOYFxlql5nRs6JxVttd3URTQmjHPvc6N73XNHNWYfc4SaTZ6vWwzp2JHgutcXGrSLAg+U3YDIf4TGSlXMWxLbxR7yL57ca4xo1Vhkvfzkr0j1770TEAAYm23exnkw/g7CaRWU/Y3VN0c3xAG5wmWgXSs+wunLqF0rnKyCeuW//JYSWNDKPRghlOQltxpQ4OJAvT3/3HDIPXgigx1UP6bMJx4YkbcZ1nNlB0Ka06LxXfR7xp21ZKvGYi8XHW35VEpofGhwXfeDIj8TdX41bRVTlFiXuL7FIauHmhrhPS5FqPi97AahTGOvuRvK2BiyGbkLZt5dBB4KRizhz8c5b4LBc/U+sJs/f0FAF84NF+C/hHVTspNY5hj1o7xyyqJKzh4jtzutxyRbrGIkG9MR44TsO6qNPYV2szkEGPWMu8GxC2yw6czPy8Q1EnPvqL3goiTek6isWeba3DDtfkKfKQ7YcFwN/VMgN/0Xr2H/Jlbc3U7U3i2G3EfWB4mfNcq4xdR2GS8gvO0DpFrMNQATitZqWE+W0X430Lr0Ojji6KtaiFwBI3WjL2fwxzwrxbK1UJNPU3Qi28c/+Iz6z0tXCRTjqhNF5vDxBVWfvyysQTkS/yNh2d46/bm/ERqdA2BfXDDqiHuJOLqyhOnoRcBzfa/02aLx4sEeZkIU=");
         config.addDefault("zombie.health", 50.0D);
         config.addDefault("zombie.max-per-player", 1);
         config.addDefault("zombie.spawn-radius", 48);

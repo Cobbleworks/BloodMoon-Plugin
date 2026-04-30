@@ -9,6 +9,8 @@ import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
+import org.bukkit.scoreboard.Scoreboard;
+import org.bukkit.scoreboard.Team;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
@@ -57,11 +59,12 @@ public final class ClownBunnySwarm {
             spawnLoc.setY(world.getHighestBlockYAt(spawnLoc) + 0.2D);
 
             Rabbit rabbit = (Rabbit) world.spawnEntity(spawnLoc, EntityType.RABBIT);
-            rabbit.setCustomName(null);
+            rabbit.setCustomName("");
             rabbit.setCustomNameVisible(false);
             rabbit.setRabbitType(Rabbit.Type.THE_KILLER_BUNNY);
             rabbit.setRemoveWhenFarAway(false);
             rabbit.setMaximumNoDamageTicks(3);
+            hideNameTag(rabbit);
 
             world.spawnParticle(Particle.HAPPY_VILLAGER, spawnLoc, 12, 0.4D, 0.5D, 0.4D, 0.02D);
             world.playSound(spawnLoc, Sound.ENTITY_RABBIT_JUMP, 0.8F, 0.5F + index * 0.12F);
@@ -228,6 +231,22 @@ public final class ClownBunnySwarm {
 
     private void cleanupInvalid() {
         bunnies.removeIf(entry -> entry.rabbit == null || !entry.rabbit.isValid() || entry.rabbit.isDead());
+    }
+
+    private void hideNameTag(Rabbit rabbit) {
+        try {
+            Scoreboard board = org.bukkit.Bukkit.getScoreboardManager().getMainScoreboard();
+            if (board == null) {
+                return;
+            }
+            Team team = board.getTeam("bm_hidden_mobs");
+            if (team == null) {
+                team = board.registerNewTeam("bm_hidden_mobs");
+                team.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER);
+            }
+            team.addEntry(rabbit.getUniqueId().toString());
+        } catch (Exception ignored) {
+        }
     }
 
     private static final class BunnyEntry {
