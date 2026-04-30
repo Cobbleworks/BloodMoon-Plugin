@@ -42,6 +42,7 @@ public final class NPCListener implements Listener {
         ClownNPC clown = plugin.getNPCManager().getClown(event.getNPC());
         if (clown != null && event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
             event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_WITCH_HURT, 0.9F, 1.2F);
+            clown.onTakeDamage();
             return;
         }
 

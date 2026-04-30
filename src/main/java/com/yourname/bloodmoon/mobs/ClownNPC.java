@@ -47,7 +47,7 @@ import org.mcmonkey.sentinel.targeting.SentinelTargetList;
 
 public final class ClownNPC {
 
-    public enum ClownState { WANDERING, COMBAT, CASTING, MANIC, DEAD }
+    public enum ClownState { WANDERING, COMBAT, CASTING, TAUNTING, MANIC, DEAD }
 
     public enum ClownAbility {
         FIREWORK_VOLLEY(25), BUNNY_SWARM(20), HOOK_PULL(18), WIND_BURST(15), CHAOS_DASH(12), PARROT_BARRAGE(14), DUCK_INFERNO(13);
@@ -72,14 +72,15 @@ public final class ClownNPC {
     private static final double FIREWORK_DAMAGE         = 7.0D;
     private static final double FIREWORK_HIT_RANGE      = 1.6D;
     private static final int    FIREWORK_LIFESPAN_TICKS = 70;
-    private static final int    BUNNY_SWARM_COUNT       = 4;
+    private static final int    BUNNY_SWARM_COUNT       = 2;
     private static final double HOOK_HIT_RANGE          = 1.5D;
     private static final int    HOOK_LIFESPAN_TICKS     = 60;
-    private static final double HOOK_PULL_STRENGTH      = 2.2D;
+    private static final double HOOK_PUSH_STRENGTH      = 1.8D;
     private static final int    WIND_CHARGE_COUNT       = 5;
     private static final double WIND_BURST_DAMAGE       = 3.0D;
     private static final double CHAOS_DASH_DAMAGE       = 5.0D;
-    private static final int    MAX_BUNNIES             = 8;
+    private static final int    MAX_BUNNIES             = 4;
+    private static final int    BAIT_TRAP_COOLDOWN_MAX  = 600;
 
     private static final Particle.DustOptions JESTER_PINK  = new Particle.DustOptions(Color.fromRGB(255, 80, 160), 1.2F);
     private static final Particle.DustOptions JESTER_CYAN  = new Particle.DustOptions(Color.fromRGB(0, 210, 255), 1.1F);
@@ -103,6 +104,9 @@ public final class ClownNPC {
     private long lifeTicks;
     private int stateTicks;
     private int castingDurationTicks;
+    private int damageTeleportCooldown;
+    private int tauntDuration;
+    private int baitTrapCooldown;
     private boolean cleanedUp;
     private boolean deathSequenceStarted;
     private boolean combatInitialized;
@@ -136,6 +140,40 @@ public final class ClownNPC {
         if (state == ClownState.WANDERING) transitionToCombat(findNearestPlayer(getCurrentLocation(), 48.0D));
     }
 
+    public void onTakeDamage() {
+        if (state == ClownState.DEAD || state == ClownState.WANDERING || state == ClownState.TAUNTING) return;
+        if (damageTeleportCooldown > 0) return;
+        if (random.nextDouble() < 0.28D) {
+            teleportEscape();
+            damageTeleportCooldown = 80;
+        }
+    }
+
+    private void teleportEscape() {
+        Player nearest = findNearestPlayer(getCurrentLocation(), 20.0D);
+        Location origin = getCurrentLocation();
+        Vector awayDir;
+        if (nearest != null) {
+            awayDir = origin.toVector().subtract(nearest.getLocation().toVector());
+            if (awayDir.lengthSquared() < 0.01D) awayDir = new Vector(randomDouble(-1,1), 0, randomDouble(-1,1));
+        } else {
+            awayDir = new Vector(randomDouble(-1,1), 0, randomDouble(-1,1));
+        }
+        awayDir.normalize().multiply(6.0D + randomDouble(2.0D, 4.0D));
+        Location escapeDest = findSafeGroundLocation(origin.clone().add(awayDir));
+        World w = origin.getWorld();
+        if (w != null) {
+            w.spawnParticle(Particle.DUST, origin.clone().add(0,1,0), 15, 0.4, 0.5, 0.4, 0, JESTER_CYAN);
+            w.playSound(origin, Sound.ENTITY_ENDERMAN_TELEPORT, 0.6F, 1.8F);
+        }
+        npc.teleport(escapeDest, PlayerTeleportEvent.TeleportCause.PLUGIN);
+        World dw = escapeDest.getWorld();
+        if (dw != null) {
+            dw.playSound(escapeDest, Sound.ENTITY_WITCH_CELEBRATE, 0.7F, 1.5F);
+            dw.spawnParticle(Particle.FIREWORK, escapeDest, 15, 0.3, 0.5, 0.3, 0.07);
+        }
+    }
+
     public void onTraitTick()  { updateLastKnownLocation(); }
 
     public void onNpcSpawn() {
@@ -148,7 +186,7 @@ public final class ClownNPC {
 
     public void handleSentinelAttack(SentinelAttackEvent event) {
         if (!(event.getTarget() instanceof Player player)) return;
-        if (state == ClownState.WANDERING || state == ClownState.CASTING || state == ClownState.DEAD) { event.setCancelled(true); return; }
+        if (state == ClownState.WANDERING || state == ClownState.CASTING || state == ClownState.TAUNTING || state == ClownState.DEAD) { event.setCancelled(true); return; }
         target = player;
         if (random.nextDouble() < 0.10D) { ClownAbility a = chooseAbility(); if (a != null && canUseAbility(a)) startCasting(a); }
     }
@@ -275,10 +313,13 @@ public final class ClownNPC {
     private void tick() {
         if (cleanedUp || deathSequenceStarted) return;
         lifeTicks++; stateTicks++; decrementCooldowns(); updateLastKnownLocation();
+        if (damageTeleportCooldown > 0) damageTeleportCooldown--;
+        if (baitTrapCooldown > 0) baitTrapCooldown--;
         switch (state) {
             case WANDERING -> tickWandering();
             case COMBAT    -> tickCombat();
             case MANIC     -> tickManic();
+            case TAUNTING  -> tickTaunting();
             case CASTING   -> tickCasting();
             case DEAD      -> {}
         }
@@ -405,7 +446,40 @@ public final class ClownNPC {
         };
         npc.getNavigator().cancelNavigation();
         Location loc = getCurrentLocation(); World world = loc.getWorld();
-        if (world != null) world.playSound(loc, Sound.ENTITY_WITCH_CELEBRATE, 0.8F, 0.5F);
+        if (world != null) {
+            switch (ability) {
+                case BUNNY_SWARM -> {
+                    world.playSound(loc, Sound.BLOCK_NOTE_BLOCK_PLING, 0.9F, 1.9F);
+                    world.playSound(loc, Sound.ENTITY_WITCH_CELEBRATE,  0.7F, 0.5F);
+                    world.playSound(loc, Sound.ENTITY_RABBIT_ATTACK,    0.6F, 0.4F);
+                }
+                case DUCK_INFERNO -> {
+                    world.playSound(loc, Sound.BLOCK_NOTE_BLOCK_SNARE, 0.8F, 1.6F);
+                    world.playSound(loc, Sound.ENTITY_CHICKEN_EGG,     0.6F, 0.5F);
+                    world.playSound(loc, Sound.BLOCK_NOTE_BLOCK_BASS,  0.5F, 0.3F);
+                }
+                case PARROT_BARRAGE -> {
+                    world.playSound(loc, Sound.ENTITY_PARROT_IMITATE_BLAZE, 0.8F, 1.2F);
+                    world.playSound(loc, Sound.ENTITY_PARROT_AMBIENT,       0.7F, 1.4F);
+                }
+                case FIREWORK_VOLLEY -> {
+                    world.playSound(loc, Sound.ENTITY_FIREWORK_ROCKET_LAUNCH, 0.8F, 0.6F);
+                    world.playSound(loc, Sound.BLOCK_NOTE_BLOCK_PLING,        0.7F, 1.6F);
+                }
+                case HOOK_PULL -> {
+                    world.playSound(loc, Sound.ENTITY_FISHING_BOBBER_THROW,   0.9F, 0.7F);
+                    world.playSound(loc, Sound.BLOCK_AMETHYST_BLOCK_CHIME,    0.5F, 0.8F);
+                }
+                case WIND_BURST -> {
+                    world.playSound(loc, Sound.ENTITY_BREEZE_WIND_BURST, 0.9F, 0.8F);
+                    world.playSound(loc, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.4F, 1.5F);
+                }
+                case CHAOS_DASH -> {
+                    world.playSound(loc, Sound.ENTITY_ENDERMAN_TELEPORT, 0.8F, 1.4F);
+                    world.playSound(loc, Sound.ENTITY_WITCH_CELEBRATE,   0.7F, 0.6F);
+                }
+            }
+        }
     }
 
     private void tickCasting() {
@@ -622,7 +696,16 @@ public final class ClownNPC {
         dir.normalize().add(new Vector((spreadIndex-1)*0.12+randomDouble(-0.06,0.06), randomDouble(-0.04,0.04), (spreadIndex-1)*0.05+randomDouble(-0.04,0.04))).normalize().multiply(1.4);
         Firework fw = world.spawn(from, Firework.class);
         FireworkMeta meta = fw.getFireworkMeta(); meta.setPower(0);
-        meta.addEffect(FireworkEffect.builder().withColor(Color.fromRGB(255,80,0)).withColor(Color.fromRGB(255,220,0)).withFade(Color.fromRGB(255,255,200)).withFlicker().trail(true).with(FireworkEffect.Type.BALL_LARGE).build());
+        Color[] palette = {
+            Color.fromRGB(255, 80, 160), Color.fromRGB(0, 210, 255),   Color.fromRGB(255, 210, 0),
+            Color.fromRGB(255, 80, 0),   Color.fromRGB(120, 0, 255),    Color.fromRGB(0, 220, 100),
+            Color.fromRGB(255, 255, 255), Color.fromRGB(255, 40, 40)
+        };
+        Color c1   = palette[random.nextInt(palette.length)];
+        Color c2   = palette[random.nextInt(palette.length)];
+        Color fade = palette[random.nextInt(palette.length)];
+        FireworkEffect.Type fwType = random.nextBoolean() ? FireworkEffect.Type.BALL_LARGE : FireworkEffect.Type.BURST;
+        meta.addEffect(FireworkEffect.builder().withColor(c1).withColor(c2).withFade(fade).withFlicker().trail(true).with(fwType).build());
         fw.setFireworkMeta(meta); fw.setShotAtAngle(true); fw.setVelocity(dir);
         final int[] age = {0};
         BukkitRunnable tracker = new BukkitRunnable() {
@@ -689,10 +772,10 @@ public final class ClownNPC {
         Location hookLoc = hook.getLocation(); World world = hook.getWorld(); hook.remove(); if (world == null) return;
         world.playSound(hookLoc, Sound.ENTITY_FISHING_BOBBER_RETRIEVE, 1.0F, 0.8F);
         world.spawnParticle(Particle.DUST, hookLoc, 15, 0.4, 0.4, 0.4, 0, JESTER_CYAN);
-        Vector pull = caster.getLocation().toVector().subtract(player.getLocation().toVector());
-        if (pull.lengthSquared() < 0.01) return;
-        pull.normalize().multiply(HOOK_PULL_STRENGTH); pull.setY(0.6);
-        player.setVelocity(pull); world.playSound(player.getLocation(), Sound.ENTITY_PLAYER_HURT, 0.6F, 0.8F);
+        Vector push = player.getLocation().toVector().subtract(caster.getLocation().toVector());
+        if (push.lengthSquared() < 0.01) push = new Vector(randomDouble(-1,1), 0, randomDouble(-1,1));
+        push.normalize().multiply(HOOK_PUSH_STRENGTH); push.setY(0.12);
+        player.setVelocity(push); world.playSound(player.getLocation(), Sound.ENTITY_PLAYER_HURT, 0.6F, 0.8F);
     }
 
     private void castWindBurst() {
@@ -748,53 +831,57 @@ public final class ClownNPC {
         Location origin = caster.getLocation(); World world = origin.getWorld();
         if (world == null) { returnToCombat(); return; }
         world.playSound(origin, Sound.ENTITY_PARROT_IMITATE_BLAZE, 0.9F, 1.1F);
+        world.playSound(origin, Sound.ENTITY_PARROT_AMBIENT, 0.7F, 1.5F);
         world.spawnParticle(Particle.DUST, origin.clone().add(0,1.1,0), 25, 0.7, 0.7, 0.7, 0, JESTER_CYAN);
 
-        for (int i = 0; i < 2; i++) {
-            Location spawn = origin.clone().add(randomDouble(-1.6, 1.6), 1.0 + randomDouble(0.3, 1.0), randomDouble(-1.6, 1.6));
-            Parrot parrot = world.spawn(spawn, Parrot.class);
-            parrot.setSilent(true);
-            parrot.setInvulnerable(true);
-            parrot.setCollidable(false);
-            parrot.setAI(false);
-            parrot.setCustomName(null);
-            parrot.setCustomNameVisible(false);
+        // Single parrot summoned
+        Location spawn = origin.clone().add(randomDouble(-1.2, 1.2), 1.2 + randomDouble(0.3, 0.8), randomDouble(-1.2, 1.2));
+        Parrot parrot = world.spawn(spawn, Parrot.class);
+        parrot.setSilent(true);
+        parrot.setInvulnerable(true);
+        parrot.setCollidable(false);
+        parrot.setAI(false);
+        parrot.setCustomName(null);
+        parrot.setCustomNameVisible(false);
+        world.playSound(spawn, Sound.ENTITY_PARROT_AMBIENT, 0.8F, 1.3F);
 
-            BukkitRunnable attackTask = new BukkitRunnable() {
-                int ticks = 0;
-                @Override
-                public void run() {
-                    ticks++;
-                    if (!parrot.isValid() || parrot.isDead() || isDead() || ticks > 120) {
-                        if (parrot.isValid()) parrot.remove();
-                        cancel();
-                        return;
+        BukkitRunnable attackTask = new BukkitRunnable() {
+            int ticks = 0;
+            @Override
+            public void run() {
+                ticks++;
+                if (!parrot.isValid() || parrot.isDead() || isDead() || ticks > 120) {
+                    if (parrot.isValid()) parrot.remove();
+                    cancel();
+                    return;
+                }
+                if (player.isOnline() && !player.isDead()) {
+                    Location eye = player.getEyeLocation();
+                    Vector flight = eye.toVector().subtract(parrot.getLocation().toVector());
+                    if (flight.lengthSquared() > 0.0001) {
+                        Location newLoc = parrot.getLocation().add(flight.normalize().multiply(0.30));
+                        newLoc.setYaw(getYawTowards(newLoc, eye));
+                        newLoc.setPitch(getPitchTowards(newLoc, eye));
+                        parrot.teleport(newLoc);
                     }
-                    if (player.isOnline() && !player.isDead()) {
-                        Location eye = player.getEyeLocation();
-                        Vector flight = eye.toVector().subtract(parrot.getLocation().toVector());
-                        if (flight.lengthSquared() > 0.0001) {
-                            parrot.teleport(parrot.getLocation().add(flight.normalize().multiply(0.28)));
-                        }
-                        if (ticks % 25 == 0) {
-                            parrot.getWorld().playSound(parrot.getLocation(), Sound.ENTITY_PARROT_AMBIENT, 0.35F, 1.6F);
-                        }
-                        if (ticks % 20 == 0) {
-                            SmallFireball fb = parrot.launchProjectile(SmallFireball.class);
-                            Vector dir = eye.toVector().subtract(parrot.getEyeLocation().toVector());
-                            if (dir.lengthSquared() < 0.0001) dir = new Vector(0, 0, 1);
-                            fb.setVelocity(dir.normalize().multiply(0.9));
-                            fb.setYield(0.0F);
-                            fb.setIsIncendiary(false);
-                            fb.setShooter(caster);
-                            parrot.getWorld().playSound(parrot.getLocation(), Sound.ENTITY_BLAZE_SHOOT, 0.45F, 1.5F);
-                        }
+                    if (ticks % 20 == 0) {
+                        parrot.getWorld().playSound(parrot.getLocation(), Sound.ENTITY_PARROT_AMBIENT, 0.35F, 1.6F);
+                    }
+                    if (ticks % 18 == 0) {
+                        SmallFireball fb = parrot.launchProjectile(SmallFireball.class);
+                        Vector dir = eye.toVector().subtract(parrot.getEyeLocation().toVector());
+                        if (dir.lengthSquared() < 0.0001) dir = new Vector(0, 0, 1);
+                        fb.setVelocity(dir.normalize().multiply(0.9));
+                        fb.setYield(0.0F);
+                        fb.setIsIncendiary(false);
+                        fb.setShooter(caster);
+                        parrot.getWorld().playSound(parrot.getLocation(), Sound.ENTITY_BLAZE_SHOOT, 0.45F, 1.5F);
                     }
                 }
-            };
-            ownedTasks.add(attackTask);
-            attackTask.runTaskTimer(plugin, 1L, 1L);
-        }
+            }
+        };
+        ownedTasks.add(attackTask);
+        attackTask.runTaskTimer(plugin, 1L, 1L);
         returnToCombat();
     }
 
@@ -810,7 +897,9 @@ public final class ClownNPC {
         duck.setCustomNameVisible(false);
         duck.setSilent(true);
         duck.setCollidable(false);
-        world.playSound(spawn, Sound.BLOCK_NOTE_BLOCK_CHIME, 0.7F, 1.5F);
+        // Jack-in-the-box style spawn sound
+        world.playSound(spawn, Sound.BLOCK_NOTE_BLOCK_PLING, 0.9F, 1.8F);
+        world.playSound(spawn, Sound.ENTITY_CHICKEN_EGG,     0.7F, 0.6F);
 
         BukkitRunnable duckTask = new BukkitRunnable() {
             int ticks = 0;
@@ -826,12 +915,26 @@ public final class ClownNPC {
                 if (player.isOnline() && !player.isDead()) {
                     Vector step = player.getLocation().toVector().subtract(duck.getLocation().toVector());
                     if (step.lengthSquared() > 0.01) {
-                        duck.teleport(duck.getLocation().add(step.normalize().multiply(0.25)));
+                        Location newDuckLoc = duck.getLocation().add(step.normalize().multiply(0.25));
+                        newDuckLoc.setYaw(getYawTowards(newDuckLoc, player.getLocation()));
+                        duck.teleport(newDuckLoc);
                     }
                 }
-                Location trail = duck.getLocation().clone().add(0, 0.1, 0);
-                duck.getWorld().spawnParticle(Particle.FLAME, trail, 4, 0.15, 0.05, 0.15, 0.01);
-                duck.getWorld().spawnParticle(Particle.SMOKE, trail, 2, 0.12, 0.04, 0.12, 0.01);
+                Location trail = duck.getLocation().clone().add(0, 0.05, 0);
+                duck.getWorld().spawnParticle(Particle.FLAME,           trail,                       14, 0.20, 0.12, 0.20, 0.025);
+                duck.getWorld().spawnParticle(Particle.SOUL_FIRE_FLAME, trail.clone().add(0,0.15,0),  4, 0.12, 0.10, 0.12, 0.015);
+                duck.getWorld().spawnParticle(Particle.SMOKE,           trail,                        3, 0.15, 0.08, 0.15, 0.020);
+                if (ticks % 10 == 0) {
+                    for (Player p : duck.getWorld().getPlayers()) {
+                        if (!p.isDead() && p.getLocation().distanceSquared(trail) <= 1.0D) {
+                            p.setFireTicks(Math.max(p.getFireTicks(), 20));
+                            p.damage(0.5D, caster);
+                        }
+                    }
+                }
+                if (ticks < 50 && ticks % 8 == 0) {
+                    duck.getWorld().playSound(duck.getLocation(), Sound.BLOCK_NOTE_BLOCK_SNARE, 0.4F, 1.5F + ticks * 0.01F);
+                }
             }
         };
         ownedTasks.add(duckTask);
@@ -901,11 +1004,17 @@ public final class ClownNPC {
     private void playTrollTune(Location at) {
         World world = at.getWorld();
         if (world == null) return;
-        float pitchA = 0.7F + random.nextFloat() * 1.3F;
-        float pitchB = 0.7F + random.nextFloat() * 1.3F;
-        world.playSound(at, Sound.BLOCK_NOTE_BLOCK_BELL, 0.35F, pitchA);
-        world.playSound(at, Sound.BLOCK_NOTE_BLOCK_BIT, 0.3F, pitchB);
-        if (random.nextDouble() < 0.35D) castAnvilPrank();
+        world.playSound(at, Sound.BLOCK_NOTE_BLOCK_BELL, 0.35F, 0.7F + random.nextFloat() * 1.3F);
+        world.playSound(at, Sound.BLOCK_NOTE_BLOCK_BIT,  0.3F,  0.7F + random.nextFloat() * 1.3F);
+        // Rotate through the full prank suite so all pranks actually fire in combat
+        switch (random.nextInt(6)) {
+            case 0 -> castAnvilPrank();
+            case 1 -> castInventoryShufflePrank();
+            case 2 -> castFakePanicPrank();
+            case 3 -> castGiftPrank();
+            case 4 -> castFreezeAudiencePrank();
+            case 5 -> { if (baitTrapCooldown <= 0) { castBaitTrap(); baitTrapCooldown = BAIT_TRAP_COOLDOWN_MAX; } }
+        }
     }
 
     private void castInventoryShufflePrank() {
@@ -995,7 +1104,57 @@ public final class ClownNPC {
         laughTrack.runTaskTimer(plugin, 0L, 5L);
     }
     private void returnToCombat() {
-        if (state == ClownState.CASTING) { state = stateBeforeCasting; stateTicks = 0; }
+        if (state == ClownState.CASTING) {
+            if (random.nextDouble() < 0.70D) {
+                state = ClownState.TAUNTING;
+                stateTicks = 0;
+                tauntDuration = 60 + random.nextInt(40);
+            } else {
+                state = stateBeforeCasting;
+                stateTicks = 0;
+            }
+        }
+    }
+
+    private void tickTaunting() {
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) { state = stateBeforeCasting; stateTicks = 0; return; }
+        Location loc = entity.getLocation();
+        World world = loc.getWorld();
+        if (stateTicks == 1) {
+            npc.getNavigator().cancelNavigation();
+            playVariedLaugh(loc, true);
+            if (world != null) {
+                world.spawnParticle(Particle.NOTE, loc.clone().add(0,1.5,0), 12, 0.6, 0.3, 0.6, 0.6);
+                world.spawnParticle(Particle.DUST, loc.clone().add(0,1,0), 18, 0.6, 0.6, 0.6, 0, JESTER_PINK);
+            }
+        }
+        if (stateTicks % 20 == 0 && stateTicks < tauntDuration - 20 && world != null) {
+            playVariedLaugh(loc, stateTicks < tauntDuration / 2);
+            world.spawnParticle(Particle.DUST, loc.clone().add(0,1,0), 6, 0.4, 0.4, 0.4, 0, JESTER_GOLD);
+            world.spawnParticle(Particle.NOTE, loc.clone().add(0,1.5,0), 3, 0.5, 0.3, 0.5, 0.4);
+        }
+        if (stateTicks == tauntDuration - 12) doTauntWarp();
+        if (target != null && target.isOnline() && !target.isDead()) npc.faceLocation(target.getEyeLocation());
+        if (stateTicks >= tauntDuration) { state = stateBeforeCasting; stateTicks = 0; }
+    }
+
+    private void doTauntWarp() {
+        Location origin = getCurrentLocation();
+        Location dest = findSafeGroundLocation(origin.clone().add(randomDouble(-7,7), 0, randomDouble(-7,7)));
+        World w = origin.getWorld();
+        if (w != null) {
+            w.spawnParticle(Particle.FIREWORK, origin, 30, 0.5, 0.8, 0.5, 0.1);
+            w.spawnParticle(Particle.DUST, origin.clone().add(0,1,0), 20, 0.5, 0.7, 0.5, 0, JESTER_CYAN);
+            w.playSound(origin, Sound.ENTITY_ENDERMAN_TELEPORT, 0.8F, 1.6F);
+        }
+        npc.teleport(dest, PlayerTeleportEvent.TeleportCause.PLUGIN);
+        World dw = dest.getWorld();
+        if (dw != null) {
+            dw.spawnParticle(Particle.FIREWORK, dest, 25, 0.4, 0.7, 0.4, 0.08);
+            dw.spawnParticle(Particle.DUST, dest.clone().add(0,1,0), 15, 0.4, 0.6, 0.4, 0, JESTER_PINK);
+            dw.playSound(dest, Sound.ENTITY_WITCH_CELEBRATE, 0.9F, 0.5F);
+        }
     }
 
     private Player ensureTarget(double maxDistance) {
@@ -1012,6 +1171,132 @@ public final class ClownNPC {
     private void cancelOwnedTasks() {
         for (BukkitRunnable task : List.copyOf(ownedTasks)) { try { task.cancel(); } catch (IllegalStateException ignored) {} }
         ownedTasks.clear();
+    }
+
+    private void playVariedLaugh(Location location, boolean loud) {
+        if (location.getWorld() == null) return;
+        float vol = loud ? 1.1F : 0.7F;
+        switch (random.nextInt(5)) {
+            case 0 -> {
+                location.getWorld().playSound(location, Sound.ENTITY_WITCH_CELEBRATE, vol,       0.3F);
+                location.getWorld().playSound(location, Sound.ENTITY_GHAST_AMBIENT,   vol*0.4F,  0.45F);
+                location.getWorld().playSound(location, Sound.BLOCK_NOTE_BLOCK_BASS,  vol*0.6F,  0.25F);
+            }
+            case 1 -> {
+                location.getWorld().playSound(location, Sound.ENTITY_WITCH_CELEBRATE, vol,       0.55F);
+                location.getWorld().playSound(location, Sound.ENTITY_ENDERMAN_SCREAM, vol*0.4F,  0.8F);
+                location.getWorld().playSound(location, Sound.BLOCK_NOTE_BLOCK_BELL,  vol*0.5F,  0.6F);
+            }
+            case 2 -> {
+                location.getWorld().playSound(location, Sound.ENTITY_WITCH_AMBIENT,     vol*0.9F, 0.4F);
+                location.getWorld().playSound(location, Sound.ENTITY_ENDER_DRAGON_GROWL, vol*0.3F, 1.8F);
+            }
+            case 3 -> {
+                location.getWorld().playSound(location, Sound.ENTITY_WITCH_CELEBRATE, vol*0.8F, 0.7F);
+                location.getWorld().playSound(location, Sound.BLOCK_NOTE_BLOCK_BANJO, vol*0.7F, 1.8F);
+                location.getWorld().playSound(location, Sound.ENTITY_WITCH_CELEBRATE, vol*0.5F, 0.25F);
+            }
+            case 4 -> {
+                location.getWorld().playSound(location, Sound.ENTITY_GHAST_SCREAM,    vol*0.35F, 0.6F);
+                location.getWorld().playSound(location, Sound.BLOCK_NOTE_BLOCK_PLING, vol*0.8F,  1.4F);
+                location.getWorld().playSound(location, Sound.ENTITY_WITCH_CELEBRATE, vol*0.7F,  0.4F);
+            }
+        }
+    }
+
+    private float getYawTowards(Location from, Location to) {
+        double dx = to.getX() - from.getX();
+        double dz = to.getZ() - from.getZ();
+        return (float) (Math.toDegrees(Math.atan2(-dx, dz)));
+    }
+
+    private float getPitchTowards(Location from, Location to) {
+        double dx = to.getX() - from.getX();
+        double dy = to.getY() - from.getY();
+        double dz = to.getZ() - from.getZ();
+        double d = Math.sqrt(dx * dx + dz * dz);
+        return (float) (-Math.toDegrees(Math.atan2(dy, d)));
+    }
+
+    private void castBaitTrap() {
+        Player player = ensureTarget(32.0D); LivingEntity caster = getLivingEntity();
+        if (player == null || caster == null) return;
+        World world = caster.getWorld();
+        Material[] baits = { Material.DIAMOND, Material.GOLDEN_APPLE, Material.ENCHANTED_GOLDEN_APPLE, Material.EMERALD, Material.DIAMOND_SWORD };
+        ItemStack baitItem = new ItemStack(baits[random.nextInt(baits.length)], 1);
+        Vector toward = player.getLocation().toVector().subtract(caster.getLocation().toVector()).normalize().multiply(2.5D);
+        Location dropLoc = findSafeGroundLocation(caster.getLocation().clone().add(toward));
+        Item item = world.dropItem(dropLoc, baitItem);
+        item.setPickupDelay(20);
+        item.setUnlimitedLifetime(true);
+        item.setMetadata("bloodmoon-clown-bait", new FixedMetadataValue(plugin, npc.getId()));
+        world.playSound(dropLoc, Sound.BLOCK_NOTE_BLOCK_BELL, 0.9F, 1.6F);
+        world.spawnParticle(Particle.DUST, dropLoc.clone().add(0,0.5,0), 20, 0.3, 0.3, 0.3, 0, JESTER_GOLD);
+        BukkitRunnable baitTask = new BukkitRunnable() {
+            int age = 0;
+            @Override
+            public void run() {
+                age++;
+                if (!item.isValid() || item.isDead() || age > 20*20 || isDead()) {
+                    if (item.isValid()) item.remove();
+                    cancel(); return;
+                }
+                if (age % 3 == 0) {
+                    item.getWorld().spawnParticle(Particle.DUST, item.getLocation().clone().add(0,0.35,0), 2, 0.12, 0.12, 0.12, 0, JESTER_GOLD);
+                    if (age % 9 == 0) item.getWorld().spawnParticle(Particle.DUST, item.getLocation().clone().add(0,0.35,0), 1, 0.10, 0.10, 0.10, 0, JESTER_PINK);
+                }
+                if (age % 20 == 0 && player.isOnline() && !player.isDead()) {
+                    if (player.getLocation().distanceSquared(item.getLocation()) <= 2.25D && random.nextDouble() < 0.30D) {
+                        triggerBaitExplosion(item.getLocation(), player, caster);
+                        item.remove(); cancel();
+                    }
+                }
+            }
+        };
+        ownedTasks.add(baitTask);
+        baitTask.runTaskTimer(plugin, 1L, 1L);
+    }
+
+    private void triggerBaitExplosion(Location loc, Player player, LivingEntity caster) {
+        World world = loc.getWorld(); if (world == null) return;
+        world.spawnParticle(Particle.FIREWORK, loc.clone().add(0,0.5,0), 60, 0.8, 0.8, 0.8, 0.1);
+        world.spawnParticle(Particle.DUST,     loc.clone().add(0,0.5,0), 30, 0.5, 0.5, 0.5, 0, JESTER_GOLD);
+        world.spawnParticle(Particle.DUST,     loc.clone().add(0,0.5,0), 25, 0.5, 0.5, 0.5, 0, JESTER_PINK);
+        world.playSound(loc, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 1.0F, 0.7F);
+        world.playSound(loc, Sound.ENTITY_WITCH_CELEBRATE, 0.9F, 0.4F);
+        if (player.isOnline() && !player.isDead() && player.getLocation().distanceSquared(loc) <= 9.0D) {
+            player.damage(4.5D, caster);
+            Vector kb = player.getLocation().toVector().subtract(loc.toVector());
+            if (kb.lengthSquared() > 0.01D) kb.normalize().multiply(1.0D);
+            kb.setY(0.5D); player.setVelocity(kb);
+        }
+    }
+
+    public void triggerBaitPickup(Player player) {
+        if (isDead()) return;
+        Vector behind = player.getLocation().getDirection().normalize().multiply(-2.0D);
+        Location dest = findSafeGroundLocation(player.getLocation().clone().add(behind));
+        dest.setYaw(player.getLocation().getYaw()); dest.setPitch(0f);
+        npc.teleport(dest, PlayerTeleportEvent.TeleportCause.PLUGIN);
+        Location loc = dest; World w = loc.getWorld();
+        if (w != null) {
+            w.playSound(loc, Sound.ENTITY_WITCH_CELEBRATE, 1.2F, 0.25F);
+            w.playSound(loc, Sound.ENTITY_GHAST_SCREAM,    0.5F, 0.55F);
+            w.playSound(loc, Sound.ENTITY_ENDERMAN_SCREAM, 0.4F, 0.7F);
+            w.spawnParticle(Particle.FIREWORK, loc, 50, 0.8, 0.8, 0.8, 0.12);
+            w.spawnParticle(Particle.DUST, loc.clone().add(0,1,0), 30, 0.6, 0.6, 0.6, 0, JESTER_GOLD);
+        }
+        BukkitRunnable hit = new BukkitRunnable() {
+            @Override public void run() {
+                if (isDead() || !player.isOnline() || player.isDead()) return;
+                LivingEntity e = getLivingEntity(); if (e == null) return;
+                npc.faceLocation(player.getEyeLocation());
+                player.damage(8.0D, e);
+                player.getWorld().spawnParticle(Particle.CRIT, player.getLocation().add(0,1,0), 20, 0.5, 0.5, 0.5, 0.1);
+                player.getWorld().playSound(player.getLocation(), Sound.ENTITY_PLAYER_ATTACK_CRIT, 1.0F, 0.8F);
+            }
+        };
+        ownedTasks.add(hit); hit.runTaskLater(plugin, 5L);
     }
 
     private void playCreepyLaugh(Location location, boolean loud) {

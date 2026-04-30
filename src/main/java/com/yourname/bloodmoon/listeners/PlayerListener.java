@@ -187,7 +187,16 @@ public final class PlayerListener implements Listener {
             return;
         }
         Item item = event.getItem();
-        if (!item.hasMetadata("bloodmoon-clown-gift")) {
+        if (!item.hasMetadata("bloodmoon-clown-gift") && !item.hasMetadata("bloodmoon-clown-bait")) {
+            return;
+        }
+
+        if (item.hasMetadata("bloodmoon-clown-bait")) {
+            event.setCancelled(true);
+            item.remove();
+            int npcId = item.getMetadata("bloodmoon-clown-bait").get(0).asInt();
+            com.yourname.bloodmoon.mobs.ClownNPC clown = plugin.getNPCManager().getClown(npcId);
+            if (clown != null) clown.triggerBaitPickup(player);
             return;
         }
 
