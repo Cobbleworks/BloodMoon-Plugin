@@ -64,7 +64,18 @@ public final class ClownBunnySwarm {
             rabbit.setRabbitType(Rabbit.Type.THE_KILLER_BUNNY);
             rabbit.setRemoveWhenFarAway(false);
             rabbit.setMaximumNoDamageTicks(3);
+            rabbit.setInvulnerable(true);
             hideNameTag(rabbit);
+
+            BukkitRunnable arm = new BukkitRunnable() {
+                @Override
+                public void run() {
+                    if (rabbit.isValid()) {
+                        rabbit.setInvulnerable(false);
+                    }
+                }
+            };
+            arm.runTaskLater(plugin, 40L);
 
             world.spawnParticle(Particle.HAPPY_VILLAGER, spawnLoc, 12, 0.4D, 0.5D, 0.4D, 0.02D);
             world.playSound(spawnLoc, Sound.ENTITY_RABBIT_JUMP, 0.8F, 0.5F + index * 0.12F);
