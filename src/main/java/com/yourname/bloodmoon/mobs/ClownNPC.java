@@ -25,6 +25,7 @@ import org.bukkit.entity.Firework;
 import org.bukkit.entity.FishHook;
 import org.bukkit.entity.FallingBlock;
 import org.bukkit.entity.Chicken;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Parrot;
 import org.bukkit.entity.Player;
@@ -33,6 +34,7 @@ import org.bukkit.entity.WindCharge;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.FireworkMeta;
+import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -904,6 +906,93 @@ public final class ClownNPC {
         world.playSound(at, Sound.BLOCK_NOTE_BLOCK_BELL, 0.35F, pitchA);
         world.playSound(at, Sound.BLOCK_NOTE_BLOCK_BIT, 0.3F, pitchB);
         if (random.nextDouble() < 0.35D) castAnvilPrank();
+    }
+
+    private void castInventoryShufflePrank() {
+        Player player = ensureTarget(30.0D);
+        if (player == null) return;
+        org.bukkit.inventory.PlayerInventory inv = player.getInventory();
+        ItemStack[] hotbar = new ItemStack[9];
+        for (int i = 0; i < 9; i++) hotbar[i] = inv.getItem(i);
+
+        if (random.nextBoolean()) {
+            ItemStack first = hotbar[0];
+            for (int i = 0; i < 8; i++) hotbar[i] = hotbar[i + 1];
+            hotbar[8] = first;
+        } else {
+            int swaps = 2 + random.nextInt(3);
+            for (int i = 0; i < swaps; i++) {
+                int a = random.nextInt(9);
+                int b = random.nextInt(9);
+                if (a == b) continue;
+                ItemStack tmp = hotbar[a];
+                hotbar[a] = hotbar[b];
+                hotbar[b] = tmp;
+            }
+        }
+
+        for (int i = 0; i < 9; i++) inv.setItem(i, hotbar[i]);
+        player.updateInventory();
+        player.getWorld().playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BANJO, 0.75F, 1.8F);
+    }
+
+    private void castFakePanicPrank() {
+        Player player = ensureTarget(34.0D);
+        if (player == null) return;
+        Location center = player.getLocation().add(0, 1.0, 0);
+        World world = player.getWorld();
+        world.playSound(center, Sound.ENTITY_PLAYER_ATTACK_CRIT, 1.1F, 0.8F);
+        world.playSound(center, Sound.ENTITY_ZOMBIE_ATTACK_IRON_DOOR, 0.9F, 1.1F);
+        world.spawnParticle(Particle.CRIT, center, 34, 0.45, 0.55, 0.45, 0.15);
+        world.spawnParticle(Particle.DAMAGE_INDICATOR, center, 22, 0.35, 0.45, 0.35, 0.05);
+    }
+
+    private void castGiftPrank() {
+        Player player = ensureTarget(32.0D); LivingEntity caster = getLivingEntity();
+        if (player == null || caster == null) return;
+        World world = caster.getWorld();
+        ItemStack bait = new ItemStack(random.nextBoolean() ? Material.GOLDEN_APPLE : Material.EMERALD, 1);
+        Item item = world.dropItem(caster.getEyeLocation(), bait);
+        item.setPickupDelay(12);
+        item.setUnlimitedLifetime(false);
+        item.setVelocity(player.getLocation().toVector().subtract(caster.getLocation().toVector()).normalize().multiply(0.45).setY(0.25));
+        item.setMetadata("bloodmoon-clown-gift", new FixedMetadataValue(plugin, npc.getId()));
+        world.playSound(caster.getLocation(), Sound.ENTITY_CHICKEN_EGG, 0.7F, 1.4F);
+
+        BukkitRunnable cleanup = new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (item.isValid()) item.remove();
+            }
+        };
+        ownedTasks.add(cleanup);
+        cleanup.runTaskLater(plugin, 20L * 12L);
+    }
+
+    private void castFreezeAudiencePrank() {
+        Player player = ensureTarget(28.0D);
+        if (player == null) return;
+        player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 20, 255, true, true, true));
+        World world = player.getWorld();
+        world.spawnParticle(Particle.WITCH, player.getLocation().add(0, 1.1, 0), 18, 0.35, 0.45, 0.35, 0.04);
+
+        BukkitRunnable laughTrack = new BukkitRunnable() {
+            int burst = 0;
+            @Override
+            public void run() {
+                burst++;
+                if (burst > 4 || !player.isOnline() || player.isDead()) {
+                    cancel();
+                    return;
+                }
+                Location base = player.getLocation();
+                world.playSound(base, Sound.ENTITY_WITCH_CELEBRATE, 0.85F, 0.65F + (burst * 0.05F));
+                world.playSound(base, Sound.BLOCK_NOTE_BLOCK_SNARE, 0.6F, 1.1F + (burst * 0.06F));
+                world.playSound(base, Sound.BLOCK_NOTE_BLOCK_HAT, 0.55F, 1.6F);
+            }
+        };
+        ownedTasks.add(laughTrack);
+        laughTrack.runTaskTimer(plugin, 0L, 5L);
     }
     private void returnToCombat() {
         if (state == ClownState.CASTING) { state = stateBeforeCasting; stateTicks = 0; }

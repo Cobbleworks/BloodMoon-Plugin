@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.bukkit.Material;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
@@ -18,6 +19,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
@@ -133,6 +135,26 @@ public final class PlayerListener implements Listener {
 
         Player directHitPlayer = event.getHitEntity() instanceof Player p ? p : null;
         zombie.handleVomitImpact(projectile, projectile.getLocation(), directHitPlayer);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onEntityPickupItem(EntityPickupItemEvent event) {
+        if (!(event.getEntity() instanceof Player player)) {
+            return;
+        }
+        Item item = event.getItem();
+        if (!item.hasMetadata("bloodmoon-clown-gift")) {
+            return;
+        }
+
+        event.setCancelled(true);
+        item.remove();
+
+        player.getWorld().spawnParticle(org.bukkit.Particle.EXPLOSION, player.getLocation().add(0, 0.6, 0), 1);
+        player.getWorld().spawnParticle(org.bukkit.Particle.SMOKE, player.getLocation().add(0, 0.7, 0), 24, 0.35, 0.25, 0.35, 0.03);
+        player.getWorld().playSound(player.getLocation(), org.bukkit.Sound.ENTITY_GENERIC_EXPLODE, 0.7F, 1.5F);
+        player.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.NAUSEA, 60, 0, true, true, true));
+        player.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.SLOWNESS, 40, 1, true, true, true));
     }
 
     @EventHandler(ignoreCancelled = true)
