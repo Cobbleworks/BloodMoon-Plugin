@@ -310,6 +310,8 @@ public final class ClownNPC {
         s.damage = 5.0D; s.respawnTime = -1; s.chaseRange = 30.0D; s.armor = 0.0D;
         s.protectFromIgnores = false;
         s.allTargets = new SentinelTargetList(); s.addTarget("players");
+        s.addTarget("mobs");
+        s.addTarget("monsters");
         s.allIgnores = new SentinelTargetList();
         npc.setProtected(false);
     }
@@ -399,6 +401,8 @@ public final class ClownNPC {
         combatInitialized = true; setNavigationSpeed(1.3F);
         SentinelTrait s = npc.getOrAddTrait(SentinelTrait.class);
         s.allTargets = new SentinelTargetList(); s.addTarget("players");
+        s.addTarget("mobs");
+        s.addTarget("monsters");
         s.allIgnores = new SentinelTargetList(); s.chaseRange = 30.0D; s.respawnTime = -1;
     }
 
@@ -1951,5 +1955,8 @@ public final class ClownNPC {
 
     private record AbilityWeight(ClownAbility ability, int weight) {}
 }
+
+
+
 
 

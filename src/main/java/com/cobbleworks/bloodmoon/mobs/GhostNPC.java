@@ -349,6 +349,8 @@ public final class GhostNPC {
         sentinel.protectFromIgnores = false;
         sentinel.allTargets = new SentinelTargetList();
         sentinel.addTarget("players");
+        sentinel.addTarget("mobs");
+        sentinel.addTarget("monsters");
         sentinel.allIgnores = new SentinelTargetList();
     }
 
@@ -1534,4 +1536,7 @@ public final class GhostNPC {
         tasks.clear();
     }
 }
+
+
+
 

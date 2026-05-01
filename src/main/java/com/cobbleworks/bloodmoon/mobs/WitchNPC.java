@@ -293,6 +293,8 @@ public final class WitchNPC {
         s.protectFromIgnores = false;
         s.allTargets = new SentinelTargetList();
         s.addTarget("players");
+        s.addTarget("mobs");
+        s.addTarget("monsters");
         s.allIgnores = new SentinelTargetList();
     }
 
@@ -1575,4 +1577,7 @@ public final class WitchNPC {
         }
     }
 }
+
+
+
 

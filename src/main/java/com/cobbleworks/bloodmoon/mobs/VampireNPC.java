@@ -513,6 +513,8 @@ public final class VampireNPC {
         sentinel.protectFromIgnores = false;
         sentinel.allTargets = new SentinelTargetList();
         sentinel.addTarget("players");
+        sentinel.addTarget("mobs");
+        sentinel.addTarget("monsters");
         sentinel.allIgnores = new SentinelTargetList();
         npc.setProtected(false);
     }
@@ -783,6 +785,8 @@ public final class VampireNPC {
         SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
         sentinel.allTargets = new SentinelTargetList();
         sentinel.addTarget("players");
+        sentinel.addTarget("mobs");
+        sentinel.addTarget("monsters");
         sentinel.allIgnores = new SentinelTargetList();
         sentinel.chaseRange = 30.0D;
         sentinel.respawnTime = -1;
@@ -3002,5 +3006,8 @@ public final class VampireNPC {
         return pendingAbility;
     }
 }
+
+
+
 
 
