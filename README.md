@@ -1,5 +1,5 @@
 <p align="center">
-	[Placeholder]
+	<img src="images/plugin-logo.png" alt="BloodMoon Plugin" width="180" />
 </p>
 <h1 align="center">BloodMoon Event Plugin</h1>
 <p align="center">
@@ -24,7 +24,7 @@ The current Blood Moon roster includes a stalking vampire, a chaotic carnival cl
 - **Signed Skin Support:** All custom NPCs use real configured skin names plus signed texture/signature data for stable appearance
 - **Per-Player Spawn Pressure:** Each enemy type respects a per-player nearby cap instead of uncontrolled global spam
 - **Admin Spawn and Cleanup Commands:** Spawn any supported Blood Moon monster near a chosen player, clear worlds, or force the event on and off
-- **Vampire Health Bar Toggle:** Players can enable or disable a nearest-vampire health bar through `/bloodmoon healthbar`
+- **Special-Mob Health Bar Toggle:** Players can enable or disable a nearest special-mob health bar through `/bloodmoon healthbar`
 - **Themed Loot Pools:** Every Blood Moon NPC now has expanded basic and rare drop possibilities tailored to its theme
 
 ### **Supported Platforms**
@@ -168,7 +168,7 @@ All primary administration is handled through `/bloodmoon` with the alias `/bm`.
 | `/bloodmoon clear [world]` | Remove active Blood Moon NPCs from one world or all worlds |
 | `/bloodmoon reload` | Reload `config.yml` values |
 | `/bloodmoon chance <1-100>` | Set a temporary Blood Moon chance override |
-| `/bloodmoon healthbar [on|off|toggle]` | Toggle the nearest vampire health bar for a player |
+| `/bloodmoon healthbar [on|off|toggle]` | Toggle the nearest special-mob health bar for a player |
 
 ### **Supported Spawn Types**
 
@@ -192,7 +192,7 @@ All primary administration is handled through `/bloodmoon` with the alias `/bm`.
 | Permission | Description | Default |
 |------------|-------------|---------|
 | `bloodmoon.admin` | Full Blood Moon administration, including start/stop/spawn/clear/reload/chance | `op` |
-| `bloodmoon.healthbar` | Allows players to toggle the nearest vampire health bar | `true` |
+| `bloodmoon.healthbar` | Allows players to toggle the nearest special-mob health bar | `true` |
 | `bloodmoon.notify` | Receive Blood Moon notifications | `true` |
 
 ## **Building from Source**
