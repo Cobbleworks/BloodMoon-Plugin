@@ -995,15 +995,37 @@ public final class ClownNPC {
             Vector dir = baseDir.clone().add(new Vector(randomDouble(-0.3,0.3), randomDouble(-0.1,0.25), randomDouble(-0.3,0.3))).normalize().multiply(1.3+randomDouble(-0.2,0.2));
             try { WindCharge wc = world.spawn(from.clone().add(randomDouble(-0.3,0.3), 0, randomDouble(-0.3,0.3)), WindCharge.class); wc.setVelocity(dir); }
             catch (Exception ex) { plugin.getLogger().fine("WindCharge skipped: "+ex.getMessage()); }
-            world.spawnParticle(Particle.CLOUD, from, 5, 0.2, 0.2, 0.2, 0.02);
-            world.spawnParticle(Particle.DUST, from, 4, 0.2, 0.2, 0.2, 0.0, JESTER_CYAN);
         }
-        if (player.isOnline() && !player.isDead()) {
-            Vector knockback = player.getLocation().toVector().subtract(from.toVector());
-            if (knockback.lengthSquared() > 0.01D) {
-                player.setVelocity(player.getVelocity().add(knockback.normalize().multiply(0.22D).setY(0.08D)));
+
+        final Location rayOrigin = from.clone();
+        final Vector rayDir = baseDir.clone();
+        BukkitRunnable ray = new BukkitRunnable() {
+            int ticks;
+
+            @Override
+            public void run() {
+                ticks++;
+                if (ticks > 36 || isDead() || !player.isOnline() || player.isDead()) {
+                    cancel();
+                    return;
+                }
+                for (double d = 0.6D; d <= 10.0D; d += 0.55D) {
+                    Location point = rayOrigin.clone().add(rayDir.clone().multiply(d));
+                    world.spawnParticle(Particle.CLOUD, point, 2, 0.12, 0.10, 0.12, 0.01);
+                    world.spawnParticle(Particle.DUST, point, 2, 0.10, 0.08, 0.10, 0.0, JESTER_CYAN);
+                    world.spawnParticle(Particle.DUST, point, 1, 0.08, 0.06, 0.08, 0.0, JESTER_PURPLE);
+                    if (player.getWorld() == world && player.getLocation().distanceSquared(point) <= 1.8D * 1.8D) {
+                        player.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 12, 0, true, true, true));
+                        player.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS, 12, 0, true, true, true));
+                    }
+                }
+                if (ticks % 8 == 0) {
+                    world.playSound(rayOrigin, Sound.BLOCK_BUBBLE_COLUMN_WHIRLPOOL_INSIDE, 0.55F, 1.25F);
+                }
             }
-        }
+        };
+        ownedTasks.add(ray);
+        ray.runTaskTimer(plugin, 1L, 1L);
         returnToCombat();
     }
 
