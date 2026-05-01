@@ -114,6 +114,20 @@ public final class WitchNPC {
         return e != null ? e.getLocation() : (lastKnownLocation == null ? spawnLocation.clone() : lastKnownLocation.clone());
     }
 
+    public double getCurrentHealth() {
+        LivingEntity e = getLivingEntity();
+        return e == null ? plugin.getConfigManager().getWitchHealth() : Math.max(0.0D, e.getHealth());
+    }
+
+    public double getMaximumHealth() {
+        LivingEntity e = getLivingEntity();
+        if (e == null) {
+            return plugin.getConfigManager().getWitchHealth();
+        }
+        var attr = e.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        return attr == null ? plugin.getConfigManager().getWitchHealth() : Math.max(1.0D, attr.getValue());
+    }
+
     public void onTraitTick() {
         LivingEntity e = getLivingEntity();
         if (e != null) lastKnownLocation = e.getLocation();

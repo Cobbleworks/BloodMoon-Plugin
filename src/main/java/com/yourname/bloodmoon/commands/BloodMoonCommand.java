@@ -218,11 +218,11 @@ public final class BloodMoonCommand implements CommandExecutor {
 
     private void handleHealthBar(CommandSender sender, String[] args) {
         if (!(sender instanceof Player player)) {
-            MessageUtils.send(sender, "§cOnly players can toggle the vampire health bar.");
+            MessageUtils.send(sender, "§cOnly players can toggle the special-mob health bar.");
             return;
         }
         if (!sender.hasPermission("bloodmoon.healthbar")) {
-            MessageUtils.send(sender, "§cYou do not have permission to use the vampire health bar.");
+            MessageUtils.send(sender, "§cYou do not have permission to use the special-mob health bar.");
             return;
         }
 
@@ -242,8 +242,8 @@ public final class BloodMoonCommand implements CommandExecutor {
 
         boolean enabled = plugin.getVampireHealthBarManager().isEnabled(player);
         MessageUtils.send(player, enabled
-            ? "§aNearest vampire health bar enabled."
-            : "§eNearest vampire health bar disabled.");
+            ? "§aNearest special-mob health bar enabled."
+            : "§eNearest special-mob health bar disabled.");
     }
 
     private World resolveWorld(CommandSender sender, String name) {

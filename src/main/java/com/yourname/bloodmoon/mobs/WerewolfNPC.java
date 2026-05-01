@@ -118,6 +118,20 @@ public final class WerewolfNPC {
         return entity != null ? entity.getLocation() : (lastKnownLocation != null ? lastKnownLocation.clone() : spawnLocation.clone());
     }
 
+    public double getCurrentHealth() {
+        LivingEntity entity = getLivingEntity();
+        return entity == null ? plugin.getConfigManager().getWerewolfHealth() : Math.max(0.0D, entity.getHealth());
+    }
+
+    public double getMaximumHealth() {
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) {
+            return plugin.getConfigManager().getWerewolfHealth();
+        }
+        var attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        return attr == null ? plugin.getConfigManager().getWerewolfHealth() : Math.max(1.0D, attr.getValue());
+    }
+
     public void onTraitTick() {
         LivingEntity entity = getLivingEntity();
         if (entity != null) {

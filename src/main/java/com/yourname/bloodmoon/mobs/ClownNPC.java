@@ -160,6 +160,20 @@ public final class ClownNPC {
         return lastKnownLocation == null ? spawnLocation.clone() : lastKnownLocation.clone();
     }
 
+    public double getCurrentHealth() {
+        LivingEntity entity = getLivingEntity();
+        return entity == null ? plugin.getConfigManager().getClownHealth() : Math.max(0.0D, entity.getHealth());
+    }
+
+    public double getMaximumHealth() {
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) {
+            return plugin.getConfigManager().getClownHealth();
+        }
+        var attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        return attr == null ? plugin.getConfigManager().getClownHealth() : Math.max(1.0D, attr.getValue());
+    }
+
     public void triggerSnapFromDamage() {
         if (state == ClownState.WANDERING) transitionToCombat(findNearestPlayer(getCurrentLocation(), 48.0D));
     }

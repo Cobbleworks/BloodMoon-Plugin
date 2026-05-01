@@ -226,6 +226,20 @@ public final class ZombieNPC {
         return lastKnownLocation == null ? spawnLocation.clone() : lastKnownLocation.clone();
     }
 
+    public double getCurrentHealth() {
+        LivingEntity entity = getLivingEntity();
+        return entity == null ? plugin.getConfigManager().getZombieHealth() : Math.max(0.0D, entity.getHealth());
+    }
+
+    public double getMaximumHealth() {
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) {
+            return plugin.getConfigManager().getZombieHealth();
+        }
+        var attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        return attr == null ? plugin.getConfigManager().getZombieHealth() : Math.max(1.0D, attr.getValue());
+    }
+
     public void onTraitTick() {
         updateLastKnownLocation();
     }
