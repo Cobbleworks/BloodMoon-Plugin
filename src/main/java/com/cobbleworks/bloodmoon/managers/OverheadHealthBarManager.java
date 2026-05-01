@@ -8,14 +8,18 @@ import com.cobbleworks.bloodmoon.mobs.VampireNPC;
 import com.cobbleworks.bloodmoon.mobs.WerewolfNPC;
 import com.cobbleworks.bloodmoon.mobs.WitchNPC;
 import com.cobbleworks.bloodmoon.mobs.ZombieNPC;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import net.citizensnpcs.api.npc.NPC;
-import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scoreboard.Scoreboard;
-import org.bukkit.scoreboard.Team;
 
 /**
  * Renders overhead segmented health bars directly above active Blood Moon NPCs.
@@ -23,6 +27,8 @@ import org.bukkit.scoreboard.Team;
 public final class OverheadHealthBarManager {
 
     private final BloodMoonPlugin plugin;
+    private final Map<UUID, ArmorStand> barEntities = new HashMap<>();
+    private final Set<UUID> touchedThisTick = new HashSet<>();
     private BukkitRunnable updateTask;
 
     public OverheadHealthBarManager(BloodMoonPlugin plugin) {
@@ -45,6 +51,7 @@ public final class OverheadHealthBarManager {
             updateTask.cancel();
             updateTask = null;
         }
+        clearAllBars();
     }
 
     public boolean toggle(Player player) {
@@ -60,6 +67,8 @@ public final class OverheadHealthBarManager {
     }
 
     private void tick() {
+        touchedThisTick.clear();
+
         for (VampireNPC vampire : plugin.getNPCManager().getActiveVampires()) {
             if (vampire == null || vampire.isDead()) {
                 continue;
@@ -110,6 +119,8 @@ public final class OverheadHealthBarManager {
             }
             applyOverheadBar(werewolf.getNpc(), werewolf.getCurrentHealth(), werewolf.getMaximumHealth());
         }
+
+        cleanupUntouchedBars();
     }
 
     private void applyOverheadBar(NPC npc, double currentHealth, double maximumHealth) {
@@ -121,17 +132,8 @@ public final class OverheadHealthBarManager {
             return;
         }
 
-        double max = Math.max(1.0D, maximumHealth);
-        double current = Math.max(0.0D, Math.min(max, currentHealth));
-        double progress = current / max;
-        String name = "§8" + buildSegmentBar(progress);
-
-        npc.data().set("nameplate-visible", true);
-        npc.data().setPersistent(NPC.Metadata.NAMEPLATE_VISIBLE, true);
-        npc.setName(name);
-        living.setCustomName(name);
-        living.setCustomNameVisible(true);
-        ensureNameTagVisible(living);
+        forceHideCitizensNameplate(npc, living);
+        updateFloatingBar(living, currentHealth, maximumHealth);
     }
 
     private void applyOverheadBarEntity(LivingEntity living, double currentHealth, double maximumHealth) {
@@ -139,14 +141,8 @@ public final class OverheadHealthBarManager {
             return;
         }
 
-        double max = Math.max(1.0D, maximumHealth);
-        double current = Math.max(0.0D, Math.min(max, currentHealth));
-        double progress = current / max;
-        String name = "§8" + buildSegmentBar(progress);
-
-        living.setCustomName(name);
-        living.setCustomNameVisible(true);
-        ensureNameTagVisible(living);
+        living.setCustomNameVisible(false);
+        updateFloatingBar(living, currentHealth, maximumHealth);
     }
 
     private void hideNpcEntityNameplate(NPC npc, LivingEntity activeCarrier) {
@@ -157,7 +153,76 @@ public final class OverheadHealthBarManager {
         if (!(entity instanceof LivingEntity npcEntity) || npcEntity == activeCarrier) {
             return;
         }
+        npc.data().set("nameplate-visible", false);
+        npc.data().setPersistent(NPC.Metadata.NAMEPLATE_VISIBLE, false);
         npcEntity.setCustomNameVisible(false);
+    }
+
+    private void forceHideCitizensNameplate(NPC npc, LivingEntity living) {
+        npc.data().set("nameplate-visible", false);
+        npc.data().setPersistent(NPC.Metadata.NAMEPLATE_VISIBLE, false);
+        living.setCustomNameVisible(false);
+    }
+
+    private void updateFloatingBar(LivingEntity living, double currentHealth, double maximumHealth) {
+        UUID hostId = living.getUniqueId();
+        touchedThisTick.add(hostId);
+
+        double max = Math.max(1.0D, maximumHealth);
+        double current = Math.max(0.0D, Math.min(max, currentHealth));
+        double progress = current / max;
+        String barText = "§8" + buildSegmentBar(progress);
+
+        ArmorStand bar = barEntities.get(hostId);
+        if (bar == null || !bar.isValid()) {
+            Location spawnAt = getBarLocation(living);
+            if (spawnAt.getWorld() == null) {
+                return;
+            }
+            bar = spawnAt.getWorld().spawn(spawnAt, ArmorStand.class, stand -> {
+                stand.setInvisible(true);
+                stand.setMarker(true);
+                stand.setSmall(true);
+                stand.setGravity(false);
+                stand.setInvulnerable(true);
+                stand.setSilent(true);
+                stand.setCollidable(false);
+                stand.setCustomNameVisible(true);
+                stand.setBasePlate(false);
+                stand.setArms(false);
+            });
+            barEntities.put(hostId, bar);
+        }
+
+        bar.teleport(getBarLocation(living));
+        bar.setCustomName(barText);
+        bar.setCustomNameVisible(true);
+    }
+
+    private Location getBarLocation(LivingEntity living) {
+        double yOffset = Math.max(0.9D, living.getHeight() + 0.55D);
+        return living.getLocation().add(0.0D, yOffset, 0.0D);
+    }
+
+    private void cleanupUntouchedBars() {
+        Set<UUID> staleIds = new HashSet<>(barEntities.keySet());
+        staleIds.removeAll(touchedThisTick);
+        for (UUID staleId : staleIds) {
+            ArmorStand bar = barEntities.remove(staleId);
+            if (bar != null && bar.isValid()) {
+                bar.remove();
+            }
+        }
+    }
+
+    private void clearAllBars() {
+        for (ArmorStand bar : barEntities.values()) {
+            if (bar != null && bar.isValid()) {
+                bar.remove();
+            }
+        }
+        barEntities.clear();
+        touchedThisTick.clear();
     }
 
     private String buildSegmentBar(double progress) {
@@ -169,23 +234,6 @@ public final class OverheadHealthBarManager {
         }
         builder.append("§7]");
         return builder.toString();
-    }
-
-    private void ensureNameTagVisible(LivingEntity entity) {
-        if (!(entity instanceof Player playerEntity)) {
-            return;
-        }
-        try {
-            Scoreboard board = Bukkit.getScoreboardManager() == null ? null : Bukkit.getScoreboardManager().getMainScoreboard();
-            if (board == null) {
-                return;
-            }
-            Team hidden = board.getTeam("bm_hidden_npc");
-            if (hidden != null) {
-                hidden.removeEntry(playerEntity.getName());
-            }
-        } catch (Exception ignored) {
-        }
     }
 
 }
