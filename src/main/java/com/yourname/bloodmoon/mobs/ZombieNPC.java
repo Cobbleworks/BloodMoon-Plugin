@@ -283,6 +283,7 @@ public final class ZombieNPC {
             return;
         }
         hitPlayer.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 60, 1, true, true, true));
+        hitPlayer.addPotionEffect(new PotionEffect(PotionEffectType.HUNGER, 80, 1, true, true, true));
         hitPlayer.damage(2.5D);
 
         // Flag accelerated armor wear for ACID_DURATION_MS
@@ -295,6 +296,7 @@ public final class ZombieNPC {
             new Particle.DustOptions(Color.fromRGB(50, 220, 50), 1.1F));
         world.spawnParticle(Particle.SNEEZE, loc, 8, 0.3D, 0.3D, 0.3D, 0D);
         world.playSound(hitPlayer.getLocation(), Sound.ENTITY_SLIME_SQUISH_SMALL, 1.0F, 0.6F);
+        world.playSound(hitPlayer.getLocation(), Sound.ENTITY_ZOMBIE_INFECT, 0.75F, 0.9F);
     }
 
     public void startDeathSequence() {
@@ -716,6 +718,7 @@ public final class ZombieNPC {
                     if (!p.isDead()
                         && p.getLocation().distanceSquared(seg.loc) <= TRAIL_RADIUS_SQUARED) {
                         p.damage(0.5D);
+                        p.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 30, 0, true, true, true));
                     }
                 }
             }
@@ -746,7 +749,12 @@ public final class ZombieNPC {
                 if (food > 0) {
                     p.setFoodLevel(Math.max(0, food - 2));
                     p.setSaturation(Math.max(0F, p.getSaturation() - 1.0F));
+                    p.addPotionEffect(new PotionEffect(PotionEffectType.HUNGER, 50, 0, true, false, true));
+                } else {
+                    p.damage(0.7D);
+                    p.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 40, 0, true, true, true));
                 }
+                world.spawnParticle(Particle.SNEEZE, p.getLocation().add(0D, 1D, 0D), 2, 0.15D, 0.2D, 0.15D, 0D);
             }
         }
     }
@@ -892,6 +900,12 @@ public final class ZombieNPC {
                     }
                     if (p.getLocation().distanceSquared(center) <= radiusSq) {
                         corruptFoodItem(p);
+                        p.addPotionEffect(new PotionEffect(PotionEffectType.HUNGER, 60, 1, true, true, true));
+                        p.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 40, 0, true, true, true));
+                        if (iteration >= 6) {
+                            p.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 30, 0, true, true, true));
+                        }
+                        world.spawnParticle(Particle.SNEEZE, p.getLocation().add(0D, 1D, 0D), 4, 0.25D, 0.25D, 0.25D, 0D);
                     }
                 }
             }

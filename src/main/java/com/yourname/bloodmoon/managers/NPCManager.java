@@ -245,26 +245,7 @@ public final class NPCManager {
     }
 
     public boolean spawnShamblingZombie(Location location, Player initialTarget) {
-        if (!citizensInitialized) {
-            initializeCitizens();
-        }
-        if (!isCitizensReady() || location == null || location.getWorld() == null) {
-            return false;
-        }
-
-        World world = location.getWorld();
-        world.strikeLightningEffect(location);
-        Zombie zombie = (Zombie) world.spawnEntity(location, EntityType.ZOMBIE);
-        zombie.setRemoveWhenFarAway(false);
-        zombie.setFireTicks(0);
-        zombie.setCustomNameVisible(false);
-        zombie.setAdult();
-        zombie.setSilent(false);
-        if (initialTarget != null && initialTarget.isOnline() && initialTarget.getWorld() == world) {
-            zombie.setTarget(initialTarget);
-        }
-        shamblingZombies.put(zombie.getUniqueId(), location.clone());
-        return true;
+        return spawnZombie(location, initialTarget).isPresent();
     }
 
     public Optional<WitchNPC> spawnWitch(Location location, Player initialTarget) {

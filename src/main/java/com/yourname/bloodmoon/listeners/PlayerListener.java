@@ -82,12 +82,8 @@ public final class PlayerListener implements Listener {
             return;
         }
 
-        if (event.getEntity() instanceof Zombie shambling && plugin.getNPCManager().isShamblingZombie(shambling)) {
-            Player aggressor = event.getDamager() instanceof Player player ? player : null;
-            plugin.getNPCManager().transformShamblingZombie(shambling, aggressor);
-            event.setCancelled(true);
-            return;
-        }
+        // Legacy shambling-zombie reveal is intentionally disabled so spawned BloodMoon zombies
+        // are always the full encounter NPC immediately instead of transforming on first hit.
 
         if (vampire != null && event.getEntity() instanceof LivingEntity livingEntity) {
             event.setDamage(event.getDamage() * vampire.getHemoplagueDamageMultiplier(livingEntity));
