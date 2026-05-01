@@ -38,7 +38,7 @@ public final class ConfigManager {
     }
 
     public double getSpecialMobReplaceChance() {
-        return Math.max(0.0D, Math.min(1.0D, getConfig().getDouble("bloodmoon.special-mob-replace-chance", 0.024D)));
+        return Math.max(0.0D, Math.min(1.0D, getConfig().getDouble("bloodmoon.special-mob-replace-chance", 0.08D)));
     }
 
     public List<String> getEnabledWorlds() {
@@ -317,7 +317,7 @@ public final class ConfigManager {
 
     private void addDefaults(FileConfiguration config) {
         config.addDefault("bloodmoon.chance", 24);
-        config.addDefault("bloodmoon.special-mob-replace-chance", 0.024D);
+        config.addDefault("bloodmoon.special-mob-replace-chance", 0.08D);
         config.addDefault("bloodmoon.worlds", List.of("world"));
         config.addDefault("vampire.health", 40.0D);
         config.addDefault("vampire.stalk-ticks-min", 80);

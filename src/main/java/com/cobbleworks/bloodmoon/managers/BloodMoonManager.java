@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
@@ -97,6 +98,8 @@ public final class BloodMoonManager {
     private static final double SCARECROW_PULSE_CHANCE = 0.08D;
     private static final double GHOST_PULSE_CHANCE = 0.07D;
     private static final double WEREWOLF_PULSE_CHANCE = 0.06D;
+    private static final Particle.DustOptions BLOOD_MIST = new Particle.DustOptions(Color.fromRGB(145, 8, 8), 1.25F);
+    private static final Particle.DustOptions SHADOW_MIST = new Particle.DustOptions(Color.fromRGB(45, 10, 10), 1.05F);
 
     public BloodMoonManager(BloodMoonPlugin plugin) {
         this.plugin = plugin;
@@ -406,6 +409,16 @@ public final class BloodMoonManager {
                     double oz = (random.nextDouble() * 2.0 - 1.0) * 14.0;
                     Location loc = origin.clone().add(ox, oy, oz);
                     world.spawnParticle(Particle.ASH, loc, 2, 0.12D, 0.18D, 0.12D, 0.0D);
+                    if (random.nextDouble() < 0.65D) {
+                        world.spawnParticle(Particle.DUST, loc, 1, 0.16D, 0.22D, 0.16D, 0.0D, BLOOD_MIST);
+                    }
+                    if (random.nextDouble() < 0.35D) {
+                        world.spawnParticle(Particle.DUST, loc, 1, 0.14D, 0.18D, 0.14D, 0.0D, SHADOW_MIST);
+                    }
+                }
+
+                if (random.nextDouble() < 0.10D) {
+                    world.playSound(origin, Sound.AMBIENT_CRIMSON_FOREST_MOOD, 0.35F, 0.55F + random.nextFloat() * 0.2F);
                 }
             }
         }

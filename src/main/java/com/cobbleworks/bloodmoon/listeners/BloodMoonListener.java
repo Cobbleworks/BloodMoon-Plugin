@@ -62,7 +62,8 @@ public final class BloodMoonListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onNaturalMonsterSpawn(CreatureSpawnEvent event) {
         if (event.getSpawnReason() != CreatureSpawnEvent.SpawnReason.NATURAL
-            && event.getSpawnReason() != CreatureSpawnEvent.SpawnReason.REINFORCEMENTS) {
+            && event.getSpawnReason() != CreatureSpawnEvent.SpawnReason.REINFORCEMENTS
+            && event.getSpawnReason() != CreatureSpawnEvent.SpawnReason.CHUNK_GEN) {
             return;
         }
 
