@@ -122,11 +122,10 @@ public final class VampireHealthBarManager {
         double max = Math.max(1.0D, maximumHealth);
         double current = Math.max(0.0D, Math.min(max, currentHealth));
         double progress = current / max;
-        String name = "§4" + label + " §8" + buildSegmentBar(progress) + " §7" + format(current) + "§8/§7" + format(max);
+        String name = "§4" + label + " §8" + buildSegmentBar(progress);
 
         npc.data().set("nameplate-visible", true);
         npc.data().setPersistent(NPC.Metadata.NAMEPLATE_VISIBLE, true);
-        npc.setName(name);
         living.setCustomName(name);
         living.setCustomNameVisible(true);
         ensureNameTagVisible(living);
@@ -160,7 +159,4 @@ public final class VampireHealthBarManager {
         }
     }
 
-    private String format(double value) {
-        return String.format(java.util.Locale.US, "%.1f", value);
-    }
 }
