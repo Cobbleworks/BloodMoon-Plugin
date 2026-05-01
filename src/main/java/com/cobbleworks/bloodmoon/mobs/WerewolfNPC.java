@@ -296,6 +296,7 @@ public final class WerewolfNPC {
         sentinel.addTarget("mobs");
         sentinel.addTarget("monsters");
         sentinel.allIgnores = new SentinelTargetList();
+        sentinel.addIgnore("npcs");
     }
 
     private void hideNameplate(LivingEntity entity) {
@@ -1176,6 +1177,8 @@ public final class WerewolfNPC {
         tasks.clear();
     }
 }
+
+
 
 
 

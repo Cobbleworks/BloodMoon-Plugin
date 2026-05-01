@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
-import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
@@ -91,7 +90,6 @@ public final class BloodMoonManager {
     private Integer chanceOverride;
     private DifficultyProfile difficultyProfile = DifficultyProfile.MEDIUM;
 
-    private static final Particle.DustOptions BLOOD_AMBIENT = new Particle.DustOptions(Color.fromRGB(160, 0, 0), 1.2F);
     private static final double VAMPIRE_PULSE_CHANCE = 0.18D;
     private static final double CLOWN_PULSE_CHANCE = 0.12D;
     private static final double ZOMBIE_PULSE_CHANCE = 0.14D;
@@ -407,7 +405,7 @@ public final class BloodMoonManager {
                     double oy = random.nextDouble() * 6.0;
                     double oz = (random.nextDouble() * 2.0 - 1.0) * 14.0;
                     Location loc = origin.clone().add(ox, oy, oz);
-                    world.spawnParticle(Particle.DUST, loc, 2, 0.12D, 0.18D, 0.12D, 0.0D, BLOOD_AMBIENT);
+                    world.spawnParticle(Particle.ASH, loc, 2, 0.12D, 0.18D, 0.12D, 0.0D);
                 }
             }
         }
@@ -423,9 +421,9 @@ public final class BloodMoonManager {
     }
 
     private void forceStorm(World world) {
-        world.setStorm(true);
+        world.setStorm(false);
         world.setThundering(false);
-        world.setWeatherDuration(24000);
+        world.setWeatherDuration(12000);
         world.setThunderDuration(0);
     }
 

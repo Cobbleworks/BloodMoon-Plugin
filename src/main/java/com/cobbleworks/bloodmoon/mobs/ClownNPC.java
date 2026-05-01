@@ -313,6 +313,7 @@ public final class ClownNPC {
         s.addTarget("mobs");
         s.addTarget("monsters");
         s.allIgnores = new SentinelTargetList();
+        s.addIgnore("npcs");
         npc.setProtected(false);
     }
 
@@ -403,7 +404,8 @@ public final class ClownNPC {
         s.allTargets = new SentinelTargetList(); s.addTarget("players");
         s.addTarget("mobs");
         s.addTarget("monsters");
-        s.allIgnores = new SentinelTargetList(); s.chaseRange = 30.0D; s.respawnTime = -1;
+        s.allIgnores = new SentinelTargetList();
+        s.addIgnore("npcs"); s.chaseRange = 30.0D; s.respawnTime = -1;
     }
 
     private void tickCombat() {
@@ -1955,6 +1957,8 @@ public final class ClownNPC {
 
     private record AbilityWeight(ClownAbility ability, int weight) {}
 }
+
+
 
 
 

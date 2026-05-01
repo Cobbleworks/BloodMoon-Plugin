@@ -516,6 +516,7 @@ public final class VampireNPC {
         sentinel.addTarget("mobs");
         sentinel.addTarget("monsters");
         sentinel.allIgnores = new SentinelTargetList();
+        sentinel.addIgnore("npcs");
         npc.setProtected(false);
     }
 
@@ -788,6 +789,7 @@ public final class VampireNPC {
         sentinel.addTarget("mobs");
         sentinel.addTarget("monsters");
         sentinel.allIgnores = new SentinelTargetList();
+        sentinel.addIgnore("npcs");
         sentinel.chaseRange = 30.0D;
         sentinel.respawnTime = -1;
     }
@@ -3006,6 +3008,8 @@ public final class VampireNPC {
         return pendingAbility;
     }
 }
+
+
 
 
 

@@ -352,6 +352,7 @@ public final class GhostNPC {
         sentinel.addTarget("mobs");
         sentinel.addTarget("monsters");
         sentinel.allIgnores = new SentinelTargetList();
+        sentinel.addIgnore("npcs");
     }
 
     private void hideNameplate(LivingEntity entity) {
@@ -1536,6 +1537,8 @@ public final class GhostNPC {
         tasks.clear();
     }
 }
+
+
 
 
 

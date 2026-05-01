@@ -17,10 +17,13 @@ import com.cobbleworks.bloodmoon.traits.WitchTrait;
 import com.cobbleworks.bloodmoon.traits.ZombieTrait;
 import net.citizensnpcs.api.event.NPCDamageEvent;
 import net.citizensnpcs.api.event.NPCDeathEvent;
+import net.citizensnpcs.api.npc.NPC;
+import org.bukkit.entity.Entity;
 import org.bukkit.Sound;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.mcmonkey.sentinel.events.SentinelAttackEvent;
 
 /**
@@ -91,6 +94,21 @@ public final class NPCListener implements Listener {
         if (werewolf != null && event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
             werewolf.onTakeDamage();
             event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_WOLF_HURT, 0.95F, 0.75F);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
+        NPC attacker = resolveBloodMoonNpc(event.getDamager());
+        NPC victim = resolveBloodMoonNpc(event.getEntity());
+        if (attacker == null || victim == null || attacker.equals(victim)) {
+            return;
+        }
+
+        // Do not proactively target each other, but retaliate if struck.
+        if (attacker.isSpawned() && victim.isSpawned()) {
+            attacker.getNavigator().setTarget(event.getEntity(), true);
+            victim.getNavigator().setTarget(event.getDamager(), true);
         }
     }
 
@@ -189,6 +207,38 @@ public final class NPCListener implements Listener {
             WerewolfTrait trait = event.getNPC().getOrAddTrait(WerewolfTrait.class);
             trait.handleSentinelAttack(event);
         }
+    }
+
+    private NPC resolveBloodMoonNpc(Entity entity) {
+        if (entity == null) {
+            return null;
+        }
+        VampireNPC vampire = plugin.getNPCManager().getVampire(entity);
+        if (vampire != null) {
+            return vampire.getNpc();
+        }
+        ClownNPC clown = plugin.getNPCManager().getClown(entity);
+        if (clown != null) {
+            return clown.getNpc();
+        }
+        ZombieNPC zombie = plugin.getNPCManager().getZombie(entity);
+        if (zombie != null) {
+            return zombie.getNpc();
+        }
+        WitchNPC witch = plugin.getNPCManager().getWitch(entity);
+        if (witch != null) {
+            return witch.getNpc();
+        }
+        ScarecrowNPC scarecrow = plugin.getNPCManager().getScarecrow(entity);
+        if (scarecrow != null) {
+            return scarecrow.getNpc();
+        }
+        GhostNPC ghost = plugin.getNPCManager().getGhost(entity);
+        if (ghost != null) {
+            return ghost.getNpc();
+        }
+        WerewolfNPC werewolf = plugin.getNPCManager().getWerewolf(entity);
+        return werewolf == null ? null : werewolf.getNpc();
     }
 }
 

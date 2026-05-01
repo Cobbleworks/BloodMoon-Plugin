@@ -296,6 +296,7 @@ public final class WitchNPC {
         s.addTarget("mobs");
         s.addTarget("monsters");
         s.allIgnores = new SentinelTargetList();
+        s.addIgnore("npcs");
     }
 
     private void hideNameplate(LivingEntity entity) {
@@ -1577,6 +1578,8 @@ public final class WitchNPC {
         }
     }
 }
+
+
 
 
 

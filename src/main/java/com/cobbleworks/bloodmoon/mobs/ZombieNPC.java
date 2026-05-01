@@ -485,7 +485,8 @@ public final class ZombieNPC {
         sentinel.addTarget("players");
         sentinel.addTarget("mobs");
         sentinel.addTarget("monsters");
-        sentinel.allIgnores  = new SentinelTargetList();
+        sentinel.allIgnores = new SentinelTargetList();
+        sentinel.addIgnore("npcs");
         npc.setProtected(false);
     }
 
@@ -1364,7 +1365,8 @@ public final class ZombieNPC {
         sentinel.addTarget("players");
         sentinel.addTarget("mobs");
         sentinel.addTarget("monsters");
-        sentinel.allIgnores  = new SentinelTargetList();
+        sentinel.allIgnores = new SentinelTargetList();
+        sentinel.addIgnore("npcs");
         sentinel.chaseRange  = 32.0D;
         sentinel.respawnTime = -1;
     }
@@ -1417,6 +1419,8 @@ public final class ZombieNPC {
         ownedTasks.clear();
     }
 }
+
+
 
 
 

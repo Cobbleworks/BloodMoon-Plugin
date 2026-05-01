@@ -210,6 +210,7 @@ public final class ScarecrowNPC {
         s.addTarget("mobs");
         s.addTarget("monsters");
         s.allIgnores = new SentinelTargetList();
+        s.addIgnore("npcs");
     }
 
     private void hideNameplate(LivingEntity entity) {
@@ -1123,6 +1124,8 @@ public final class ScarecrowNPC {
         }
     }
 }
+
+
 
 
 
