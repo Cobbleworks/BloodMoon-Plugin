@@ -89,6 +89,7 @@ public final class WitchNPC {
     private Location lastKnownLocation;
     private int stateTicks;
     private int castTicks;
+    private int postCastRecoveryTicks;
     private boolean cleaned;
     private boolean deathStarted;
     private WitchPhase phase = WitchPhase.COMPOSED;
@@ -320,6 +321,7 @@ public final class WitchNPC {
         if (cleaned || deathStarted) return;
         stateTicks++;
         cooldowns.replaceAll((k, v) -> Math.max(0, v - 1));
+        if (postCastRecoveryTicks > 0) postCastRecoveryTicks--;
         if (repositionCooldown > 0) repositionCooldown--;
         onTraitTick();
         checkPhaseTransition();
@@ -340,6 +342,9 @@ public final class WitchNPC {
             npc.getNavigator().setTarget(player, true);
         }
         npc.faceLocation(player.getEyeLocation());
+        if (postCastRecoveryTicks > 0) {
+            return;
+        }
         if (stateTicks % 24 == 0) player.getWorld().playSound(getCurrentLocation(), Sound.ENTITY_WITCH_AMBIENT, 0.8F, 0.8F);
         int abilityInterval = Math.max(16, (int) Math.round(30.0D * plugin.getBloodMoonManager().getAbilityCadenceMultiplier()));
         if (stateTicks % abilityInterval == 0) {
@@ -350,12 +355,14 @@ public final class WitchNPC {
 
     private void tickCasting() {
         runCastingParticles();
+        runCastingAnimation();
         if (stateTicks < castTicks) return;
         WitchAbility ability = pending;
         pending = null;
         state = beforeCast;
         stateTicks = 0;
         castTicks = 0;
+        postCastRecoveryTicks = 14;
         if (ability != null) executeAbility(ability);
     }
 
@@ -366,10 +373,25 @@ public final class WitchNPC {
         state    = WitchState.CASTING;
         stateTicks = 0;
         castTicks  = switch (ability) {
-            case SHARED_VESSEL, DEADLY_SPELL, HEX_CIRCLE, MIRROR_IMAGE -> 35;
-            default -> 20;
+            case SHARED_VESSEL, DEADLY_SPELL, HEX_CIRCLE, MIRROR_IMAGE -> 46;
+            default -> 28;
         };
         playCastingStartSound(ability);
+    }
+
+    private void runCastingAnimation() {
+        if (!(npc.getEntity() instanceof Player witchPlayer)) {
+            return;
+        }
+        if (target != null && target.isOnline() && !target.isDead()) {
+            npc.faceLocation(target.getEyeLocation());
+        }
+        if (stateTicks % 6 == 0) {
+            witchPlayer.swingMainHand();
+        }
+        if (pending == WitchAbility.HEX_CIRCLE && stateTicks % 4 == 0) {
+            witchPlayer.swingOffHand();
+        }
     }
 
     private WitchAbility chooseAbility() {
@@ -673,7 +695,7 @@ public final class WitchNPC {
     private void castHexCircle() {
         Player player = ensureTarget(35.0D);
         if (player == null) return;
-        player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 20, 1, true, true, true));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 24, 0, true, true, true));
         Location center = player.getLocation().clone();
         World world = center.getWorld();
         if (world == null) return;
@@ -684,11 +706,15 @@ public final class WitchNPC {
             @Override public void run() {
                 t++;
                 if (isDead()) { cancel(); return; }
-                if (player.isOnline() && !player.isDead() && t <= 80) {
+                if (player.isOnline() && !player.isDead() && t <= 52) {
                     Location current = player.getLocation();
-                    center.setX(current.getX());
+                    double maxStep = 0.18D;
+                    Vector move = current.toVector().subtract(center.toVector());
+                    if (move.lengthSquared() > maxStep * maxStep) {
+                        move.normalize().multiply(maxStep);
+                    }
+                    center.add(move);
                     center.setY(current.getY());
-                    center.setZ(current.getZ());
                 }
                 if (t > 80) {
                     // Seal: launch everything inside
@@ -696,10 +722,12 @@ public final class WitchNPC {
                     world.playSound(center, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 1.0F, 0.7F);
                     for (Entity e : world.getNearbyEntities(center, radius, 3.0D, radius)) {
                         if (e instanceof Player p && !p.isDead()) {
-                            p.setVelocity(new Vector(0, 2.2D, 0));
-                            p.damage(5.0D);
+                            p.setVelocity(new Vector(0, 1.05D, 0));
+                            p.setFallDistance(0.0F);
+                            p.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 50, 0, true, true, true));
+                            p.damage(2.5D);
                         } else if (e instanceof LivingEntity le) {
-                            le.setVelocity(new Vector(0, 1.8D, 0));
+                            le.setVelocity(new Vector(0, 0.8D, 0));
                         }
                     }
                     world.spawnParticle(Particle.DUST, center.clone().add(0, 0.5, 0), 80, radius, 0.3, radius, 0, DUST_VIOLET);
