@@ -75,6 +75,12 @@ public final class NPCListener implements Listener {
 
         GhostNPC ghost = plugin.getNPCManager().getGhost(event.getNPC());
         if (ghost != null && event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
+            if (ghost.isUntargetable()) {
+                event.setCancelled(true);
+                return;
+            }
+            event.setDamage(ghost.reduceIncomingDamage(event.getDamage()));
+            ghost.onTakeDamage(event.getDamage());
             event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_ALLAY_HURT, 0.85F, 0.6F);
         }
     }

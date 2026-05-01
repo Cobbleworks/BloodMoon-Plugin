@@ -1,6 +1,7 @@
 package com.yourname.bloodmoon.listeners;
 
 import com.yourname.bloodmoon.BloodMoonPlugin;
+import com.yourname.bloodmoon.mobs.GhostNPC;
 import com.yourname.bloodmoon.mobs.VampireNPC;
 import com.yourname.bloodmoon.mobs.WitchNPC;
 import com.yourname.bloodmoon.mobs.ZombieNPC;
@@ -120,6 +121,13 @@ public final class PlayerListener implements Listener {
     public void onEntityDamage(EntityDamageEvent event) {
         Entity entity = event.getEntity();
 
+        if (entity instanceof Player player) {
+            GhostNPC possessingGhost = GhostNPC.getPossessingGhost(player);
+            if (possessingGhost != null) {
+                possessingGhost.handlePossessedVictimDamaged(event.getFinalDamage());
+            }
+        }
+
         // Cancel fall damage for Blood Moon NPCs / bats
         if (event.getCause() == EntityDamageEvent.DamageCause.FALL) {
             if (plugin.getNPCManager().isBloodMoonNpc(entity)
@@ -229,6 +237,12 @@ public final class PlayerListener implements Listener {
         if (event.getTo() == null) {
             return;
         }
+
+        GhostNPC possessingGhost = GhostNPC.getPossessingGhost(event.getPlayer());
+        if (possessingGhost != null) {
+            possessingGhost.handlePossessedMove(event.getPlayer(), event);
+        }
+
         if (event.getFrom().getBlockX() == event.getTo().getBlockX()
             && event.getFrom().getBlockY() == event.getTo().getBlockY()
             && event.getFrom().getBlockZ() == event.getTo().getBlockZ()) {
