@@ -45,10 +45,10 @@ public final class BloodMoonTabCompleter implements TabCompleter {
             return filter(Bukkit.getWorlds().stream().map(World::getName).toList(), args[1]);
         }
         if (args.length == 2 && "spawn".equals(sub)) {
-            return filter(List.of("vampire", "clown", "zombie", "witch", "scarecrow"), args[1]);
+            return filter(List.of("vampire", "clown", "zombie", "witch", "scarecrow", "ghost"), args[1]);
         }
         if (args.length == 3 && "spawn".equals(sub)
-            && ("vampire".equals(args[1].toLowerCase()) || "clown".equals(args[1].toLowerCase()) || "zombie".equals(args[1].toLowerCase()) || "witch".equals(args[1].toLowerCase()) || "scarecrow".equals(args[1].toLowerCase()))) {
+            && ("vampire".equals(args[1].toLowerCase()) || "clown".equals(args[1].toLowerCase()) || "zombie".equals(args[1].toLowerCase()) || "witch".equals(args[1].toLowerCase()) || "scarecrow".equals(args[1].toLowerCase()) || "ghost".equals(args[1].toLowerCase()))) {
             return filter(Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(), args[2]);
         }
         if (args.length == 2 && "chance".equals(sub)) {

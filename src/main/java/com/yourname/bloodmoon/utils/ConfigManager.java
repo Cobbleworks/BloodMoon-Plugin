@@ -235,6 +235,32 @@ public final class ConfigManager {
             "ScY77wYvapORK2ZC2kRpHKOINuYz3+iAn6qWHnUiIDe/e4oBXCD2jFNqHBL/N/mNYVNOXmyIH+4fMD1WV4EBIySRvwsSdK4KWvUJgnic28rb8c9lsgbPghgyk15ZFi0YTYfJ7NwfPA4RPtI3Zwg51Nm/IBdNbjaN9RV4APxoANTmPLoC206f0inH37RQvfimervD7v5A+rHiZavOQNs2+zrg9E0FefN4EJYl3OllQgn5HFcOiTibSYlAt11lTNvOvvM5gP2H5NnVSng47CHO8yWD1gigJx1Xe0hq9AiaH8JDOl+lCMQxq5sM+kkyn1p0XJ6ruteV5a1KeS2ZcbfZp3+rQ8uwmvvAhQ0kp09KABMSre3BUM5o1iSZy7hKVWi3Ru/Q+HqjRc8UvkkVAwfLFp9UJHFCAKC+/i4Q2lZ1N2LIwHvCKIEEpCEyf1bKdphkgdrOQUzGifXhrd620if61U8Lzijg7KZg5kinEV+gHa6Oh98RQs4o13gG6JMzZtrNMIV/U6iybBG2nUmBS/EhMliGkvuKGPZ86UvQ2c8OeSECJO7K01gECSSdVVf1dcrss2/8kKS/IjsTB5qsr+FS5JZziQY8kQaT3JtIUDleo50vZMOF4SHJoMq10H/ejMFXbVXbqn6GQHIZolnsPOmNb8EHoComq4MNwNRty6hN+o0=");
     }
 
+    public double getGhostHealth() {
+        return Math.max(1.0D, getConfig().getDouble("ghost.health", 28.0D));
+    }
+
+    public int getGhostMaxPerPlayer() {
+        return Math.max(0, getConfig().getInt("ghost.max-per-player", 1));
+    }
+
+    public int getGhostSpawnRadius() {
+        return Math.max(8, getConfig().getInt("ghost.spawn-radius", 52));
+    }
+
+    public String getGhostSkinName() {
+        return getConfig().getString("ghost.skin-name", "bloodmoon_ghost_Nghia_m500");
+    }
+
+    public String getGhostSkinTexture() {
+        return getConfig().getString("ghost.skin-texture",
+            "ewogICJ0aW1lc3RhbXAiIDogMTc3NzU3NjQxMDg1OCwKICAicHJvZmlsZUlkIiA6ICJhNjkyZTQ0NjRlMTQ0MTc2YmQwNjk1NjgwMTEwMTVlMSIsCiAgInByb2ZpbGVOYW1lIiA6ICJOZ2hpYV9tNTAwIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzVmMDk0ZmZjMTJiZjkxY2M2MjUwM2QzOTdhZjc4Nzc3NzRmNzAyZmMwYzZlMTY4ZTAzNGEyMjZhYTUxZmIzZGEiCiAgICB9LAogICAgIkNBUEUiIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzI4ZGU0YTgxNjg4YWQxOGI0OWU3MzVhMjczZTA4NmMxOGYxZTM5NjY5NTYxMjNjY2I1NzQwMzRjMDZmNWQzMzYiCiAgICB9CiAgfQp9");
+    }
+
+    public String getGhostSkinSignature() {
+        return getConfig().getString("ghost.skin-signature",
+            "wN2NyYD161pzwI+4BOI4UoiaFVQHqBiG4hrKEHJG0q2dn0I3WdDtcWDB8Md1DsYhULZ6G+VQGXaoS/L3h2kjmdhFdmQIUiGVgE+FWCKczQjncjXk4hLpkt2z/1wm3aLQLzEwJScQkRKTQ33O5DlIVVOd0BoohARfEg9XvBSN/JJwaDrdbe/gJFWL3uF5aeVNumBo27sp2kS+ICLm+PQ6v9SN4BEhih78eL5HcbtEtSMclEMF1AAyt7KW2NpEj4ks0AAsU1k7zvTqQECxHozkIOKXE77KBGBm6hhXNYaKGOr7I0bYWU9/Sg87InqyTqeNUjSQ0ko6SSgfTt21q1xIJZKZEcaL8tgSRiYzCqHtj+PndFPG6pDTpHe29yMoex5+3iObWFLhMuJ/+u1PQ11UnLxQZ1Onw8Sk/BAmmaXEqDapOj1daqeeXK0rB0avqsSPU6x93evX1dC3RIxis+/sjIQHJYkf1aCi5zLpkYbV8lkY4/Z59X3tQ9hhZq4iGVe2J1pGbRdM3+lHl+VH5okSYeBERGntZr0sWtwJrbDxFNtsX5RYepJTGeIwWbJZmwyersNnGf/6uS3KsVwaM4jmrO4VTJXq+tyxZD7Zv6bg+IJ4en5upyk/WUiJoPCrG7q59XMZzMd6Dz31cdK7k661GwnNTXzpALqkrcxWs5gA7xc=");
+    }
+
     public double getBleedChance() {
         return Math.max(0.0D, Math.min(1.0D, getConfig().getDouble("bleed.chance", 0.4D)));
     }
@@ -318,6 +344,14 @@ public final class ConfigManager {
             "ewogICJ0aW1lc3RhbXAiIDogMTc3NzU3NjAyOTE1NCwKICAicHJvZmlsZUlkIiA6ICIwMmU5OGQ0MzU1MzQ0NWNkOGEwNWIzYWFlYmIzOWJmMSIsCiAgInByb2ZpbGVOYW1lIiA6ICJha2dkbXUiLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYjRkMWVkZGVhYzgzMGQ5ZGVhMTJiODg4OTk3YjI4OWZhODRiNjljOTAxZjJjNTc0NGFmOTc1ZmM0OTRlYmUzIgogICAgfQogIH0KfQ==");
         config.addDefault("scarecrow.skin-signature",
             "ScY77wYvapORK2ZC2kRpHKOINuYz3+iAn6qWHnUiIDe/e4oBXCD2jFNqHBL/N/mNYVNOXmyIH+4fMD1WV4EBIySRvwsSdK4KWvUJgnic28rb8c9lsgbPghgyk15ZFi0YTYfJ7NwfPA4RPtI3Zwg51Nm/IBdNbjaN9RV4APxoANTmPLoC206f0inH37RQvfimervD7v5A+rHiZavOQNs2+zrg9E0FefN4EJYl3OllQgn5HFcOiTibSYlAt11lTNvOvvM5gP2H5NnVSng47CHO8yWD1gigJx1Xe0hq9AiaH8JDOl+lCMQxq5sM+kkyn1p0XJ6ruteV5a1KeS2ZcbfZp3+rQ8uwmvvAhQ0kp09KABMSre3BUM5o1iSZy7hKVWi3Ru/Q+HqjRc8UvkkVAwfLFp9UJHFCAKC+/i4Q2lZ1N2LIwHvCKIEEpCEyf1bKdphkgdrOQUzGifXhrd620if61U8Lzijg7KZg5kinEV+gHa6Oh98RQs4o13gG6JMzZtrNMIV/U6iybBG2nUmBS/EhMliGkvuKGPZ86UvQ2c8OeSECJO7K01gECSSdVVf1dcrss2/8kKS/IjsTB5qsr+FS5JZziQY8kQaT3JtIUDleo50vZMOF4SHJoMq10H/ejMFXbVXbqn6GQHIZolnsPOmNb8EHoComq4MNwNRty6hN+o0=");
+        config.addDefault("ghost.health", 28.0D);
+        config.addDefault("ghost.max-per-player", 1);
+        config.addDefault("ghost.spawn-radius", 52);
+        config.addDefault("ghost.skin-name", "bloodmoon_ghost_Nghia_m500");
+        config.addDefault("ghost.skin-texture",
+            "ewogICJ0aW1lc3RhbXAiIDogMTc3NzU3NjQxMDg1OCwKICAicHJvZmlsZUlkIiA6ICJhNjkyZTQ0NjRlMTQ0MTc2YmQwNjk1NjgwMTEwMTVlMSIsCiAgInByb2ZpbGVOYW1lIiA6ICJOZ2hpYV9tNTAwIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzVmMDk0ZmZjMTJiZjkxY2M2MjUwM2QzOTdhZjc4Nzc3NzRmNzAyZmMwYzZlMTY4ZTAzNGEyMjZhYTUxZmIzZGEiCiAgICB9LAogICAgIkNBUEUiIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzI4ZGU0YTgxNjg4YWQxOGI0OWU3MzVhMjczZTA4NmMxOGYxZTM5NjY5NTYxMjNjY2I1NzQwMzRjMDZmNWQzMzYiCiAgICB9CiAgfQp9");
+        config.addDefault("ghost.skin-signature",
+            "wN2NyYD161pzwI+4BOI4UoiaFVQHqBiG4hrKEHJG0q2dn0I3WdDtcWDB8Md1DsYhULZ6G+VQGXaoS/L3h2kjmdhFdmQIUiGVgE+FWCKczQjncjXk4hLpkt2z/1wm3aLQLzEwJScQkRKTQ33O5DlIVVOd0BoohARfEg9XvBSN/JJwaDrdbe/gJFWL3uF5aeVNumBo27sp2kS+ICLm+PQ6v9SN4BEhih78eL5HcbtEtSMclEMF1AAyt7KW2NpEj4ks0AAsU1k7zvTqQECxHozkIOKXE77KBGBm6hhXNYaKGOr7I0bYWU9/Sg87InqyTqeNUjSQ0ko6SSgfTt21q1xIJZKZEcaL8tgSRiYzCqHtj+PndFPG6pDTpHe29yMoex5+3iObWFLhMuJ/+u1PQ11UnLxQZ1Onw8Sk/BAmmaXEqDapOj1daqeeXK0rB0avqsSPU6x93evX1dC3RIxis+/sjIQHJYkf1aCi5zLpkYbV8lkY4/Z59X3tQ9hhZq4iGVe2J1pGbRdM3+lHl+VH5okSYeBERGntZr0sWtwJrbDxFNtsX5RYepJTGeIwWbJZmwyersNnGf/6uS3KsVwaM4jmrO4VTJXq+tyxZD7Zv6bg+IJ4en5upyk/WUiJoPCrG7q59XMZzMd6Dz31cdK7k661GwnNTXzpALqkrcxWs5gA7xc=");
         config.addDefault("bleed.chance", 0.4D);
         config.addDefault("bleed.damage-per-tick", 1.0D);
         config.addDefault("bleed.interval-ticks", 40);

@@ -381,6 +381,12 @@ public final class BloodMoonManager {
                 }
                 plugin.getNPCManager().spawnScarecrowNear(player);
             }
+            for (int index = 0; index < Math.max(1, plugin.getConfigManager().getGhostMaxPerPlayer()); index++) {
+                if (plugin.getNPCManager().countGhostsNear(player, 96.0D) >= plugin.getConfigManager().getGhostMaxPerPlayer()) {
+                    break;
+                }
+                plugin.getNPCManager().spawnGhostNear(player);
+            }
         }
     }
 
@@ -431,6 +437,10 @@ public final class BloodMoonManager {
             if (plugin.getNPCManager().countScarecrowsNear(player, 96.0D) < plugin.getConfigManager().getScarecrowMaxPerPlayer()
                 && random.nextDouble() <= 0.08D) {
                 plugin.getNPCManager().spawnScarecrowNear(player);
+            }
+            if (plugin.getNPCManager().countGhostsNear(player, 96.0D) < plugin.getConfigManager().getGhostMaxPerPlayer()
+                && random.nextDouble() <= 0.07D) {
+                plugin.getNPCManager().spawnGhostNear(player);
             }
         }
     }

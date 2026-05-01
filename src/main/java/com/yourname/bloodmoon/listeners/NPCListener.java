@@ -2,11 +2,13 @@ package com.yourname.bloodmoon.listeners;
 
 import com.yourname.bloodmoon.BloodMoonPlugin;
 import com.yourname.bloodmoon.mobs.ClownNPC;
+import com.yourname.bloodmoon.mobs.GhostNPC;
 import com.yourname.bloodmoon.mobs.ScarecrowNPC;
 import com.yourname.bloodmoon.mobs.VampireNPC;
 import com.yourname.bloodmoon.mobs.WitchNPC;
 import com.yourname.bloodmoon.mobs.ZombieNPC;
 import com.yourname.bloodmoon.traits.ClownTrait;
+import com.yourname.bloodmoon.traits.GhostTrait;
 import com.yourname.bloodmoon.traits.ScarecrowTrait;
 import com.yourname.bloodmoon.traits.VampireTrait;
 import com.yourname.bloodmoon.traits.WitchTrait;
@@ -68,6 +70,12 @@ public final class NPCListener implements Listener {
         ScarecrowNPC scarecrow = plugin.getNPCManager().getScarecrow(event.getNPC());
         if (scarecrow != null && event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
             event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_SKELETON_HURT, 0.95F, 0.85F);
+            return;
+        }
+
+        GhostNPC ghost = plugin.getNPCManager().getGhost(event.getNPC());
+        if (ghost != null && event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
+            event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_ALLAY_HURT, 0.85F, 0.6F);
         }
     }
 
@@ -110,6 +118,14 @@ public final class NPCListener implements Listener {
             event.getDrops().clear();
             event.setDroppedExp(0);
             scarecrow.startDeathSequence();
+            return;
+        }
+
+        GhostNPC ghost = plugin.getNPCManager().getGhost(event.getNPC());
+        if (ghost != null) {
+            event.getDrops().clear();
+            event.setDroppedExp(0);
+            ghost.startDeathSequence();
         }
 
     }
@@ -138,6 +154,11 @@ public final class NPCListener implements Listener {
         }
         if (event.getNPC().hasTrait(ScarecrowTrait.class)) {
             ScarecrowTrait trait = event.getNPC().getOrAddTrait(ScarecrowTrait.class);
+            trait.handleSentinelAttack(event);
+            return;
+        }
+        if (event.getNPC().hasTrait(GhostTrait.class)) {
+            GhostTrait trait = event.getNPC().getOrAddTrait(GhostTrait.class);
             trait.handleSentinelAttack(event);
         }
     }
