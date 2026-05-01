@@ -50,11 +50,14 @@ public final class GhostNPC {
     private static final Particle.DustOptions DUST_WHITE = new Particle.DustOptions(Color.fromRGB(230, 230, 255), 1.2F);
     private static final Particle.DustOptions DUST_ICE = new Particle.DustOptions(Color.fromRGB(100, 180, 255), 1.0F);
     private static final Particle.DustOptions DUST_CYAN = new Particle.DustOptions(Color.fromRGB(0, 200, 200), 1.1F);
+    private static final Particle.DustOptions DUST_REDSTONE = new Particle.DustOptions(Color.fromRGB(220, 30, 30), 0.9F);
 
     private enum GhostState { STALKING, RUSHING, DEAD }
     private enum GhostAbility { MIND_CONTROL, PARANORMAL_ACTIVITY, ECHO, POSSESSION, POLTERGEIST_THROW }
 
     private static final Map<UUID, GhostNPC> POSSESSIONS = new HashMap<>();
+    private static final int ITEM_SNATCH_COOLDOWN_TICKS = 180;
+    private static final int ITEM_SNATCH_THROW_DELAY_TICKS = 42;
 
     private final BloodMoonPlugin plugin;
     private final NPC npc;
@@ -78,6 +81,7 @@ public final class GhostNPC {
     private int stateTicks;
     private int vanishingTicks;
     private int phaseWalkTicks;
+    private int itemSnatchCooldown;
     private boolean cleaned;
     private boolean deathStarted;
     private boolean untargetable;
@@ -148,10 +152,34 @@ public final class GhostNPC {
             return;
         }
         Vector delta = event.getTo().toVector().subtract(event.getFrom().toVector());
-        Location inverted = event.getFrom().clone().subtract(delta);
-        inverted.setYaw(event.getTo().getYaw());
-        inverted.setPitch(event.getTo().getPitch());
-        event.setTo(inverted);
+        Vector horizontal = new Vector(delta.getX(), 0.0D, delta.getZ());
+
+        if (horizontal.lengthSquared() < 0.0004D) {
+            Location look = event.getTo().clone();
+            look.setYaw(event.getTo().getYaw() + (float) ((Math.sin(stateTicks * 0.45D) * 22.0D)));
+            event.setTo(look);
+            return;
+        }
+
+        double cos = Math.cos(Math.PI * 0.65D);
+        double sin = Math.sin(Math.PI * 0.65D);
+        Vector rotated = new Vector(
+            horizontal.getX() * cos - horizontal.getZ() * sin,
+            0.0D,
+            horizontal.getX() * sin + horizontal.getZ() * cos
+        );
+
+        double speed = Math.min(0.38D, horizontal.length());
+        Location drifted = event.getFrom().clone().add(rotated.normalize().multiply(speed));
+        drifted.setY(event.getTo().getY());
+        drifted.setYaw(event.getTo().getYaw() + (float) ((Math.cos(stateTicks * 0.4D) * 16.0D)));
+        drifted.setPitch(event.getTo().getPitch());
+
+        if (!drifted.getBlock().isPassable() || !drifted.clone().add(0, 1, 0).getBlock().isPassable()) {
+            event.setTo(event.getTo().clone());
+            return;
+        }
+        event.setTo(drifted);
     }
 
     public void handlePossessedVictimDamaged(double finalDamage) {
@@ -342,7 +370,11 @@ public final class GhostNPC {
         }
         stateTicks++;
         cooldowns.replaceAll((key, value) -> Math.max(0, value - 1));
+        if (itemSnatchCooldown > 0) {
+            itemSnatchCooldown--;
+        }
         onTraitTick();
+        emitGhostTellParticles();
 
         tickVanishing();
 
@@ -371,13 +403,6 @@ public final class GhostNPC {
         npc.getNavigator().cancelNavigation();
         npc.faceLocation(player.getEyeLocation());
 
-        if (stateTicks % 5 == 0) {
-            Location loc = getCurrentLocation().add(0, 1, 0);
-            if (loc.getWorld() != null) {
-                loc.getWorld().spawnParticle(Particle.DUST, loc, 2, 0.3, 0.4, 0.3, 0, DUST_WHITE);
-                loc.getWorld().spawnParticle(Particle.DUST, loc, 1, 0.2, 0.3, 0.2, 0, DUST_ICE);
-            }
-        }
         if (stateTicks % 100 == 0) {
             Location loc = getCurrentLocation();
             if (loc.getWorld() != null) {
@@ -534,12 +559,7 @@ public final class GhostNPC {
 
                 if (!stolen && player.isOnline() && !player.isDead() && player.getWorld() == current.getWorld() && current.distanceSquared(player.getLocation()) < 9.0D) {
                     stolen = true;
-                    ItemStack held = player.getInventory().getItemInMainHand();
-                    if (held.getType() != Material.AIR && held.getAmount() > 0) {
-                        stolenItems.add(held.clone());
-                        player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
-                        player.sendMessage("§7§oA cold presence passes through you...");
-                    }
+                    trySnatchAndThrow(player, caster);
                     player.damage(3.0D, caster);
                     player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 40, 1, false, true, true));
                     world.playSound(player.getLocation(), Sound.ENTITY_WITHER_AMBIENT, 0.5F, 2.0F);
@@ -769,6 +789,8 @@ public final class GhostNPC {
                     scrambleHotbar(possessedPlayer.getInventory());
                     possessedPlayer.getWorld().playSound(possessedPlayer.getLocation(), Sound.ITEM_BUNDLE_INSERT, 0.6F, 0.7F);
                 }
+                possessedPlayer.addPotionEffect(new PotionEffect(PotionEffectType.NAUSEA, 30, 0, false, true, true));
+                possessedPlayer.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 20, 0, false, true, true));
                 possessedPlayer.getWorld().spawnParticle(Particle.DUST, possessedPlayer.getLocation().add(0, 1, 0), 6, 0.3, 0.5, 0.3, 0, DUST_CYAN);
             }
         };
@@ -940,6 +962,9 @@ public final class GhostNPC {
         }
         for (Player player : world.getPlayers()) {
             double distanceSquared = player.getLocation().distanceSquared(current);
+            if (distanceSquared <= 324.0D) {
+                player.getWorld().spawnParticle(Particle.DUST, player.getLocation().add(0, 1.0, 0), 1, 0.25, 0.3, 0.25, 0, DUST_REDSTONE);
+            }
             if (distanceSquared > 144.0D) {
                 continue;
             }
@@ -1013,6 +1038,112 @@ public final class GhostNPC {
                 next.getWorld().spawnParticle(Particle.DUST, next.clone().add(0, 1, 0), 6, 0.2, 0.4, 0.2, 0, DUST_ICE);
             }
         }
+    }
+
+    private void emitGhostTellParticles() {
+        Location loc = getCurrentLocation().add(0, 1, 0);
+        World world = loc.getWorld();
+        if (world == null) {
+            return;
+        }
+        if (stateTicks % 3 == 0) {
+            world.spawnParticle(Particle.DUST, loc, 1, 0.18, 0.24, 0.18, 0, DUST_WHITE);
+        }
+        if (stateTicks % 7 == 0) {
+            world.spawnParticle(Particle.DUST, loc, 1, 0.14, 0.18, 0.14, 0, DUST_ICE);
+        }
+    }
+
+    private void trySnatchAndThrow(Player player, LivingEntity caster) {
+        if (itemSnatchCooldown > 0) {
+            return;
+        }
+        int slot = findSnatchSlot(player.getInventory());
+        if (slot < 0) {
+            return;
+        }
+
+        ItemStack stack = player.getInventory().getItem(slot);
+        if (stack == null || stack.getType().isAir()) {
+            return;
+        }
+
+        ItemStack stolen = stack.clone();
+        stolen.setAmount(1);
+        if (stack.getAmount() <= 1) {
+            player.getInventory().setItem(slot, new ItemStack(Material.AIR));
+        } else {
+            stack.setAmount(stack.getAmount() - 1);
+            player.getInventory().setItem(slot, stack);
+        }
+        player.sendMessage("§7§oThe ghost snatches an item and hurls it back...");
+        itemSnatchCooldown = ITEM_SNATCH_COOLDOWN_TICKS;
+
+        World world = player.getWorld();
+        world.playSound(player.getLocation(), Sound.ENTITY_ALLAY_ITEM_GIVEN, 0.6F, 0.6F);
+        world.spawnParticle(Particle.DUST, player.getLocation().add(0, 1, 0), 10, 0.25, 0.35, 0.25, 0, DUST_WHITE);
+
+        BukkitRunnable delayedThrow = new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (isDead() || !player.isOnline() || player.isDead()) {
+                    return;
+                }
+                Location origin = getCurrentLocation().clone().add(0, 1.2, 0);
+                World throwWorld = origin.getWorld();
+                if (throwWorld == null || throwWorld != player.getWorld()) {
+                    return;
+                }
+                org.bukkit.entity.Item projectile = throwWorld.dropItem(origin, stolen);
+                projectile.setPickupDelay(Integer.MAX_VALUE);
+                Vector velocity = player.getEyeLocation().toVector().subtract(origin.toVector());
+                if (velocity.lengthSquared() > 0.0001D) {
+                    projectile.setVelocity(velocity.normalize().multiply(0.82D));
+                }
+
+                BukkitRunnable tracker = new BukkitRunnable() {
+                    int ticks;
+
+                    @Override
+                    public void run() {
+                        ticks++;
+                        if (!projectile.isValid() || ticks > 35 || isDead()) {
+                            if (projectile.isValid()) {
+                                projectile.setPickupDelay(20);
+                            }
+                            cancel();
+                            return;
+                        }
+                        if (player.isOnline() && !player.isDead() && player.getWorld() == projectile.getWorld()
+                            && projectile.getLocation().distanceSquared(player.getLocation().add(0, 1, 0)) <= 2.25D) {
+                            player.damage(3.5D, caster);
+                            player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 25, 1, false, true, true));
+                            projectile.remove();
+                            cancel();
+                        }
+                    }
+                };
+                tasks.add(tracker);
+                tracker.runTaskTimer(plugin, 1L, 1L);
+            }
+        };
+        tasks.add(delayedThrow);
+        delayedThrow.runTaskLater(plugin, ITEM_SNATCH_THROW_DELAY_TICKS);
+    }
+
+    private int findSnatchSlot(PlayerInventory inventory) {
+        int held = inventory.getHeldItemSlot();
+        ItemStack heldItem = inventory.getItem(held);
+        if (heldItem != null && !heldItem.getType().isAir()) {
+            return held;
+        }
+        for (int i = 0; i < 9; i++) {
+            ItemStack item = inventory.getItem(i);
+            if (item != null && !item.getType().isAir()) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private void setUntargetable(boolean untargetable) {
