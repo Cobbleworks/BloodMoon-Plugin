@@ -251,6 +251,16 @@ public final class VampireNPC {
         return entity == null ? plugin.getConfigManager().getVampireHealth() : getMaxHealth(entity);
     }
 
+    public LivingEntity getHealthBarCarrier() {
+        if (state == VampireState.DISGUISED_BAT && disguiseBat != null && disguiseBat.isValid()) {
+            return disguiseBat;
+        }
+        if (state == VampireState.BAT_FORM_ESCAPE && escapeBat != null && escapeBat.isValid()) {
+            return escapeBat;
+        }
+        return getLivingEntity();
+    }
+
     /**
      * Called by the Citizens trait every tick as a secondary driving point.
      */

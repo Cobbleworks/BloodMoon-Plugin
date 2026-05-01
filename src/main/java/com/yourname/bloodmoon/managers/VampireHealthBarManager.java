@@ -64,7 +64,9 @@ public final class VampireHealthBarManager {
             if (vampire == null || vampire.isDead()) {
                 continue;
             }
-            applyOverheadBar(vampire.getNpc(), "Vampire", vampire.getCurrentHealth(), vampire.getMaximumHealth());
+            LivingEntity carrier = vampire.getHealthBarCarrier();
+            applyOverheadBarEntity(carrier, "Vampire", vampire.getCurrentHealth(), vampire.getMaximumHealth());
+            hideNpcEntityNameplate(vampire.getNpc(), carrier);
         }
 
         for (ClownNPC clown : plugin.getNPCManager().getActiveClowns()) {
@@ -129,6 +131,32 @@ public final class VampireHealthBarManager {
         living.setCustomName(name);
         living.setCustomNameVisible(true);
         ensureNameTagVisible(living);
+    }
+
+    private void applyOverheadBarEntity(LivingEntity living, String label, double currentHealth, double maximumHealth) {
+        if (living == null || !living.isValid()) {
+            return;
+        }
+
+        double max = Math.max(1.0D, maximumHealth);
+        double current = Math.max(0.0D, Math.min(max, currentHealth));
+        double progress = current / max;
+        String name = "§4" + label + " §8" + buildSegmentBar(progress);
+
+        living.setCustomName(name);
+        living.setCustomNameVisible(true);
+        ensureNameTagVisible(living);
+    }
+
+    private void hideNpcEntityNameplate(NPC npc, LivingEntity activeCarrier) {
+        if (npc == null || !npc.isSpawned()) {
+            return;
+        }
+        Entity entity = npc.getEntity();
+        if (!(entity instanceof LivingEntity npcEntity) || npcEntity == activeCarrier) {
+            return;
+        }
+        npcEntity.setCustomNameVisible(false);
     }
 
     private String buildSegmentBar(double progress) {
