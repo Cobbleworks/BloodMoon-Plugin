@@ -20,12 +20,12 @@ import org.bukkit.scoreboard.Team;
 /**
  * Renders overhead segmented health bars directly above active Blood Moon NPCs.
  */
-public final class VampireHealthBarManager {
+public final class OverheadHealthBarManager {
 
     private final BloodMoonPlugin plugin;
     private BukkitRunnable updateTask;
 
-    public VampireHealthBarManager(BloodMoonPlugin plugin) {
+    public OverheadHealthBarManager(BloodMoonPlugin plugin) {
         this.plugin = plugin;
     }
 
@@ -65,7 +65,7 @@ public final class VampireHealthBarManager {
                 continue;
             }
             LivingEntity carrier = vampire.getHealthBarCarrier();
-            applyOverheadBarEntity(carrier, "Vampire", vampire.getCurrentHealth(), vampire.getMaximumHealth());
+            applyOverheadBarEntity(carrier, vampire.getCurrentHealth(), vampire.getMaximumHealth());
             hideNpcEntityNameplate(vampire.getNpc(), carrier);
         }
 
@@ -73,46 +73,46 @@ public final class VampireHealthBarManager {
             if (clown == null || clown.isDead()) {
                 continue;
             }
-            applyOverheadBar(clown.getNpc(), "Clown", clown.getCurrentHealth(), clown.getMaximumHealth());
+            applyOverheadBar(clown.getNpc(), clown.getCurrentHealth(), clown.getMaximumHealth());
         }
 
         for (ZombieNPC zombie : plugin.getNPCManager().getActiveZombies()) {
             if (zombie == null || zombie.isDead()) {
                 continue;
             }
-            applyOverheadBar(zombie.getNpc(), "Zombie", zombie.getCurrentHealth(), zombie.getMaximumHealth());
+            applyOverheadBar(zombie.getNpc(), zombie.getCurrentHealth(), zombie.getMaximumHealth());
         }
 
         for (WitchNPC witch : plugin.getNPCManager().getActiveWitches()) {
             if (witch == null || witch.isDead()) {
                 continue;
             }
-            applyOverheadBar(witch.getNpc(), "Witch", witch.getCurrentHealth(), witch.getMaximumHealth());
+            applyOverheadBar(witch.getNpc(), witch.getCurrentHealth(), witch.getMaximumHealth());
         }
 
         for (ScarecrowNPC scarecrow : plugin.getNPCManager().getActiveScarecrows()) {
             if (scarecrow == null || scarecrow.isDead()) {
                 continue;
             }
-            applyOverheadBar(scarecrow.getNpc(), "Scarecrow", scarecrow.getCurrentHealth(), scarecrow.getMaximumHealth());
+            applyOverheadBar(scarecrow.getNpc(), scarecrow.getCurrentHealth(), scarecrow.getMaximumHealth());
         }
 
         for (GhostNPC ghost : plugin.getNPCManager().getActiveGhosts()) {
             if (ghost == null || ghost.isDead()) {
                 continue;
             }
-            applyOverheadBar(ghost.getNpc(), "Ghost", ghost.getCurrentHealth(), ghost.getMaximumHealth());
+            applyOverheadBar(ghost.getNpc(), ghost.getCurrentHealth(), ghost.getMaximumHealth());
         }
 
         for (WerewolfNPC werewolf : plugin.getNPCManager().getActiveWerewolves()) {
             if (werewolf == null || werewolf.isDead()) {
                 continue;
             }
-            applyOverheadBar(werewolf.getNpc(), "Werewolf", werewolf.getCurrentHealth(), werewolf.getMaximumHealth());
+            applyOverheadBar(werewolf.getNpc(), werewolf.getCurrentHealth(), werewolf.getMaximumHealth());
         }
     }
 
-    private void applyOverheadBar(NPC npc, String label, double currentHealth, double maximumHealth) {
+    private void applyOverheadBar(NPC npc, double currentHealth, double maximumHealth) {
         if (npc == null || !npc.isSpawned()) {
             return;
         }
@@ -134,7 +134,7 @@ public final class VampireHealthBarManager {
         ensureNameTagVisible(living);
     }
 
-    private void applyOverheadBarEntity(LivingEntity living, String label, double currentHealth, double maximumHealth) {
+    private void applyOverheadBarEntity(LivingEntity living, double currentHealth, double maximumHealth) {
         if (living == null || !living.isValid()) {
             return;
         }
@@ -189,4 +189,5 @@ public final class VampireHealthBarManager {
     }
 
 }
+
 

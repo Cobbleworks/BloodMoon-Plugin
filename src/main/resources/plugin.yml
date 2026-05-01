@@ -1,6 +1,6 @@
 name: BloodMoon-Event
 version: 1.0.0
-main: com.yourname.bloodmoon.BloodMoonPlugin
+main: com.cobbleworks.bloodmoon.BloodMoonPlugin
 api-version: '1.20'
 author: Cobbleworks
 depend:
@@ -17,8 +17,9 @@ permissions:
     description: Allows full Blood Moon administration.
     default: op
   bloodmoon.healthbar:
-    description: Allows players to show the nearest vampire health bar.
+    description: Allows players to use the overhead special NPC healthbar system.
     default: true
   bloodmoon.notify:
     description: Allows receiving Blood Moon notifications.
     default: true
+
