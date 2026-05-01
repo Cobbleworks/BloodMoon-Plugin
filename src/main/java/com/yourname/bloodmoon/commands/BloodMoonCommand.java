@@ -218,32 +218,15 @@ public final class BloodMoonCommand implements CommandExecutor {
 
     private void handleHealthBar(CommandSender sender, String[] args) {
         if (!(sender instanceof Player player)) {
-            MessageUtils.send(sender, "§cOnly players can toggle the special-mob health bar.");
+            MessageUtils.send(sender, "§cOnly players can view special-mob overhead health bars.");
             return;
         }
         if (!sender.hasPermission("bloodmoon.healthbar")) {
-            MessageUtils.send(sender, "§cYou do not have permission to use the special-mob health bar.");
+            MessageUtils.send(sender, "§cYou do not have permission to use special-mob health bar features.");
             return;
         }
-
-        if (args.length >= 2) {
-            switch (args[1].toLowerCase()) {
-                case "on" -> plugin.getVampireHealthBarManager().setEnabled(player, true);
-                case "off" -> plugin.getVampireHealthBarManager().setEnabled(player, false);
-                case "toggle" -> plugin.getVampireHealthBarManager().toggle(player);
-                default -> {
-                    MessageUtils.send(sender, "§cUsage: /bloodmoon healthbar [on|off|toggle]");
-                    return;
-                }
-            }
-        } else {
-            plugin.getVampireHealthBarManager().toggle(player);
-        }
-
-        boolean enabled = plugin.getVampireHealthBarManager().isEnabled(player);
-        MessageUtils.send(player, enabled
-            ? "§aNearest special-mob health bar enabled."
-            : "§eNearest special-mob health bar disabled.");
+        MessageUtils.send(player, "§aSpecial-mob overhead health bars are active.");
+        MessageUtils.send(player, "§7Each BloodMoon NPC now shows its segmented health above its head.");
     }
 
     private World resolveWorld(CommandSender sender, String name) {
@@ -263,7 +246,7 @@ public final class BloodMoonCommand implements CommandExecutor {
     private void sendUsage(CommandSender sender) {
         MessageUtils.send(sender, "§4BloodMoon commands:");
         if (sender instanceof Player player && player.hasPermission("bloodmoon.healthbar")) {
-            MessageUtils.send(sender, "§7/bloodmoon healthbar [on|off|toggle]");
+            MessageUtils.send(sender, "§7/bloodmoon healthbar §8(view overhead-bar info)");
         }
         MessageUtils.send(sender, "§7/bloodmoon start [world]");
         MessageUtils.send(sender, "§7/bloodmoon stop [world]");

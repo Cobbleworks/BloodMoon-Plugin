@@ -100,6 +100,10 @@ public final class GhostNPC {
         startController();
     }
 
+    public NPC getNpc() {
+        return npc;
+    }
+
     public boolean isDead() {
         return state == GhostState.DEAD || cleaned || deathStarted;
     }

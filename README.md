@@ -117,7 +117,7 @@ Use `/bloodmoon reload` after editing configuration.
 - `/bloodmoon status` returns event and active world details
 - `/bloodmoon spawn vampire <player>` works
 - `/bloodmoon spawn ghost <player>` works
-- `/bloodmoon healthbar toggle` works in-game
+- `/bloodmoon healthbar` returns overhead health-bar status
 
 ## **Event Architecture**
 
@@ -205,7 +205,7 @@ All administration is on `/bloodmoon` (alias: `/bm`).
 | `/bloodmoon reload` | Reload config file |
 | `/bloodmoon chance <1-100>` | Temporary chance override |
 | `/bloodmoon difficulty <easy|medium|hard|nightmare>` | Runtime difficulty profile switch |
-| `/bloodmoon healthbar [on|off|toggle]` | Toggle nearest special-mob segmented health bar |
+| `/bloodmoon healthbar` | Show info about always-on overhead segmented health bars |
 
 Supported `<type>` values:
 
@@ -216,7 +216,7 @@ Supported `<type>` values:
 | Permission | Description | Default |
 |------------|-------------|---------|
 | `bloodmoon.admin` | Full event administration and spawn control | `op` |
-| `bloodmoon.healthbar` | Toggle nearest special-mob health bar | `true` |
+| `bloodmoon.healthbar` | Access overhead special-mob health bar information command | `true` |
 | `bloodmoon.notify` | Receive Blood Moon event notifications | `true` |
 
 ## **Building from Source**

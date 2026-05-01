@@ -109,6 +109,10 @@ public final class WerewolfNPC {
         startController();
     }
 
+    public NPC getNpc() {
+        return npc;
+    }
+
     public boolean isDead() {
         return state == WerewolfState.DEAD || cleaned || deathStarted;
     }

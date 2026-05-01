@@ -33,7 +33,7 @@ public final class BloodMoonTabCompleter implements TabCompleter {
 
         String sub = args[0].toLowerCase(Locale.ROOT);
         if (args.length == 2 && "healthbar".equals(sub) && sender.hasPermission("bloodmoon.healthbar")) {
-            return filter(List.of("on", "off", "toggle"), args[1]);
+            return List.of();
         }
         if (!sender.hasPermission("bloodmoon.admin")) {
             return List.of();

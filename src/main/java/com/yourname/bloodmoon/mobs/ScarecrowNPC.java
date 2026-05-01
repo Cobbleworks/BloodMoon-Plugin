@@ -76,6 +76,8 @@ public final class ScarecrowNPC {
     }
 
     // ─── Public API ───────────────────────────────────────────────────────────
+    public NPC getNpc() { return npc; }
+
     public boolean isDead() { return state == ScarecrowState.DEAD || cleaned || deathStarted; }
 
     public Location getCurrentLocation() {

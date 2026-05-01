@@ -108,6 +108,8 @@ public final class WitchNPC {
     }
 
     // ─── Public API ───────────────────────────────────────────────────────────
+    public NPC getNpc() { return npc; }
+
     public boolean isDead() { return state == WitchState.DEAD || cleaned || deathStarted; }
 
     public Location getCurrentLocation() {
