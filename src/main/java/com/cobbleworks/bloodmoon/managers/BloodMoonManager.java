@@ -92,6 +92,13 @@ public final class BloodMoonManager {
     private DifficultyProfile difficultyProfile = DifficultyProfile.MEDIUM;
 
     private static final Particle.DustOptions BLOOD_AMBIENT = new Particle.DustOptions(Color.fromRGB(160, 0, 0), 1.2F);
+    private static final double VAMPIRE_PULSE_CHANCE = 0.18D;
+    private static final double CLOWN_PULSE_CHANCE = 0.12D;
+    private static final double ZOMBIE_PULSE_CHANCE = 0.14D;
+    private static final double WITCH_PULSE_CHANCE = 0.10D;
+    private static final double SCARECROW_PULSE_CHANCE = 0.08D;
+    private static final double GHOST_PULSE_CHANCE = 0.07D;
+    private static final double WEREWOLF_PULSE_CHANCE = 0.06D;
 
     public BloodMoonManager(BloodMoonPlugin plugin) {
         this.plugin = plugin;
@@ -445,48 +452,7 @@ public final class BloodMoonManager {
 
     private void spawnInitialVampires(World world) {
         for (Player player : world.getPlayers()) {
-            for (int index = 0; index < Math.max(1, plugin.getConfigManager().getMaxVampiresPerPlayer()); index++) {
-                if (plugin.getNPCManager().countVampiresNear(player, 96.0D) >= plugin.getConfigManager().getMaxVampiresPerPlayer()) {
-                    break;
-                }
-                plugin.getNPCManager().spawnVampireNear(player);
-            }
-            for (int index = 0; index < Math.max(1, plugin.getConfigManager().getClownMaxPerPlayer()); index++) {
-                if (plugin.getNPCManager().countClownsNear(player, 96.0D) >= plugin.getConfigManager().getClownMaxPerPlayer()) {
-                    break;
-                }
-                plugin.getNPCManager().spawnClownNear(player);
-            }
-            for (int index = 0; index < Math.max(1, plugin.getConfigManager().getZombieMaxPerPlayer()); index++) {
-                if (plugin.getNPCManager().countZombiesNear(player, 96.0D) >= plugin.getConfigManager().getZombieMaxPerPlayer()) {
-                    break;
-                }
-                plugin.getNPCManager().spawnZombieNear(player);
-            }
-            for (int index = 0; index < Math.max(1, plugin.getConfigManager().getWitchMaxPerPlayer()); index++) {
-                if (plugin.getNPCManager().countWitchesNear(player, 96.0D) >= plugin.getConfigManager().getWitchMaxPerPlayer()) {
-                    break;
-                }
-                plugin.getNPCManager().spawnWitchNear(player);
-            }
-            for (int index = 0; index < Math.max(1, plugin.getConfigManager().getScarecrowMaxPerPlayer()); index++) {
-                if (plugin.getNPCManager().countScarecrowsNear(player, 96.0D) >= plugin.getConfigManager().getScarecrowMaxPerPlayer()) {
-                    break;
-                }
-                plugin.getNPCManager().spawnScarecrowNear(player);
-            }
-            for (int index = 0; index < Math.max(1, plugin.getConfigManager().getGhostMaxPerPlayer()); index++) {
-                if (plugin.getNPCManager().countGhostsNear(player, 96.0D) >= plugin.getConfigManager().getGhostMaxPerPlayer()) {
-                    break;
-                }
-                plugin.getNPCManager().spawnGhostNear(player);
-            }
-            for (int index = 0; index < Math.max(1, plugin.getConfigManager().getWerewolfMaxPerPlayer()); index++) {
-                if (plugin.getNPCManager().countWerewolvesNear(player, 96.0D) >= plugin.getConfigManager().getWerewolfMaxPerPlayer()) {
-                    break;
-                }
-                plugin.getNPCManager().spawnWerewolfNear(player);
-            }
+            spawnSpecialsNearPlayerByChance(player, 0.55D);
         }
     }
 
@@ -513,44 +479,83 @@ public final class BloodMoonManager {
     }
 
     private void spawnVampirePulse(World world) {
-        int playerCount = world.getPlayers().size();
-        if (playerCount == 0) {
+        if (world.getPlayers().isEmpty()) {
             return;
         }
-        int maxTotal = playerCount * plugin.getConfigManager().getMaxVampiresPerPlayer();
-        if (plugin.getNPCManager().countVampires(world) >= maxTotal) {
-            return;
-        }
+
         for (Player player : world.getPlayers()) {
-            if (plugin.getNPCManager().countVampiresNear(player, 96.0D) < plugin.getConfigManager().getMaxVampiresPerPlayer()
-                && random.nextDouble() <= 0.18D) {
-                plugin.getNPCManager().spawnVampireNear(player);
-            }
-            if (plugin.getNPCManager().countClownsNear(player, 96.0D) < plugin.getConfigManager().getClownMaxPerPlayer()
-                && random.nextDouble() <= 0.12D) {
-                plugin.getNPCManager().spawnClownNear(player);
-            }
-            if (plugin.getNPCManager().countZombiesNear(player, 96.0D) < plugin.getConfigManager().getZombieMaxPerPlayer()
-                && random.nextDouble() <= 0.14D) {
-                plugin.getNPCManager().spawnZombieNear(player);
-            }
-            if (plugin.getNPCManager().countWitchesNear(player, 96.0D) < plugin.getConfigManager().getWitchMaxPerPlayer()
-                && random.nextDouble() <= 0.1D) {
-                plugin.getNPCManager().spawnWitchNear(player);
-            }
-            if (plugin.getNPCManager().countScarecrowsNear(player, 96.0D) < plugin.getConfigManager().getScarecrowMaxPerPlayer()
-                && random.nextDouble() <= 0.08D) {
-                plugin.getNPCManager().spawnScarecrowNear(player);
-            }
-            if (plugin.getNPCManager().countGhostsNear(player, 96.0D) < plugin.getConfigManager().getGhostMaxPerPlayer()
-                && random.nextDouble() <= 0.07D) {
-                plugin.getNPCManager().spawnGhostNear(player);
-            }
-            if (plugin.getNPCManager().countWerewolvesNear(player, 96.0D) < plugin.getConfigManager().getWerewolfMaxPerPlayer()
-                && random.nextDouble() <= 0.06D) {
-                plugin.getNPCManager().spawnWerewolfNear(player);
-            }
+            spawnSpecialsNearPlayerByChance(player, 1.0D);
         }
+    }
+
+    private void spawnSpecialsNearPlayerByChance(Player player, double chanceMultiplier) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+
+        maybeSpawn(player,
+            plugin.getNPCManager().countVampiresNear(player, 96.0D),
+            plugin.getConfigManager().getMaxVampiresPerPlayer(),
+            VAMPIRE_PULSE_CHANCE * chanceMultiplier,
+            () -> plugin.getNPCManager().spawnVampireNear(player));
+
+        maybeSpawn(player,
+            plugin.getNPCManager().countClownsNear(player, 96.0D),
+            plugin.getConfigManager().getClownMaxPerPlayer(),
+            CLOWN_PULSE_CHANCE * chanceMultiplier,
+            () -> plugin.getNPCManager().spawnClownNear(player));
+
+        maybeSpawn(player,
+            plugin.getNPCManager().countZombiesNear(player, 96.0D),
+            plugin.getConfigManager().getZombieMaxPerPlayer(),
+            ZOMBIE_PULSE_CHANCE * chanceMultiplier,
+            () -> plugin.getNPCManager().spawnZombieNear(player));
+
+        maybeSpawn(player,
+            plugin.getNPCManager().countWitchesNear(player, 96.0D),
+            plugin.getConfigManager().getWitchMaxPerPlayer(),
+            WITCH_PULSE_CHANCE * chanceMultiplier,
+            () -> plugin.getNPCManager().spawnWitchNear(player));
+
+        maybeSpawn(player,
+            plugin.getNPCManager().countScarecrowsNear(player, 96.0D),
+            plugin.getConfigManager().getScarecrowMaxPerPlayer(),
+            SCARECROW_PULSE_CHANCE * chanceMultiplier,
+            () -> plugin.getNPCManager().spawnScarecrowNear(player));
+
+        maybeSpawn(player,
+            plugin.getNPCManager().countGhostsNear(player, 96.0D),
+            plugin.getConfigManager().getGhostMaxPerPlayer(),
+            GHOST_PULSE_CHANCE * chanceMultiplier,
+            () -> plugin.getNPCManager().spawnGhostNear(player));
+
+        maybeSpawn(player,
+            plugin.getNPCManager().countWerewolvesNear(player, 96.0D),
+            plugin.getConfigManager().getWerewolfMaxPerPlayer(),
+            WEREWOLF_PULSE_CHANCE * chanceMultiplier,
+            () -> plugin.getNPCManager().spawnWerewolfNear(player));
+    }
+
+    private void maybeSpawn(Player player, int currentNearCount, int maxPerPlayer, double chance, Runnable spawnAction) {
+        if (maxPerPlayer <= 0 || currentNearCount >= maxPerPlayer) {
+            return;
+        }
+        if (countTotalSpecialsNearPlayer(player) >= plugin.getConfigManager().getMaxSpecialMobsPerPlayer()) {
+            return;
+        }
+        if (random.nextDouble() <= Math.max(0.0D, Math.min(1.0D, chance))) {
+            spawnAction.run();
+        }
+    }
+
+    private int countTotalSpecialsNearPlayer(Player player) {
+        return plugin.getNPCManager().countVampiresNear(player, 96.0D)
+            + plugin.getNPCManager().countClownsNear(player, 96.0D)
+            + plugin.getNPCManager().countZombiesNear(player, 96.0D)
+            + plugin.getNPCManager().countWitchesNear(player, 96.0D)
+            + plugin.getNPCManager().countScarecrowsNear(player, 96.0D)
+            + plugin.getNPCManager().countGhostsNear(player, 96.0D)
+            + plugin.getNPCManager().countWerewolvesNear(player, 96.0D);
     }
 
 
