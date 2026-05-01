@@ -144,9 +144,9 @@ public final class WitchNPC {
     /** Called by NPCListener when the witch takes a hit – feeds the Deadly Spell accumulator. */
     public void onTakeDamage(double damage) {
         if (brandActive && damage > 0) deadlySpellAccumulated += damage;
-        if (damage > 0.0D && repositionCooldown <= 0 && random.nextDouble() < 0.40D) {
+        if (damage > 0.0D && repositionCooldown <= 0 && random.nextDouble() < 0.22D) {
             doCircleStep();
-            repositionCooldown = 40 + random.nextInt(20);
+            repositionCooldown = 46 + random.nextInt(24);
         }
     }
 
@@ -286,10 +286,10 @@ public final class WitchNPC {
         s.setInvincible(false);
         s.setHealth(plugin.getConfigManager().getWitchHealth());
         s.health = plugin.getConfigManager().getWitchHealth();
-        s.damage = 4.5D;
+        s.damage = 4.2D;
         s.respawnTime = -1;
         s.chaseRange = 30.0D;
-        s.armor = 0.1D;
+        s.armor = 0.04D;
         s.protectFromIgnores = false;
         s.allTargets = new SentinelTargetList();
         s.addTarget("players");
@@ -1262,7 +1262,7 @@ public final class WitchNPC {
                     double dmg = 1.5D;
                     player.damage(dmg, e);
                     var attr = e.getAttribute(Attribute.GENERIC_MAX_HEALTH);
-                    if (attr != null) e.setHealth(Math.min(attr.getValue(), e.getHealth() + dmg));
+                    if (attr != null) e.setHealth(Math.min(attr.getValue(), e.getHealth() + (dmg * 0.45D)));
                     world.spawnParticle(Particle.DUST, e.getLocation().add(0, 1.2, 0), 6, 0.3, 0.3, 0.3, 0, DUST_CRIMSON);
                 }
             }

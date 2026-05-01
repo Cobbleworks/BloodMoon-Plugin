@@ -188,7 +188,7 @@ public final class ConfigManager {
     }
 
     public double getWitchHealth() {
-        return Math.max(1.0D, getConfig().getDouble("witch.health", 46.0D) * getNonVampireHealthMultiplier());
+        return Math.max(1.0D, getConfig().getDouble("witch.health", 40.0D) * getNonVampireHealthMultiplier());
     }
 
     public int getWitchMaxPerPlayer() {
@@ -359,7 +359,7 @@ public final class ConfigManager {
             "ewogICJ0aW1lc3RhbXAiIDogMTcyOTM0MTA2NTk5NSwKICAicHJvZmlsZUlkIiA6ICJhMWQzNzljMjhhODA0ZTMxYjY3YjcyMDcyNWE0ZjI3NSIsCiAgInByb2ZpbGVOYW1lIiA6ICJDeXNwZWN0IiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzY4Y2QxYmE3OGU5OTFkYmM4MWNiMDIyOTYyYzA1MzVmYTg5MjEyNzRmMGYzZTJjNDI1NzcxOWE5YWE2MDNiOWUiLAogICAgICAibWV0YWRhdGEiIDogewogICAgICAgICJtb2RlbCIgOiAic2xpbSIKICAgICAgfQogICAgfQogIH0KfQ==");
         config.addDefault("zombie.skin-signature",
             "Y9cLhQ0f2QwfqjsjCKHHAAWiPtwhVoitGTSiy6zXe9C1aM38fLWin08dD5taRvPmfW+dVDTO9Udt/IXYY9XTZMwvrWDqZ17/vwlncwEFXQg/V9ax5mHQySUWafE/7E7VR7XPBV7QDVIxRZzO8gSzcHQyuo+ONyuz16E+cnaJNKi0Aotw+jsfTMhLUQ1JnjbCwG1mf+WTelNB3JxbykBQ062cp4dEQWfDHCn6bZiWzOwh/ldfYFIY/xVldOYhmNpoHH3BPvjxiEROezMMHY4R/jK2yqP82wWIra73xu6JWSQTFsefImcoTxcBhkrUz7pNu+oZwI7FAZwJpy+EvYBajmSxCGRopvu2xfpjp4GsBrZ4/HmSEZPcGl2AM2b3ITIz2rsaaBs2aWeKsUbXmrefKQXRgy/fAp8mvm5nlevLq3sv3+/auBC2MUmwC+9/fBoP8UpuYTDnrz9Q4Sqt00K4KxwmkwdfTH5vsNwxOpbhHDfNLDAb4ayJoSykTNEF6dwRqZsu9AiayMA7YoKoWUCeNKcVz+4OCKE2RfNK+v1lMgh5l9xeFy+bQfBrwv5pwkxqXg8xVoW6YcUS5avlmpvXNw/KV3cBmyf9JCViCI9t9oK5FqmpLsWodpKcoTOMKhibBE+CK81jPLj3JoXLOEJwB1lPWKFl7UQ13fjQvbDl3yc=");
-        config.addDefault("witch.health", 46.0D);
+        config.addDefault("witch.health", 40.0D);
         config.addDefault("witch.max-per-player", 1);
         config.addDefault("witch.spawn-radius", 48);
         config.addDefault("witch.skin-name", "bloodmoon_witch_9b19c47ec1b068a5");
