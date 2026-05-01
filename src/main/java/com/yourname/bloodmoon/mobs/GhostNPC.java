@@ -89,6 +89,7 @@ public final class GhostNPC {
     private boolean cleaned;
     private boolean deathStarted;
     private boolean untargetable;
+    private boolean forcedVisibleByLight;
 
     private record BlockRevert(Location loc, Material original) {}
 
@@ -409,6 +410,7 @@ public final class GhostNPC {
             setUntargetable(false);
         }
         onTraitTick();
+        updateLightRevealState();
         emitGhostTellParticles();
 
         tickVanishing();
@@ -1061,12 +1063,21 @@ public final class GhostNPC {
     }
 
     private void startVanishing(int durationTicks) {
+        if (forcedVisibleByLight) {
+            return;
+        }
         vanishingTicks = Math.max(vanishingTicks, durationTicks);
     }
 
     private void tickVanishing() {
         LivingEntity entity = getLivingEntity();
         if (entity == null) {
+            return;
+        }
+        if (forcedVisibleByLight) {
+            vanishingTicks = 0;
+            entity.removePotionEffect(PotionEffectType.INVISIBILITY);
+            entity.setSilent(false);
             return;
         }
         if (vanishingTicks > 0) {
@@ -1083,11 +1094,18 @@ public final class GhostNPC {
     }
 
     private void startPhaseWalk() {
+        if (forcedVisibleByLight) {
+            return;
+        }
         phaseWalkTicks = 20;
         breakVanishing();
     }
 
     private void tickPhaseWalk(Player player) {
+        if (forcedVisibleByLight) {
+            phaseWalkTicks = 0;
+            return;
+        }
         if (phaseWalkTicks <= 0) {
             return;
         }
@@ -1115,6 +1133,63 @@ public final class GhostNPC {
         if (stateTicks % 7 == 0) {
             world.spawnParticle(Particle.DUST, loc, 1, 0.14, 0.18, 0.14, 0, DUST_ICE);
         }
+    }
+
+    private void updateLightRevealState() {
+        Location current = getCurrentLocation();
+        World world = current.getWorld();
+        if (world == null) {
+            forcedVisibleByLight = false;
+            return;
+        }
+
+        forcedVisibleByLight = isWithinTorchOrLanternLight(current);
+        if (!forcedVisibleByLight) {
+            return;
+        }
+
+        breakVanishing();
+        phaseWalkTicks = 0;
+        setUntargetable(false);
+        LivingEntity entity = getLivingEntity();
+        if (entity != null) {
+            entity.removePotionEffect(PotionEffectType.INVISIBILITY);
+        }
+    }
+
+    private boolean isWithinTorchOrLanternLight(Location origin) {
+        World world = origin.getWorld();
+        if (world == null) {
+            return false;
+        }
+
+        int ox = origin.getBlockX();
+        int oy = origin.getBlockY();
+        int oz = origin.getBlockZ();
+        int radius = 8;
+
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -4; dy <= 4; dy++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    Block block = world.getBlockAt(ox + dx, oy + dy, oz + dz);
+                    Material type = block.getType();
+                    if (type != Material.TORCH
+                        && type != Material.WALL_TORCH
+                        && type != Material.SOUL_TORCH
+                        && type != Material.SOUL_WALL_TORCH
+                        && type != Material.LANTERN
+                        && type != Material.SOUL_LANTERN) {
+                        continue;
+                    }
+
+                    double distanceSquared = block.getLocation().add(0.5D, 0.5D, 0.5D).distanceSquared(origin);
+                    if (distanceSquared <= 64.0D) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private boolean trySnatchAndThrow(Player player, LivingEntity caster) {
