@@ -9,7 +9,7 @@ depend:
 commands:
   bloodmoon:
     description: Manage the Blood Moon event.
-    usage: "/bloodmoon <healthbar|start|stop|status|spawn|reload|chance> (spawn: vampire|clown)"
+    usage: "/bloodmoon <healthbar|start|stop|status|spawn|clear|reload|chance|difficulty> (spawn: vampire|clown|zombie|witch|scarecrow|ghost|werewolf)"
     aliases:
       - bm
 permissions:

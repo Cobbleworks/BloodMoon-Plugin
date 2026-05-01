@@ -15,7 +15,7 @@ import org.bukkit.entity.Player;
  */
 public final class BloodMoonTabCompleter implements TabCompleter {
 
-    private static final List<String> ROOT = List.of("start", "stop", "status", "spawn", "clear", "reload", "chance");
+    private static final List<String> ROOT = List.of("start", "stop", "status", "spawn", "clear", "reload", "chance", "difficulty");
     private static final List<String> PLAYER_ROOT = List.of("healthbar");
 
     @Override
@@ -45,14 +45,17 @@ public final class BloodMoonTabCompleter implements TabCompleter {
             return filter(Bukkit.getWorlds().stream().map(World::getName).toList(), args[1]);
         }
         if (args.length == 2 && "spawn".equals(sub)) {
-            return filter(List.of("vampire", "clown", "zombie", "witch", "scarecrow", "ghost"), args[1]);
+            return filter(List.of("vampire", "clown", "zombie", "witch", "scarecrow", "ghost", "werewolf"), args[1]);
         }
         if (args.length == 3 && "spawn".equals(sub)
-            && ("vampire".equals(args[1].toLowerCase()) || "clown".equals(args[1].toLowerCase()) || "zombie".equals(args[1].toLowerCase()) || "witch".equals(args[1].toLowerCase()) || "scarecrow".equals(args[1].toLowerCase()) || "ghost".equals(args[1].toLowerCase()))) {
+            && ("vampire".equals(args[1].toLowerCase()) || "clown".equals(args[1].toLowerCase()) || "zombie".equals(args[1].toLowerCase()) || "witch".equals(args[1].toLowerCase()) || "scarecrow".equals(args[1].toLowerCase()) || "ghost".equals(args[1].toLowerCase()) || "werewolf".equals(args[1].toLowerCase()))) {
             return filter(Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(), args[2]);
         }
         if (args.length == 2 && "chance".equals(sub)) {
             return filter(List.of("1", "4", "8", "12", "25", "50", "100"), args[1]);
+        }
+        if (args.length == 2 && "difficulty".equals(sub)) {
+            return filter(List.of("easy", "medium", "hard", "nightmare"), args[1]);
         }
         return List.of();
     }

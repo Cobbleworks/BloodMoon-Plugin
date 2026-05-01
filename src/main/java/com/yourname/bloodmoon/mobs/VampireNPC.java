@@ -75,6 +75,7 @@ public final class VampireNPC {
         BAT_FORM_ESCAPE(8),
         SUMMON_BATS(14),
         SHADOW_DASH(16),
+        EXECUTION_DASH(11),
         TIDES_OF_BLOOD(12),
         BLOOD_SHIELD(6);
 
@@ -105,6 +106,7 @@ public final class VampireNPC {
     private static final int DRAIN_LIFE_COOLDOWN = 180;
     private static final int HEMOPLAGUE_COOLDOWN = 260;
     private static final int SUMMON_BATS_COOLDOWN = 180;
+    private static final int EXECUTION_DASH_COOLDOWN = 260;
     private static final int DEATH_REMOVE_DELAY = 60;
     private static final int MAX_SUMMONED_BATS = 6;
     private static final int DRAIN_LIFE_DURATION_TICKS = 8;
@@ -117,8 +119,12 @@ public final class VampireNPC {
     private static final double HEMOPLAGUE_EXPLOSION_DAMAGE = 6.0D;
     private static final double HEMOPLAGUE_HEAL_MULTIPLIER = 1.00D;
     private static final double HEMOPLAGUE_DAMAGE_BONUS = 1.20D;
+    private static final int MISSING_HEALTH_REGEN_INTERVAL = 20;
+    private static final double MAX_MISSING_HEALTH_REGEN_PER_PULSE = 2.4D;
     private static final double TIDES_OF_BLOOD_RANGE = 7.0D;
     private static final double TIDES_OF_BLOOD_BOLT_DAMAGE = 3.0D;
+    private static final double EXECUTION_DASH_DAMAGE = 7.0D;
+    private static final double EXECUTION_DASH_EXECUTE_THRESHOLD = 0.15D;
     private static final Particle.DustOptions BLOOD_DUST = new Particle.DustOptions(Color.fromRGB(140, 0, 0), 1.2F);
     private static final Particle.DustOptions DARK_BLOOD_DUST = new Particle.DustOptions(Color.fromRGB(80, 0, 0), 1.0F);
     private static final Particle.DustOptions BRIGHT_BLOOD_DUST = new Particle.DustOptions(Color.fromRGB(190, 0, 0), 1.45F);
@@ -781,6 +787,7 @@ public final class VampireNPC {
         target = player;
         chaseCombatTarget(player);
         maybeTriggerBloodShieldAtLowHealth();
+        tickMissingHealthRegeneration();
 
         if (stateTicks % COMBAT_AMBIENT_INTERVAL == 0) {
             Location location = getCurrentLocation();
@@ -838,6 +845,7 @@ public final class VampireNPC {
         castingDurationTicks = switch (ability) {
             case HEMOPLAGUE -> random.nextInt(11) + 30;
             case TIDES_OF_BLOOD -> random.nextInt(9) + 34;
+            case EXECUTION_DASH -> random.nextInt(5) + 18;
             default -> random.nextInt(11) + 20;
         };
         Navigator navigator = npc.getNavigator();
@@ -883,6 +891,7 @@ public final class VampireNPC {
             case HEMOPLAGUE -> spawnHemoplagueCastingParticles(world, base);
             case SUMMON_BATS -> spawnSummonBatsCastingParticles(world, base);
             case SHADOW_DASH -> spawnShadowDashCastingParticles(world, base);
+            case EXECUTION_DASH -> spawnExecutionDashCastingParticles(world, base);
             case TIDES_OF_BLOOD -> spawnTidesOfBloodCastingParticles(world, base);
             case BLOOD_SHIELD -> spawnBloodShieldCastingParticles(world, base);
             case BAT_FORM_ESCAPE -> spawnGenericCastingRing(world, base);
@@ -909,6 +918,7 @@ public final class VampireNPC {
             case HEMOPLAGUE -> animateHemoplagueCasting(player);
             case SUMMON_BATS -> animateSummonBatsCasting(player);
             case SHADOW_DASH -> animateShadowDashCasting(player);
+            case EXECUTION_DASH -> animateExecutionDashCasting(player);
             case TIDES_OF_BLOOD -> animateTidesOfBloodCasting(player);
             case BLOOD_SHIELD -> animateBloodShieldCasting(player);
             case BAT_FORM_ESCAPE -> animateEscapeCasting(player);
@@ -1009,6 +1019,19 @@ public final class VampireNPC {
             world.spawnParticle(Particle.DUST, point, 1, 0.03D, 0.02D, 0.03D, 0.0D, DARK_BLOOD_DUST);
             if (step % 2 == 0) {
                 world.spawnParticle(Particle.CRIT, point, 1, 0.01D, 0.01D, 0.01D, 0.0D);
+            }
+        }
+    }
+
+    private void spawnExecutionDashCastingParticles(World world, Location base) {
+        double pulse = 0.22D + Math.sin(stateTicks * 0.25D) * 0.08D;
+        for (int step = 0; step < 14; step++) {
+            double angle = (Math.PI * 2.0D * step) / 14.0D;
+            Location point = base.clone().add(Math.cos(angle) * (0.55D + pulse), 1.0D + Math.sin(angle * 2.0D) * 0.22D, Math.sin(angle) * (0.55D + pulse));
+            world.spawnParticle(Particle.DUST, point, 1, 0.02D, 0.02D, 0.02D, 0.0D, BRIGHT_BLOOD_DUST);
+            world.spawnParticle(Particle.DUST, point, 1, 0.02D, 0.02D, 0.02D, 0.0D, DARK_BLOOD_DUST);
+            if (step % 2 == 0) {
+                world.spawnParticle(Particle.SMOKE, point, 1, 0.02D, 0.02D, 0.02D, 0.008D);
             }
         }
     }
@@ -1122,6 +1145,18 @@ public final class VampireNPC {
         }
     }
 
+    private void animateExecutionDashCasting(Player player) {
+        if (stateTicks % 3 == 0) {
+            player.swingMainHand();
+            playCitizensPlayerAnimation(player, "ARM_SWING");
+        }
+        if (stateTicks % 6 == 0) {
+            player.swingOffHand();
+            playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
+            playCitizensPlayerAnimation(player, "START_USE_MAINHAND_ITEM");
+        }
+    }
+
     private void animateTidesOfBloodCasting(Player player) {
         if (stateTicks % 3 == 0) {
             playCitizensPlayerAnimation(player, "START_USE_MAINHAND_ITEM");
@@ -1173,6 +1208,7 @@ public final class VampireNPC {
             case BAT_FORM_ESCAPE -> castBatFormEscape();
             case SUMMON_BATS -> castSummonBats();
             case SHADOW_DASH -> castShadowDash();
+            case EXECUTION_DASH -> castExecutionDash();
             case TIDES_OF_BLOOD -> castTidesOfBlood();
             case BLOOD_SHIELD -> castBloodShield();
         }
@@ -1193,13 +1229,19 @@ public final class VampireNPC {
             if (ability == VampireAbility.DRAIN_LIFE && isBelowHealthPercent(0.30D)) {
                 weight *= 2;
             }
+            if (ability == VampireAbility.EXECUTION_DASH && isBelowHealthPercent(0.35D)) {
+                weight += 4;
+            }
             if (ability == VampireAbility.HEMOPLAGUE) {
                 int hemoplagueTargets = findHemoplagueTargets(player).size();
-                if (hemoplagueTargets < 2) {
+                int requiredTargets = getHemoplagueRequiredTargetCount();
+                if (hemoplagueTargets < requiredTargets) {
                     continue;
                 }
                 if (hemoplagueTargets >= 3) {
                     weight += 6;
+                } else if (requiredTargets == 1 && hemoplagueTargets == 1) {
+                    weight += 4;
                 }
             }
             if (ability == VampireAbility.BLOOD_SHIELD && (!isBelowHealthPercent(0.50D) || shieldUsed)) {
@@ -1235,13 +1277,18 @@ public final class VampireNPC {
         }
         return switch (ability) {
             case BLOOD_SHIELD -> !shieldUsed && !shielded;
-            case HEMOPLAGUE -> target != null && target.isOnline() && !target.isDead() && findHemoplagueTargets(target).size() >= 2;
+            case HEMOPLAGUE -> target != null && target.isOnline() && !target.isDead()
+                && findHemoplagueTargets(target).size() >= getHemoplagueRequiredTargetCount();
             case SUMMON_BATS -> batSwarm.size() < MAX_SUMMONED_BATS;
-            case SHADOW_DASH -> target != null && target.isOnline() && !target.isDead();
+            case SHADOW_DASH, EXECUTION_DASH -> target != null && target.isOnline() && !target.isDead();
             case TIDES_OF_BLOOD -> countNearbyHostiles(getCurrentLocation(), TIDES_OF_BLOOD_RANGE) > 0;
             case BAT_FORM_ESCAPE -> target != null && target.isOnline() && !target.isDead();
             case BLOOD_MAGIC, DRAIN_LIFE -> target != null && target.isOnline() && !target.isDead();
         };
+    }
+
+    private int getHemoplagueRequiredTargetCount() {
+        return isBelowHealthPercent(0.30D) ? 1 : 2;
     }
 
     private int countNearbyHostiles(Location center, double radius) {
@@ -1372,7 +1419,7 @@ public final class VampireNPC {
         }
 
         List<LivingEntity> targets = findHemoplagueTargets(primaryTarget);
-        if (targets.size() < 2) {
+        if (targets.size() < getHemoplagueRequiredTargetCount()) {
             state = VampireState.COMBAT;
             return;
         }
@@ -1784,6 +1831,102 @@ public final class VampireNPC {
         stateTicks = 0;
     }
 
+    private void castExecutionDash() {
+        Player player = ensureTarget(26.0D);
+        LivingEntity vampire = getLivingEntity();
+        if (player == null || vampire == null || player.getWorld() != vampire.getWorld()) {
+            state = VampireState.COMBAT;
+            return;
+        }
+
+        setCooldown(VampireAbility.EXECUTION_DASH, EXECUTION_DASH_COOLDOWN);
+        Location playerBase = player.getLocation().clone().add(0.0D, 1.1D, 0.0D);
+        Vector forward = player.getLocation().getDirection().setY(0.0D).normalize();
+        if (forward.lengthSquared() < 0.01D) {
+            forward = new Vector(0.0D, 0.0D, 1.0D);
+        }
+        Location start = playerBase.clone().add(forward.clone().multiply(2.2D));
+        Location end = playerBase.clone().add(forward.clone().multiply(-3.2D));
+        start.setYaw(getYawTowards(start, playerBase));
+        start.setPitch(-5.0F);
+        end.setYaw(getYawTowards(end, playerBase));
+        end.setPitch(0.0F);
+
+        ensureNpcSpawned(start);
+        npc.teleport(start, PlayerTeleportEvent.TeleportCause.PLUGIN);
+        setNpcVisible();
+
+        World world = start.getWorld();
+        if (world != null) {
+            world.playSound(start, Sound.ENTITY_PHANTOM_FLAP, 0.9F, 0.75F);
+            world.playSound(start, Sound.ENTITY_ENDERMAN_STARE, 0.55F, 0.6F);
+            world.spawnParticle(Particle.DUST, start, 16, 0.22D, 0.22D, 0.22D, 0.0D, BRIGHT_BLOOD_DUST);
+            world.spawnParticle(Particle.SMOKE, start, 14, 0.24D, 0.24D, 0.24D, 0.01D);
+        }
+
+        BukkitRunnable dashTask = new BukkitRunnable() {
+            int ticks;
+            boolean hitRegistered;
+
+            @Override
+            public void run() {
+                ticks++;
+                LivingEntity currentVampire = getLivingEntity();
+                if (currentVampire == null || isDead() || ticks > 8) {
+                    finish(currentVampire);
+                    return;
+                }
+
+                double progress = ticks / 8.0D;
+                Location point = start.clone().add(end.toVector().subtract(start.toVector()).multiply(progress));
+                point.setYaw(getYawTowards(point, end));
+                point.setPitch(-4.0F);
+                npc.teleport(point, PlayerTeleportEvent.TeleportCause.PLUGIN);
+
+                World pointWorld = point.getWorld();
+                if (pointWorld != null) {
+                    pointWorld.spawnParticle(Particle.DUST, point.clone().add(0, 1.0D, 0), 7, 0.12D, 0.12D, 0.12D, 0.0D, BRIGHT_BLOOD_DUST);
+                    pointWorld.spawnParticle(Particle.DUST, point.clone().add(0, 1.0D, 0), 6, 0.14D, 0.14D, 0.14D, 0.0D, DARK_BLOOD_DUST);
+                    pointWorld.spawnParticle(Particle.SMOKE, point.clone().add(0, 1.0D, 0), 4, 0.1D, 0.1D, 0.1D, 0.008D);
+                }
+
+                if (!hitRegistered && player.isOnline() && !player.isDead() && player.getLocation().distanceSquared(point) <= 1.96D) {
+                    hitRegistered = true;
+                    boolean executed = false;
+                    double maxHealth = getMaxHealth(player);
+                    if (maxHealth > 0.0D && player.getHealth() <= maxHealth * EXECUTION_DASH_EXECUTE_THRESHOLD) {
+                        player.damage(1000.0D, currentVampire);
+                        executed = true;
+                    } else {
+                        player.damage(EXECUTION_DASH_DAMAGE, currentVampire);
+                    }
+
+                    if (executed || player.isDead() || player.getHealth() <= 0.0D) {
+                        healVampire(Math.max(1.0D, getMaxHealth(currentVampire) * 0.50D));
+                    } else {
+                        healVampire(Math.max(0.5D, getMaxHealth(currentVampire) * 0.10D));
+                    }
+                    player.addPotionEffect(new PotionEffect(PotionEffectType.WITHER, 30, 0, true, true, true));
+                }
+
+                if (ticks >= 8) {
+                    finish(currentVampire);
+                }
+            }
+
+            private void finish(LivingEntity currentVampire) {
+                if (currentVampire != null) {
+                    currentVampire.setFallDistance(0.0F);
+                }
+                state = VampireState.COMBAT;
+                stateTicks = 0;
+                cancel();
+            }
+        };
+        ownedTasks.add(dashTask);
+        dashTask.runTaskTimer(plugin, 0L, 1L);
+    }
+
     private Location findBehindPlayerLocation(Player player) {
         Location base = player.getLocation().clone();
         Vector backward = base.getDirection().normalize().multiply(-2.0D);
@@ -2124,13 +2267,33 @@ public final class VampireNPC {
 
     private void healVampire(double amount) {
         LivingEntity entity = getLivingEntity();
-        if (entity == null) {
+        if (entity == null || amount <= 0.0D) {
             return;
         }
         double max = getMaxHealth(entity);
         entity.setHealth(Math.min(max, entity.getHealth() + amount));
         Location location = entity.getLocation().add(0.0D, 1.5D, 0.0D);
         entity.getWorld().spawnParticle(Particle.HEART, location, 1, 0.2D, 0.2D, 0.2D, 0.0D);
+    }
+
+    private void tickMissingHealthRegeneration() {
+        if (stateTicks % MISSING_HEALTH_REGEN_INTERVAL != 0) {
+            return;
+        }
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) {
+            return;
+        }
+        double max = getMaxHealth(entity);
+        if (max <= 0.0D) {
+            return;
+        }
+        double current = Math.max(0.0D, entity.getHealth());
+        double missingRatio = Math.max(0.0D, Math.min(1.0D, (max - current) / max));
+        if (missingRatio <= 0.0D) {
+            return;
+        }
+        healVampire(missingRatio * MAX_MISSING_HEALTH_REGEN_PER_PULSE);
     }
 
     private boolean isBelowHealthPercent(double percent) {
@@ -2147,6 +2310,11 @@ public final class VampireNPC {
             return Objects.requireNonNull(entity.getAttribute(Attribute.GENERIC_MAX_HEALTH)).getValue();
         }
         return plugin.getConfigManager().getVampireHealth();
+    }
+
+    private float getYawTowards(Location from, Location to) {
+        Vector delta = to.toVector().subtract(from.toVector());
+        return (float) Math.toDegrees(Math.atan2(-delta.getX(), delta.getZ()));
     }
 
     private void applyConfiguredHealth(LivingEntity entity) {
@@ -2312,9 +2480,15 @@ public final class VampireNPC {
         if (random.nextDouble() <= 0.12D) {
             world.dropItemNaturally(location, createTippedArrow(PotionType.HARMING, random.nextInt(2) + 1));
         }
-        if (random.nextDouble() <= 0.10D) {
-            world.dropItemNaturally(location, createPotionReward(Material.SPLASH_POTION,
-                random.nextBoolean() ? PotionType.HEALING : PotionType.REGENERATION));
+        if (random.nextDouble() <= 0.18D) {
+            world.dropItemNaturally(location, new ItemStack(Material.NETHER_WART, 1 + random.nextInt(2)));
+        }
+
+        if (random.nextDouble() <= 0.08D) {
+            world.dropItemNaturally(location, createPotionReward(Material.SPLASH_POTION, PotionType.INVISIBILITY));
+        }
+        if (random.nextDouble() <= 0.08D) {
+            world.dropItemNaturally(location, createPotionReward(Material.SPLASH_POTION, PotionType.REGENERATION));
         }
         if (random.nextDouble() <= 0.08D) {
             world.dropItemNaturally(location, createEnchantedBookReward());
@@ -2324,6 +2498,21 @@ public final class VampireNPC {
         }
         if (random.nextDouble() <= 0.06D) {
             world.dropItemNaturally(location, new ItemStack(Material.GOLDEN_APPLE, 1));
+        }
+        if (random.nextDouble() <= 0.06D) {
+            world.dropItemNaturally(location, new ItemStack(Material.EXPERIENCE_BOTTLE, 1 + random.nextInt(2)));
+        }
+        if (random.nextDouble() <= 0.07D) {
+            world.dropItemNaturally(location, new ItemStack(Material.ENDER_PEARL, 1));
+        }
+        if (random.nextDouble() <= 0.06D) {
+            world.dropItemNaturally(location, new ItemStack(Material.GHAST_TEAR, 1));
+        }
+        if (random.nextDouble() <= 0.05D) {
+            world.dropItemNaturally(location, new ItemStack(Material.CLOCK, 1));
+        }
+        if (random.nextDouble() <= 0.05D) {
+            world.dropItemNaturally(location, new ItemStack(Material.DRAGON_BREATH, 1));
         }
         ExperienceOrb orb = world.spawn(location, ExperienceOrb.class);
         orb.setExperience(random.nextInt(16) + 20);

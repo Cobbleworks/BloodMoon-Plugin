@@ -3,6 +3,7 @@ package com.yourname.bloodmoon.listeners;
 import com.yourname.bloodmoon.BloodMoonPlugin;
 import com.yourname.bloodmoon.mobs.GhostNPC;
 import com.yourname.bloodmoon.mobs.VampireNPC;
+import com.yourname.bloodmoon.mobs.WerewolfNPC;
 import com.yourname.bloodmoon.mobs.WitchNPC;
 import com.yourname.bloodmoon.mobs.ZombieNPC;
 import java.util.HashMap;
@@ -121,6 +122,15 @@ public final class PlayerListener implements Listener {
     public void onEntityDamage(EntityDamageEvent event) {
         Entity entity = event.getEntity();
 
+        if (entity instanceof Player player && player.hasMetadata("bloodmoon-werewolf-shattered-armor")) {
+            long expiry = player.getMetadata("bloodmoon-werewolf-shattered-armor").get(0).asLong();
+            if (System.currentTimeMillis() < expiry) {
+                event.setDamage(event.getDamage() * 1.35D);
+            } else {
+                player.removeMetadata("bloodmoon-werewolf-shattered-armor", plugin);
+            }
+        }
+
         if (entity instanceof Player player) {
             GhostNPC possessingGhost = GhostNPC.getPossessingGhost(player);
             if (possessingGhost != null) {
@@ -238,6 +248,8 @@ public final class PlayerListener implements Listener {
             return;
         }
 
+        WerewolfNPC.handleInfectedMove(event.getPlayer(), event, plugin);
+
         GhostNPC possessingGhost = GhostNPC.getPossessingGhost(event.getPlayer());
         if (possessingGhost != null) {
             possessingGhost.handlePossessedMove(event.getPlayer(), event);
@@ -313,5 +325,8 @@ public final class PlayerListener implements Listener {
         plugin.getMindHexEffect().cancel(p);
         p.removeMetadata("bloodmoon-witch-void-cage", plugin);
         p.removeMetadata("bloodmoon-witch-silenced", plugin);
+        p.removeMetadata("bloodmoon-werewolf-infection", plugin);
+        p.removeMetadata("bloodmoon-werewolf-infection-pulse", plugin);
+        p.removeMetadata("bloodmoon-werewolf-shattered-armor", plugin);
     }
 }

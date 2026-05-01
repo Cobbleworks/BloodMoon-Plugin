@@ -80,7 +80,7 @@ public final class ConfigManager {
     }
 
     public double getClownHealth() {
-        return Math.max(1.0D, getConfig().getDouble("clown.health", 32.0D));
+        return Math.max(1.0D, getConfig().getDouble("clown.health", 32.0D) * getNonVampireHealthMultiplier());
     }
 
     public int getClownMaxPerPlayer() {
@@ -130,7 +130,7 @@ public final class ConfigManager {
     }
 
     public double getZombieHealth() {
-        return Math.max(1.0D, getConfig().getDouble("zombie.health", 50.0D));
+        return Math.max(1.0D, getConfig().getDouble("zombie.health", 50.0D) * getNonVampireHealthMultiplier());
     }
 
     public int getZombieMaxPerPlayer() {
@@ -184,7 +184,7 @@ public final class ConfigManager {
     }
 
     public double getWitchHealth() {
-        return Math.max(1.0D, getConfig().getDouble("witch.health", 46.0D));
+        return Math.max(1.0D, getConfig().getDouble("witch.health", 46.0D) * getNonVampireHealthMultiplier());
     }
 
     public int getWitchMaxPerPlayer() {
@@ -210,7 +210,7 @@ public final class ConfigManager {
     }
 
     public double getScarecrowHealth() {
-        return Math.max(1.0D, getConfig().getDouble("scarecrow.health", 42.0D));
+        return Math.max(1.0D, getConfig().getDouble("scarecrow.health", 42.0D) * getNonVampireHealthMultiplier());
     }
 
     public int getScarecrowMaxPerPlayer() {
@@ -236,7 +236,7 @@ public final class ConfigManager {
     }
 
     public double getGhostHealth() {
-        return Math.max(1.0D, getConfig().getDouble("ghost.health", 28.0D));
+        return Math.max(1.0D, getConfig().getDouble("ghost.health", 28.0D) * getNonVampireHealthMultiplier());
     }
 
     public int getGhostMaxPerPlayer() {
@@ -259,6 +259,32 @@ public final class ConfigManager {
     public String getGhostSkinSignature() {
         return getConfig().getString("ghost.skin-signature",
             "wN2NyYD161pzwI+4BOI4UoiaFVQHqBiG4hrKEHJG0q2dn0I3WdDtcWDB8Md1DsYhULZ6G+VQGXaoS/L3h2kjmdhFdmQIUiGVgE+FWCKczQjncjXk4hLpkt2z/1wm3aLQLzEwJScQkRKTQ33O5DlIVVOd0BoohARfEg9XvBSN/JJwaDrdbe/gJFWL3uF5aeVNumBo27sp2kS+ICLm+PQ6v9SN4BEhih78eL5HcbtEtSMclEMF1AAyt7KW2NpEj4ks0AAsU1k7zvTqQECxHozkIOKXE77KBGBm6hhXNYaKGOr7I0bYWU9/Sg87InqyTqeNUjSQ0ko6SSgfTt21q1xIJZKZEcaL8tgSRiYzCqHtj+PndFPG6pDTpHe29yMoex5+3iObWFLhMuJ/+u1PQ11UnLxQZ1Onw8Sk/BAmmaXEqDapOj1daqeeXK0rB0avqsSPU6x93evX1dC3RIxis+/sjIQHJYkf1aCi5zLpkYbV8lkY4/Z59X3tQ9hhZq4iGVe2J1pGbRdM3+lHl+VH5okSYeBERGntZr0sWtwJrbDxFNtsX5RYepJTGeIwWbJZmwyersNnGf/6uS3KsVwaM4jmrO4VTJXq+tyxZD7Zv6bg+IJ4en5upyk/WUiJoPCrG7q59XMZzMd6Dz31cdK7k661GwnNTXzpALqkrcxWs5gA7xc=");
+    }
+
+    public double getWerewolfHealth() {
+        return Math.max(1.0D, getConfig().getDouble("werewolf.health", 58.0D) * getNonVampireHealthMultiplier());
+    }
+
+    public int getWerewolfMaxPerPlayer() {
+        return Math.max(0, getConfig().getInt("werewolf.max-per-player", 1));
+    }
+
+    public int getWerewolfSpawnRadius() {
+        return Math.max(8, getConfig().getInt("werewolf.spawn-radius", 52));
+    }
+
+    public String getWerewolfSkinName() {
+        return getConfig().getString("werewolf.skin-name", "bloodmoon_werewolf_DuskTalon");
+    }
+
+    public String getWerewolfSkinTexture() {
+        return getConfig().getString("werewolf.skin-texture",
+            "ewogICJ0aW1lc3RhbXAiIDogMTc3NzYzNDQ0OTQwOSwKICAicHJvZmlsZUlkIiA6ICJhODg0MTMzZTdlODc0YjZkYjJmMWIwYjg0ZGU5NmZhYyIsCiAgInByb2ZpbGVOYW1lIiA6ICJEdXNrVGFsb24iLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMjY1NTVhOTAwOWUyZmZhNjY5Nzg2YWI4YWViZGZlZTM3ZmE1MWY3OWRiODM0MDgwNWZlNjk3MDk0Zjk2YjMwMSIKICAgIH0KICB9Cn0=");
+    }
+
+    public String getWerewolfSkinSignature() {
+        return getConfig().getString("werewolf.skin-signature",
+            "FXw+K2p8JB/vlEOlsSi8Xqw7hSEjgXFyfhkdyGhbMJjtcUJkujL/wMinxqRFZ9J7D45ZibaM2t/r8o/iFIz6iOuvbRkeSJZVMkLF1m/uGL4vXSyF3J+pdq8dqcZVhRqDKusdhiSZskfh8lAeQcUthzYNFjL4vxQdXJc4kEjNug+5HsubZzXlflTnllpvba/uqr+52MlXYukmYNpy9uHjc8Hz9DFTGL3fIma3bke49J41nu8OtbLSrf6KSOtol/2H/FCm0FaJrp458AbVEN4hbfYDTVMIv8g2mZZPYJFhxj7N9iCnTKuX9KmUS+MiMv8d5DIQ9FlYmwCKgqv0K3bn47Wx0n9sl534ylwqJsVPTG96ZlV3S6EqrK1lSNYdur2CwPykfKsLfM33NBEnrIKWl2k8HWXaOh2GMkrQxJbd0/Ogs0phSxqOA5OMnUFNj2omUswBnbzz2tOUxuENQnDnHuv3eEHkrKZ2rggYuxAFRvnyK2ZkxtlRMglOqQ2NzFx5zsOJORl7kw0sX293JHoJfGPGGyMQLsK+KGnxJbAWkDVXlguUxTznlAyILx7wV2qB37UHd/5qOPz/WTg419/3ElXTjpxMn50j77p4PGpAGHF0pZHJ/u+LkxhMzXZv21DyndrZt4ptRMQeD4MHALj935PjW4q0i9brST5BhD2Nr98=");
     }
 
     public double getBleedChance() {
@@ -352,6 +378,14 @@ public final class ConfigManager {
             "ewogICJ0aW1lc3RhbXAiIDogMTc3NzU3NjQxMDg1OCwKICAicHJvZmlsZUlkIiA6ICJhNjkyZTQ0NjRlMTQ0MTc2YmQwNjk1NjgwMTEwMTVlMSIsCiAgInByb2ZpbGVOYW1lIiA6ICJOZ2hpYV9tNTAwIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzVmMDk0ZmZjMTJiZjkxY2M2MjUwM2QzOTdhZjc4Nzc3NzRmNzAyZmMwYzZlMTY4ZTAzNGEyMjZhYTUxZmIzZGEiCiAgICB9LAogICAgIkNBUEUiIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzI4ZGU0YTgxNjg4YWQxOGI0OWU3MzVhMjczZTA4NmMxOGYxZTM5NjY5NTYxMjNjY2I1NzQwMzRjMDZmNWQzMzYiCiAgICB9CiAgfQp9");
         config.addDefault("ghost.skin-signature",
             "wN2NyYD161pzwI+4BOI4UoiaFVQHqBiG4hrKEHJG0q2dn0I3WdDtcWDB8Md1DsYhULZ6G+VQGXaoS/L3h2kjmdhFdmQIUiGVgE+FWCKczQjncjXk4hLpkt2z/1wm3aLQLzEwJScQkRKTQ33O5DlIVVOd0BoohARfEg9XvBSN/JJwaDrdbe/gJFWL3uF5aeVNumBo27sp2kS+ICLm+PQ6v9SN4BEhih78eL5HcbtEtSMclEMF1AAyt7KW2NpEj4ks0AAsU1k7zvTqQECxHozkIOKXE77KBGBm6hhXNYaKGOr7I0bYWU9/Sg87InqyTqeNUjSQ0ko6SSgfTt21q1xIJZKZEcaL8tgSRiYzCqHtj+PndFPG6pDTpHe29yMoex5+3iObWFLhMuJ/+u1PQ11UnLxQZ1Onw8Sk/BAmmaXEqDapOj1daqeeXK0rB0avqsSPU6x93evX1dC3RIxis+/sjIQHJYkf1aCi5zLpkYbV8lkY4/Z59X3tQ9hhZq4iGVe2J1pGbRdM3+lHl+VH5okSYeBERGntZr0sWtwJrbDxFNtsX5RYepJTGeIwWbJZmwyersNnGf/6uS3KsVwaM4jmrO4VTJXq+tyxZD7Zv6bg+IJ4en5upyk/WUiJoPCrG7q59XMZzMd6Dz31cdK7k661GwnNTXzpALqkrcxWs5gA7xc=");
+        config.addDefault("werewolf.health", 58.0D);
+        config.addDefault("werewolf.max-per-player", 1);
+        config.addDefault("werewolf.spawn-radius", 52);
+        config.addDefault("werewolf.skin-name", "bloodmoon_werewolf_DuskTalon");
+        config.addDefault("werewolf.skin-texture",
+            "ewogICJ0aW1lc3RhbXAiIDogMTc3NzYzNDQ0OTQwOSwKICAicHJvZmlsZUlkIiA6ICJhODg0MTMzZTdlODc0YjZkYjJmMWIwYjg0ZGU5NmZhYyIsCiAgInByb2ZpbGVOYW1lIiA6ICJEdXNrVGFsb24iLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMjY1NTVhOTAwOWUyZmZhNjY5Nzg2YWI4YWViZGZlZTM3ZmE1MWY3OWRiODM0MDgwNWZlNjk3MDk0Zjk2YjMwMSIKICAgIH0KICB9Cn0=");
+        config.addDefault("werewolf.skin-signature",
+            "FXw+K2p8JB/vlEOlsSi8Xqw7hSEjgXFyfhkdyGhbMJjtcUJkujL/wMinxqRFZ9J7D45ZibaM2t/r8o/iFIz6iOuvbRkeSJZVMkLF1m/uGL4vXSyF3J+pdq8dqcZVhRqDKusdhiSZskfh8lAeQcUthzYNFjL4vxQdXJc4kEjNug+5HsubZzXlflTnllpvba/uqr+52MlXYukmYNpy9uHjc8Hz9DFTGL3fIma3bke49J41nu8OtbLSrf6KSOtol/2H/FCm0FaJrp458AbVEN4hbfYDTVMIv8g2mZZPYJFhxj7N9iCnTKuX9KmUS+MiMv8d5DIQ9FlYmwCKgqv0K3bn47Wx0n9sl534ylwqJsVPTG96ZlV3S6EqrK1lSNYdur2CwPykfKsLfM33NBEnrIKWl2k8HWXaOh2GMkrQxJbd0/Ogs0phSxqOA5OMnUFNj2omUswBnbzz2tOUxuENQnDnHuv3eEHkrKZ2rggYuxAFRvnyK2ZkxtlRMglOqQ2NzFx5zsOJORl7kw0sX293JHoJfGPGGyMQLsK+KGnxJbAWkDVXlguUxTznlAyILx7wV2qB37UHd/5qOPz/WTg419/3ElXTjpxMn50j77p4PGpAGHF0pZHJ/u+LkxhMzXZv21DyndrZt4ptRMQeD4MHALj935PjW4q0i9brST5BhD2Nr98=");
         config.addDefault("bleed.chance", 0.4D);
         config.addDefault("bleed.damage-per-tick", 1.0D);
         config.addDefault("bleed.interval-ticks", 40);
@@ -359,5 +393,12 @@ public final class ConfigManager {
         config.addDefault("messages.event-start", "§4- THE BLOOD MOON RISES -");
         config.addDefault("messages.event-end", "§6The Blood Moon fades... for now.");
         config.options().copyDefaults(true);
+    }
+
+    private double getNonVampireHealthMultiplier() {
+        if (plugin.getBloodMoonManager() == null) {
+            return 1.0D;
+        }
+        return plugin.getBloodMoonManager().getNonVampireHealthMultiplier();
     }
 }

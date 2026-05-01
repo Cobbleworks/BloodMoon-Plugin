@@ -46,6 +46,7 @@ public final class BloodMoonCommand implements CommandExecutor {
             case "clear" -> handleClear(sender, args);
             case "reload" -> handleReload(sender);
             case "chance" -> handleChance(sender, args);
+            case "difficulty" -> handleDifficulty(sender, args);
             default -> sendUsage(sender);
         }
         return true;
@@ -92,10 +93,17 @@ public final class BloodMoonCommand implements CommandExecutor {
         MessageUtils.send(sender, "§7Active worlds: §f" + (activeWorlds.isEmpty() ? "none" : activeWorlds.stream().map(World::getName).toList()));
         MessageUtils.send(sender, "§7Chance: §f1-in-" + plugin.getBloodMoonManager().getCurrentChance()
             + (plugin.getBloodMoonManager().hasChanceOverride() ? " §e(temporary override)" : ""));
+        MessageUtils.send(sender, "§7Difficulty: §f" + plugin.getBloodMoonManager().getDifficultyToken()
+            + " §8(health x" + formatMultiplier(plugin.getBloodMoonManager().getNonVampireHealthMultiplier())
+            + ", rewards x" + formatMultiplier(plugin.getBloodMoonManager().getRewardMultiplier())
+            + ", exp x" + formatMultiplier(plugin.getBloodMoonManager().getExpMultiplier()) + ")");
         MessageUtils.send(sender, "§7Active vampires: §f" + plugin.getNPCManager().getActiveVampires().size());
         MessageUtils.send(sender, "§7Active clowns: §f" + plugin.getNPCManager().getActiveClowns().size());
         MessageUtils.send(sender, "§7Active zombies: §f" + plugin.getNPCManager().getActiveZombies().size());
         MessageUtils.send(sender, "§7Active witches: §f" + plugin.getNPCManager().getActiveWitches().size());
+        MessageUtils.send(sender, "§7Active scarecrows: §f" + plugin.getNPCManager().getActiveScarecrows().size());
+        MessageUtils.send(sender, "§7Active ghosts: §f" + plugin.getNPCManager().getActiveGhosts().size());
+        MessageUtils.send(sender, "§7Active werewolves: §f" + plugin.getNPCManager().getActiveWerewolves().size());
         MessageUtils.send(sender, "§7Tracked bats: §f" + plugin.getNPCManager().getActiveBatIds().size());
         MessageUtils.send(sender, "§7System mode: §fNPC-only enemies");
         for (World world : Bukkit.getWorlds()) {
@@ -109,7 +117,7 @@ public final class BloodMoonCommand implements CommandExecutor {
 
     private void handleSpawn(CommandSender sender, String[] args) {
         if (args.length < 3) {
-            MessageUtils.send(sender, "§cUsage: /bloodmoon spawn <vampire|clown|zombie|witch> <player>");
+            MessageUtils.send(sender, "§cUsage: /bloodmoon spawn <vampire|clown|zombie|witch|scarecrow|ghost|werewolf> <player>");
             return;
         }
         Player player = Bukkit.getPlayerExact(args[2]);
@@ -136,7 +144,10 @@ public final class BloodMoonCommand implements CommandExecutor {
             case "ghost" -> plugin.getNPCManager().spawnGhostNear(player).ifPresentOrElse(
                 g -> MessageUtils.send(sender, "§aSpawned ghost near §e" + player.getName() + "§a."),
                 () -> MessageUtils.send(sender, "§cCould not spawn ghost here right now."));
-            default -> MessageUtils.send(sender, "§cUnknown type. Use: vampire, clown, zombie, witch, scarecrow, or ghost.");
+            case "werewolf" -> plugin.getNPCManager().spawnWerewolfNear(player).ifPresentOrElse(
+                w -> MessageUtils.send(sender, "§aSpawned werewolf near §e" + player.getName() + "§a."),
+                () -> MessageUtils.send(sender, "§cCould not spawn werewolf here right now."));
+            default -> MessageUtils.send(sender, "§cUnknown type. Use: vampire, clown, zombie, witch, scarecrow, ghost, or werewolf.");
         }
     }
 
@@ -185,6 +196,24 @@ public final class BloodMoonCommand implements CommandExecutor {
         } catch (NumberFormatException ex) {
             MessageUtils.send(sender, "§cChance must be a number from 1 to 100.");
         }
+    }
+
+    private void handleDifficulty(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            MessageUtils.send(sender, "§7Current difficulty: §f" + plugin.getBloodMoonManager().getDifficultyToken());
+            MessageUtils.send(sender, "§7Usage: /bloodmoon difficulty <easy|medium|hard|nightmare>");
+            return;
+        }
+        String token = args[1].toLowerCase();
+        boolean changed = plugin.getBloodMoonManager().setDifficulty(token);
+        if (!changed) {
+            MessageUtils.send(sender, "§cUnknown difficulty. Use: easy, medium, hard, nightmare.");
+            return;
+        }
+        MessageUtils.send(sender, "§aBloodMoon difficulty set to §e" + plugin.getBloodMoonManager().getDifficultyToken() + "§a.");
+        MessageUtils.send(sender, "§7Non-vampire health multiplier: §f" + formatMultiplier(plugin.getBloodMoonManager().getNonVampireHealthMultiplier()));
+        MessageUtils.send(sender, "§7Reward multiplier: §f" + formatMultiplier(plugin.getBloodMoonManager().getRewardMultiplier()));
+        MessageUtils.send(sender, "§7Exp multiplier: §f" + formatMultiplier(plugin.getBloodMoonManager().getExpMultiplier()));
     }
 
     private void handleHealthBar(CommandSender sender, String[] args) {
@@ -239,10 +268,15 @@ public final class BloodMoonCommand implements CommandExecutor {
         MessageUtils.send(sender, "§7/bloodmoon start [world]");
         MessageUtils.send(sender, "§7/bloodmoon stop [world]");
         MessageUtils.send(sender, "§7/bloodmoon status");
-        MessageUtils.send(sender, "§7/bloodmoon spawn <vampire|clown|zombie|witch> <player>");
+        MessageUtils.send(sender, "§7/bloodmoon spawn <vampire|clown|zombie|witch|scarecrow|ghost|werewolf> <player>");
 
         MessageUtils.send(sender, "§7/bloodmoon clear [world]");
         MessageUtils.send(sender, "§7/bloodmoon reload");
         MessageUtils.send(sender, "§7/bloodmoon chance <1-100>");
+        MessageUtils.send(sender, "§7/bloodmoon difficulty <easy|medium|hard|nightmare>");
+    }
+
+    private String formatMultiplier(double value) {
+        return String.format(java.util.Locale.ROOT, "%.2f", value);
     }
 }

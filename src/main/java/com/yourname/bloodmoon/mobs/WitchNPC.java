@@ -12,9 +12,11 @@ import org.bukkit.entity.*;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.potion.PotionType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
@@ -50,6 +52,7 @@ public final class WitchNPC {
 
     // ─── Enums ────────────────────────────────────────────────────────────────
     private enum WitchState { COMBAT, CASTING, DEAD }
+    private enum WitchPhase { COMPOSED, WRATH, UNRAVELING }
     private enum WitchAbility {
         // Signature
         SHARED_VESSEL, DEADLY_SPELL, HEX_CIRCLE, MIRROR_IMAGE,
@@ -67,6 +70,7 @@ public final class WitchNPC {
     private final Location spawnLocation;
     private final Random random = new Random();
     private final Map<WitchAbility, Integer> cooldowns = new EnumMap<>(WitchAbility.class);
+    private final Map<WitchAbility, Integer> abilityUseCounts = new EnumMap<>(WitchAbility.class);
     private final List<BukkitRunnable> tasks = new ArrayList<>();
     private final List<Witch> clones = new ArrayList<>();
     private final List<Location> runeLocations = new ArrayList<>();
@@ -74,8 +78,8 @@ public final class WitchNPC {
     // Deadly Spell accumulator
     private double deadlySpellAccumulated = 0.0D;
     private boolean brandActive = false;
-    // Evasive warp cooldown (ticks)
-    private int warpCooldown = 0;
+    // Reactive reposition cooldown (ticks)
+    private int repositionCooldown = 0;
 
     private WitchState state = WitchState.COMBAT;
     private WitchState beforeCast = WitchState.COMBAT;
@@ -87,6 +91,9 @@ public final class WitchNPC {
     private int castTicks;
     private boolean cleaned;
     private boolean deathStarted;
+    private WitchPhase phase = WitchPhase.COMPOSED;
+    private boolean wrathMirrorTriggered = false;
+    private boolean unravelingTriggered = false;
 
     // ─── Constructor ──────────────────────────────────────────────────────────
     public WitchNPC(BloodMoonPlugin plugin, NPC npc, Location spawnLocation, Player initialTarget) {
@@ -120,6 +127,10 @@ public final class WitchNPC {
     /** Called by NPCListener when the witch takes a hit – feeds the Deadly Spell accumulator. */
     public void onTakeDamage(double damage) {
         if (brandActive && damage > 0) deadlySpellAccumulated += damage;
+        if (damage > 0.0D && repositionCooldown <= 0 && random.nextDouble() < 0.40D) {
+            doCircleStep();
+            repositionCooldown = 40 + random.nextInt(20);
+        }
     }
 
     public void handleSentinelAttack(SentinelAttackEvent event) {
@@ -142,10 +153,13 @@ public final class WitchNPC {
         if (world != null) {
             world.playSound(death, Sound.ENTITY_WITCH_DEATH, 1.0F, 0.9F);
             world.spawnParticle(Particle.WITCH, death.clone().add(0, 1, 0), 30, 0.5, 0.6, 0.5, 0.2);
-            if (random.nextDouble() <= 0.5) world.dropItemNaturally(death, new ItemStack(Material.REDSTONE, 3));
-            if (random.nextDouble() <= 0.2) world.dropItemNaturally(death, new ItemStack(Material.GHAST_TEAR, 1));
+            dropLoot(world, death);
+            if (random.nextDouble() <= Math.max(0.0D, plugin.getBloodMoonManager().getRewardMultiplier() - 1.0D)) {
+                dropLoot(world, death);
+            }
             ExperienceOrb orb = world.spawn(death.clone().add(0, 0.25, 0), ExperienceOrb.class);
-            orb.setExperience(45 + random.nextInt(20));
+            orb.setExperience((int) Math.max(1.0D,
+                (45 + random.nextInt(20)) * plugin.getBloodMoonManager().getExpMultiplier()));
         }
         BukkitRunnable cleanupTask = new BukkitRunnable() {
             @Override public void run() { cleanup(); }
@@ -215,6 +229,39 @@ public final class WitchNPC {
         }
     }
 
+    private void dropLoot(World world, Location location) {
+        if (random.nextDouble() <= 0.62D) world.dropItemNaturally(location, new ItemStack(Material.REDSTONE, 2 + random.nextInt(3)));
+        if (random.nextDouble() <= 0.52D) world.dropItemNaturally(location, new ItemStack(Material.GLOWSTONE_DUST, 1 + random.nextInt(3)));
+        if (random.nextDouble() <= 0.48D) world.dropItemNaturally(location, new ItemStack(Material.GUNPOWDER, 1 + random.nextInt(3)));
+        if (random.nextDouble() <= 0.46D) world.dropItemNaturally(location, new ItemStack(Material.SPIDER_EYE, 1 + random.nextInt(2)));
+        if (random.nextDouble() <= 0.32D) world.dropItemNaturally(location, new ItemStack(Material.FERMENTED_SPIDER_EYE, 1));
+        if (random.nextDouble() <= 0.44D) world.dropItemNaturally(location, new ItemStack(Material.GLASS_BOTTLE, 1 + random.nextInt(2)));
+        if (random.nextDouble() <= 0.38D) world.dropItemNaturally(location, new ItemStack(Material.SUGAR, 1 + random.nextInt(3)));
+        if (random.nextDouble() <= 0.34D) world.dropItemNaturally(location, new ItemStack(Material.STICK, 1 + random.nextInt(2)));
+        if (random.nextDouble() <= 0.30D) world.dropItemNaturally(location, new ItemStack(Material.NETHER_WART, 1 + random.nextInt(2)));
+        if (random.nextDouble() <= 0.20D) world.dropItemNaturally(location, new ItemStack(Material.MAGMA_CREAM, 1));
+
+        if (random.nextDouble() <= 0.12D) world.dropItemNaturally(location, new ItemStack(Material.GHAST_TEAR, 1));
+        if (random.nextDouble() <= 0.10D) world.dropItemNaturally(location, new ItemStack(Material.BLAZE_POWDER, 1 + random.nextInt(2)));
+        if (random.nextDouble() <= 0.10D) world.dropItemNaturally(location, new ItemStack(Material.ENDER_PEARL, 1));
+        if (random.nextDouble() <= 0.08D) world.dropItemNaturally(location, new ItemStack(Material.DRAGON_BREATH, 1));
+        if (random.nextDouble() <= 0.08D) world.dropItemNaturally(location, new ItemStack(Material.RABBIT_FOOT, 1));
+        if (random.nextDouble() <= 0.08D) world.dropItemNaturally(location, createPotionReward(Material.SPLASH_POTION, PotionType.POISON));
+        if (random.nextDouble() <= 0.08D) world.dropItemNaturally(location, createPotionReward(Material.SPLASH_POTION, PotionType.HARMING));
+        if (random.nextDouble() <= 0.06D) world.dropItemNaturally(location, createPotionReward(Material.LINGERING_POTION, PotionType.SLOWNESS));
+        if (random.nextDouble() <= 0.06D) world.dropItemNaturally(location, new ItemStack(Material.ENCHANTED_BOOK, 1));
+        if (random.nextDouble() <= 0.08D) world.dropItemNaturally(location, new ItemStack(Material.GOLDEN_CARROT, 1));
+    }
+
+    private ItemStack createPotionReward(Material material, PotionType potionType) {
+        ItemStack item = new ItemStack(material, 1);
+        if (item.getItemMeta() instanceof PotionMeta meta) {
+            meta.setBasePotionType(potionType);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
     private void configureSentinel() {
         SentinelTrait s = npc.getOrAddTrait(SentinelTrait.class);
         s.setInvincible(false);
@@ -259,8 +306,9 @@ public final class WitchNPC {
         if (cleaned || deathStarted) return;
         stateTicks++;
         cooldowns.replaceAll((k, v) -> Math.max(0, v - 1));
-        if (warpCooldown > 0) warpCooldown--;
+        if (repositionCooldown > 0) repositionCooldown--;
         onTraitTick();
+        checkPhaseTransition();
 
         if (state == WitchState.CASTING) { tickCasting(); return; }
         if (state != WitchState.COMBAT) return;
@@ -272,22 +320,22 @@ public final class WitchNPC {
         if (player == null) { player = findNearestPlayer(getCurrentLocation(), 48.0D); target = player; }
         if (player == null) return;
 
-        // Evasive warp every 3-4.5 s
-        if (warpCooldown <= 0 && stateTicks > 20) {
-            doEvasiveWarp();
-            warpCooldown = 60 + random.nextInt(30);
+        if (phase == WitchPhase.UNRAVELING) {
+            npc.getNavigator().cancelNavigation();
+        } else {
+            npc.getNavigator().setTarget(player, true);
         }
-
-        npc.getNavigator().setTarget(player, true);
         npc.faceLocation(player.getEyeLocation());
         if (stateTicks % 24 == 0) player.getWorld().playSound(getCurrentLocation(), Sound.ENTITY_WITCH_AMBIENT, 0.8F, 0.8F);
-        if (stateTicks % 30 == 0) {
+        int abilityInterval = Math.max(16, (int) Math.round(30.0D * plugin.getBloodMoonManager().getAbilityCadenceMultiplier()));
+        if (stateTicks % abilityInterval == 0) {
             WitchAbility ability = chooseAbility();
             if (ability != null) startCasting(ability);
         }
     }
 
     private void tickCasting() {
+        runCastingParticles();
         if (stateTicks < castTicks) return;
         WitchAbility ability = pending;
         pending = null;
@@ -307,15 +355,82 @@ public final class WitchNPC {
             case SHARED_VESSEL, DEADLY_SPELL, HEX_CIRCLE, MIRROR_IMAGE -> 35;
             default -> 20;
         };
-        Location loc = getCurrentLocation();
-        if (loc.getWorld() != null) loc.getWorld().playSound(loc, Sound.ENTITY_WITCH_CELEBRATE, 0.6F, 0.8F + random.nextFloat() * 0.4F);
+        playCastingStartSound(ability);
     }
 
     private WitchAbility chooseAbility() {
+        Player player = ensureTarget(48.0D);
+        if (player == null) {
+            return null;
+        }
+
+        if (cooldowns.getOrDefault(WitchAbility.ARMOR_CURSE, 0) <= 0 && playerHasHeavyArmor(player)) {
+            return WitchAbility.ARMOR_CURSE;
+        }
+
+        if (cooldowns.getOrDefault(WitchAbility.SHARED_VESSEL, 0) <= 0) {
+            long nearby = player.getWorld().getPlayers().stream()
+                .filter(p -> !p.isDead())
+                .filter(p -> p.getLocation().distanceSquared(getCurrentLocation()) <= 36.0D * 36.0D)
+                .count();
+            if (nearby >= 2) {
+                return WitchAbility.SHARED_VESSEL;
+            }
+        }
+
+        if (player.isSprinting() && player.getLocation().distanceSquared(getCurrentLocation()) < 100.0D) {
+            if (cooldowns.getOrDefault(WitchAbility.VOID_CAGE, 0) <= 0) {
+                return WitchAbility.VOID_CAGE;
+            }
+            if (cooldowns.getOrDefault(WitchAbility.FREEZING_SPELL, 0) <= 0) {
+                return WitchAbility.FREEZING_SPELL;
+            }
+        }
+
+        if (phase == WitchPhase.WRATH || phase == WitchPhase.UNRAVELING) {
+            List<WitchAbility> wrathPool = List.of(
+                WitchAbility.DEADLY_SPELL,
+                WitchAbility.HEX_CIRCLE,
+                WitchAbility.ARMOR_CURSE,
+                WitchAbility.VOID_CAGE,
+                WitchAbility.SWITCHING_SPELL,
+                WitchAbility.LIFE_DRAIN,
+                WitchAbility.WILL_O_WISP,
+                WitchAbility.LIGHTNING_MARK,
+                WitchAbility.MIRROR_IMAGE,
+                WitchAbility.SHARED_VESSEL,
+                WitchAbility.FIRE_SPELL,
+                WitchAbility.POTION_VOLLEY,
+                WitchAbility.RUNE_TRAPS,
+                WitchAbility.ZOMBIFYING
+            );
+            List<WitchAbility> availableWrath = wrathPool.stream()
+                .filter(a -> cooldowns.getOrDefault(a, 0) <= 0)
+                .toList();
+            if (!availableWrath.isEmpty()) {
+                return availableWrath.get(random.nextInt(availableWrath.size()));
+            }
+        }
+
+        List<WitchAbility> available = new ArrayList<>();
+        for (WitchAbility ability : WitchAbility.values()) {
+            if (cooldowns.getOrDefault(ability, 0) <= 0) {
+                available.add(ability);
+            }
+        }
+        if (available.isEmpty()) {
+            return null;
+        }
+
+        int minUses = available.stream().mapToInt(a -> abilityUseCounts.getOrDefault(a, 0)).min().orElse(0);
+        List<WitchAbility> underused = available.stream().filter(a -> abilityUseCounts.getOrDefault(a, 0) == minUses).toList();
+        if (!underused.isEmpty() && random.nextDouble() <= 0.58D) {
+            return underused.get(random.nextInt(underused.size()));
+        }
+
         // Weighted pool: Signature weight 1, Control/Utility weight 2, Damage weight 3
         List<WitchAbility> pool = new ArrayList<>();
-        for (WitchAbility a : WitchAbility.values()) {
-            if (cooldowns.getOrDefault(a, 0) > 0) continue;
+        for (WitchAbility a : available) {
             int weight = switch (a) {
                 case SHARED_VESSEL, DEADLY_SPELL, HEX_CIRCLE, MIRROR_IMAGE -> 1;
                 case ARMOR_CURSE, FREEZING_SPELL, VOID_CAGE, CURSE_OF_SILENCE, SWITCHING_SPELL, INVENTORY_SPELL -> 2;
@@ -328,6 +443,7 @@ public final class WitchNPC {
     }
 
     private void executeAbility(WitchAbility ability) {
+        abilityUseCounts.merge(ability, 1, Integer::sum);
         switch (ability) {
             case SHARED_VESSEL    -> castSharedVessel();
             case DEADLY_SPELL     -> castDeadlySpell();
@@ -368,6 +484,76 @@ public final class WitchNPC {
             case RUNE_TRAPS       -> 280;
             case ZOMBIFYING       -> 500;
         });
+    }
+
+    private void runCastingParticles() {
+        if (pending == null) return;
+        Location base = getCurrentLocation().clone().add(0, 1.0D, 0);
+        World world = base.getWorld();
+        if (world == null) return;
+
+        switch (pending) {
+            case SHARED_VESSEL -> {
+                double angle = stateTicks * 0.3D;
+                for (int i = 0; i < 3; i++) {
+                    double a = angle + (i * Math.PI * 2.0D / 3.0D);
+                    Location tip = base.clone().add(Math.cos(a) * 2.5D, 0.2D, Math.sin(a) * 2.5D);
+                    drawLine(base, tip, DUST_CRIMSON);
+                }
+                if (stateTicks % 8 == 0) world.playSound(base, Sound.ENTITY_WITHER_AMBIENT, 0.35F, 1.9F);
+            }
+            case HEX_CIRCLE -> {
+                for (int i = 0; i < 6; i++) {
+                    double a = (Math.PI * 2.0D) * i / 6.0D + stateTicks * 0.08D;
+                    world.spawnParticle(Particle.DUST, base.clone().add(Math.cos(a) * 1.2D, -0.95D, Math.sin(a) * 1.2D), 2, 0.05, 0.02, 0.05, 0, DUST_VIOLET);
+                }
+                if (stateTicks % 5 == 0) world.playSound(base, Sound.BLOCK_NOTE_BLOCK_CHIME, 0.3F, Math.min(1.8F, 0.5F + (stateTicks / (float) Math.max(1, castTicks))));
+            }
+            case DEADLY_SPELL -> {
+                double progress = stateTicks / (double) Math.max(1, castTicks);
+                double radius = 2.0D - (1.2D * progress);
+                for (int i = 0; i < 16; i++) {
+                    double a = (Math.PI * 2.0D) * i / 16.0D + stateTicks * 0.2D;
+                    world.spawnParticle(Particle.DUST, base.clone().add(Math.cos(a) * radius, Math.sin(stateTicks * 0.1D) * 0.3D, Math.sin(a) * radius), 1, 0.02, 0.02, 0.02, 0, (i % 2 == 0) ? DUST_CRIMSON : DUST_BLACK);
+                }
+            }
+            case MIRROR_IMAGE -> {
+                world.spawnParticle(Particle.DUST, base, 10, 0.4, 0.5, 0.4, 0, DUST_VIOLET);
+                world.spawnParticle(Particle.SMOKE, base, 6, 0.3, 0.3, 0.3, 0.03);
+                if (stateTicks % 7 == 0) world.playSound(base, Sound.ENTITY_ENDERMAN_TELEPORT, 0.3F, 1.5F);
+            }
+            case ARMOR_CURSE -> world.spawnParticle(Particle.DUST, base, 8, 0.35, 0.25, 0.35, 0, DUST_BLACK);
+            case FREEZING_SPELL -> world.spawnParticle(Particle.DUST, base, 8, 0.25, 0.25, 0.25, 0, DUST_FROST);
+            case VOID_CAGE -> world.spawnParticle(Particle.DUST, base, 8, 0.35, 0.2, 0.35, 0, DUST_VIOLET);
+            case CURSE_OF_SILENCE -> world.spawnParticle(Particle.DUST, base, 8, 0.3, 0.2, 0.3, 0, DUST_BLACK);
+            case SWITCHING_SPELL -> world.spawnParticle(Particle.WITCH, base, 6, 0.2, 0.2, 0.2, 0.01);
+            case INVENTORY_SPELL -> world.spawnParticle(Particle.DUST, base, 8, 0.35, 0.25, 0.35, 0, DUST_PINK);
+            case LIGHTNING_MARK -> world.spawnParticle(Particle.DUST, base, 8, 0.3, 0.2, 0.3, 0, DUST_GOLD);
+            case FIRE_SPELL -> world.spawnParticle(Particle.DUST, base, 8, 0.3, 0.2, 0.3, 0, DUST_AMBER);
+            case WILL_O_WISP -> world.spawnParticle(Particle.SOUL_FIRE_FLAME, base, 6, 0.25, 0.25, 0.25, 0.01);
+            case RAPID_FIRE -> world.spawnParticle(Particle.DUST, base, 8, 0.3, 0.2, 0.3, 0, DUST_PINK);
+            case LIFE_DRAIN -> {
+                world.spawnParticle(Particle.DUST, base, 8, 0.3, 0.2, 0.3, 0, DUST_BLACK);
+                world.spawnParticle(Particle.DUST, base, 5, 0.2, 0.2, 0.2, 0, DUST_CRIMSON);
+            }
+            case POTION_VOLLEY -> world.spawnParticle(Particle.WITCH, base, 8, 0.3, 0.2, 0.3, 0.02);
+            case RUNE_TRAPS -> world.spawnParticle(Particle.DUST, base, 8, 0.35, 0.2, 0.35, 0, DUST_VIOLET);
+            case ZOMBIFYING -> world.spawnParticle(Particle.SMOKE, base, 8, 0.35, 0.25, 0.35, 0.02);
+        }
+    }
+
+    private void playCastingStartSound(WitchAbility ability) {
+        Location loc = getCurrentLocation();
+        World world = loc.getWorld();
+        if (world == null) return;
+        switch (ability) {
+            case SHARED_VESSEL -> world.playSound(loc, Sound.ENTITY_WITHER_AMBIENT, 0.6F, 1.6F);
+            case DEADLY_SPELL -> world.playSound(loc, Sound.ENTITY_WITHER_SHOOT, 0.7F, 1.2F);
+            case HEX_CIRCLE -> world.playSound(loc, Sound.BLOCK_BEACON_ACTIVATE, 0.7F, 0.7F);
+            case MIRROR_IMAGE -> world.playSound(loc, Sound.ENTITY_ENDERMAN_TELEPORT, 0.7F, 1.3F);
+            case LIFE_DRAIN -> world.playSound(loc, Sound.ENTITY_WITHER_AMBIENT, 0.6F, 1.5F);
+            default -> world.playSound(loc, Sound.ENTITY_WITCH_CELEBRATE, 0.5F, 0.8F + random.nextFloat() * 0.4F);
+        }
     }
 
     // ─── SIGNATURE ABILITIES ─────────────────────────────────────────────────
@@ -473,6 +659,7 @@ public final class WitchNPC {
     private void castHexCircle() {
         Player player = ensureTarget(35.0D);
         if (player == null) return;
+        player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 20, 1, true, true, true));
         Location center = player.getLocation().clone();
         World world = center.getWorld();
         if (world == null) return;
@@ -483,6 +670,12 @@ public final class WitchNPC {
             @Override public void run() {
                 t++;
                 if (isDead()) { cancel(); return; }
+                if (player.isOnline() && !player.isDead() && t <= 80) {
+                    Location current = player.getLocation();
+                    center.setX(current.getX());
+                    center.setY(current.getY());
+                    center.setZ(current.getZ());
+                }
                 if (t > 80) {
                     // Seal: launch everything inside
                     world.playSound(center, Sound.ENTITY_ENDER_DRAGON_GROWL,    0.8F, 1.8F);
@@ -537,8 +730,8 @@ public final class WitchNPC {
             Location spawnLoc = base.clone().add(randomDouble(-4, 4), 0, randomDouble(-4, 4));
             spawnLoc.setY(world.getHighestBlockYAt(spawnLoc) + 1.0D);
             Witch clone = world.spawn(spawnLoc, Witch.class);
-            clone.setAI(false);
-            clone.setSilent(true);
+            clone.setAI(true);
+            clone.setSilent(false);
             clone.setMetadata("bloodmoon-witch-clone", new FixedMetadataValue(plugin, npc.getId()));
             clones.add(clone);
             world.spawnParticle(Particle.DUST, spawnLoc.clone().add(0, 1, 0), 15, 0.3, 0.4, 0.3, 0, DUST_VIOLET);
@@ -563,6 +756,7 @@ public final class WitchNPC {
                     Player nearestPlayer = findNearestPlayer(getCurrentLocation(), 40.0D);
                     for (Witch clone : clones) {
                         if (!clone.isValid() || nearestPlayer == null || nearestPlayer.isDead()) continue;
+                        clone.setTarget(nearestPlayer);
                         Vector dir = nearestPlayer.getLocation().add(0, 1, 0).toVector().subtract(clone.getLocation().toVector());
                         if (dir.lengthSquared() > 0.001D) dir.normalize();
                         Location cur = clone.getLocation().clone().add(0, 1.2, 0);
@@ -705,6 +899,16 @@ public final class WitchNPC {
                     player.removeMetadata("bloodmoon-witch-void-cage", plugin);
                     cancel(); return;
                 }
+                Location pl = player.getLocation();
+                double dx = pl.getX() - cageCenter.getX();
+                double dz = pl.getZ() - cageCenter.getZ();
+                double distSq = dx * dx + dz * dz;
+                double maxSq = cageRadius * cageRadius;
+                if (distSq > maxSq) {
+                    Vector pushBack = new Vector(-dx, 0.15D, -dz).normalize().multiply(0.55D);
+                    player.setVelocity(pushBack);
+                    player.teleport(cageCenter.clone().add(dx * 0.85D, 0, dz * 0.85D));
+                }
                 if (t % 4 == 0) {
                     for (int i = 0; i < 24; i++) {
                         double a = (Math.PI * 2.0D) * i / 24.0D;
@@ -758,6 +962,18 @@ public final class WitchNPC {
         world.spawnParticle(Particle.DUST, playerLoc.clone().add(0, 1, 0), 30, 0.5, 0.7, 0.5, 0, DUST_VIOLET);
         world.playSound(witchLoc,  Sound.ENTITY_ENDERMAN_TELEPORT, 1.0F, 0.7F);
         world.playSound(playerLoc, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0F, 1.3F);
+
+        BukkitRunnable followUp = new BukkitRunnable() {
+            @Override public void run() {
+                if (isDead()) return;
+                WitchAbility chained = cooldowns.getOrDefault(WitchAbility.LIFE_DRAIN, 0) <= 0
+                    ? WitchAbility.LIFE_DRAIN
+                    : WitchAbility.LIGHTNING_MARK;
+                executeAbility(chained);
+            }
+        };
+        tasks.add(followUp);
+        followUp.runTaskLater(plugin, 8L);
     }
 
     /** Inventory Spell – large slow projectile that scatters the player's entire inventory on impact. */
@@ -976,11 +1192,12 @@ public final class WitchNPC {
 
     /** Life Drain – dark energy beam that heals witch equal to damage dealt; interrupted by range or LOS break. */
     private void castLifeDrain() {
-        Player player = ensureTarget(14.0D);
+        Player player = ensureTarget(20.0D);
         LivingEntity caster = getLivingEntity();
         if (player == null || caster == null) return;
         World world = caster.getWorld();
         if (world == null) return;
+        npc.getNavigator().cancelNavigation();
         world.playSound(caster.getLocation(), Sound.ENTITY_WITHER_AMBIENT, 0.8F, 1.4F);
         BukkitRunnable task = new BukkitRunnable() {
             int t = 0;
@@ -988,8 +1205,9 @@ public final class WitchNPC {
                 t++;
                 LivingEntity e = getLivingEntity();
                 if (t > 80 || isDead() || e == null) { cancel(); return; }
+                npc.getNavigator().cancelNavigation();
                 if (!player.isOnline() || player.isDead()) { cancel(); return; }
-                if (e.getLocation().distanceSquared(player.getLocation()) > 196.0D || !e.hasLineOfSight(player)) { cancel(); return; }
+                if (e.getLocation().distanceSquared(player.getLocation()) > 400.0D || !e.hasLineOfSight(player)) { cancel(); return; }
                 drawLine(e.getEyeLocation(), player.getEyeLocation(), DUST_BLACK);
                 if (t % 8 == 0) {
                     double dmg = 1.5D;
@@ -1144,22 +1362,105 @@ public final class WitchNPC {
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     /** Short-range evasive warp used during combat to make the witch difficult to target. */
-    private void doEvasiveWarp() {
+    private void doCircleStep() {
+        Player player = ensureTarget(30.0D);
         LivingEntity entity = getLivingEntity();
-        if (entity == null) return;
+        if (player == null || entity == null) return;
         Location origin = entity.getLocation();
         World world = origin.getWorld();
         if (world == null) return;
-        double angle = random.nextDouble() * Math.PI * 2.0D;
-        double dist  = 3.0D + random.nextDouble() * 4.0D;
-        Location dest = origin.clone().add(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
+
+        Location pivot = player.getLocation();
+        double dx = origin.getX() - pivot.getX();
+        double dz = origin.getZ() - pivot.getZ();
+        double dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist < 0.5D) dist = 5.0D;
+
+        double angle = Math.atan2(dz, dx) + (random.nextBoolean() ? 0.6D : -0.6D);
+        Location dest = pivot.clone().add(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
         dest.setY(world.getHighestBlockYAt(dest) + 1.0D);
-        dest.setYaw(origin.getYaw()); dest.setPitch(origin.getPitch());
-        world.spawnParticle(Particle.DUST,  origin.clone().add(0, 1, 0), 12, 0.4, 0.5, 0.4, 0, DUST_VIOLET);
-        world.spawnParticle(Particle.SMOKE, origin.clone().add(0, 1, 0),  6, 0.3, 0.3, 0.3, 0.03);
-        world.playSound(origin, Sound.ENTITY_ENDERMAN_TELEPORT, 0.45F, 1.6F);
+
+        world.spawnParticle(Particle.DUST, origin.clone().add(0, 1, 0), 10, 0.35, 0.45, 0.35, 0, DUST_VIOLET);
+        world.playSound(origin, Sound.ENTITY_ENDERMAN_TELEPORT, 0.35F, 1.8F);
         npc.teleport(dest, PlayerTeleportEvent.TeleportCause.PLUGIN);
-        world.spawnParticle(Particle.DUST, dest.clone().add(0, 1, 0), 8, 0.3, 0.4, 0.3, 0, DUST_VIOLET);
+    }
+
+    private void checkPhaseTransition() {
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) return;
+        var attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        if (attr == null || attr.getValue() <= 0.0D) return;
+        double ratio = entity.getHealth() / attr.getValue();
+
+        if (!wrathMirrorTriggered && ratio <= 0.60D) {
+            enterWrath();
+        }
+        if (!unravelingTriggered && ratio <= 0.25D) {
+            enterUnraveling();
+        }
+    }
+
+    private void enterWrath() {
+        wrathMirrorTriggered = true;
+        phase = WitchPhase.WRATH;
+
+        Location loc = getCurrentLocation();
+        World world = loc.getWorld();
+        if (world != null) {
+            world.playSound(loc, Sound.ENTITY_ENDER_DRAGON_GROWL, 0.8F, 1.6F);
+            world.playSound(loc, Sound.ENTITY_WITHER_SPAWN, 0.6F, 0.8F);
+            world.spawnParticle(Particle.DUST, loc.clone().add(0, 1, 0), 60, 1.0, 1.0, 1.0, 0, DUST_CRIMSON);
+            world.spawnParticle(Particle.DUST, loc.clone().add(0, 1, 0), 40, 0.8, 0.8, 0.8, 0, DUST_VIOLET);
+            world.spawnParticle(Particle.EXPLOSION_EMITTER, loc, 1);
+        }
+
+        reduceCooldowns(0.70D);
+        LivingEntity e = getLivingEntity();
+        if (e != null) {
+            e.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 20 * 999, 0, true, false, false));
+        }
+        if (state != WitchState.CASTING) {
+            startCasting(WitchAbility.MIRROR_IMAGE);
+        }
+    }
+
+    private void enterUnraveling() {
+        unravelingTriggered = true;
+        phase = WitchPhase.UNRAVELING;
+
+        Location loc = getCurrentLocation();
+        World world = loc.getWorld();
+        if (world != null) {
+            world.playSound(loc, Sound.ENTITY_WITHER_DEATH, 0.7F, 1.8F);
+            world.playSound(loc, Sound.ENTITY_WITCH_CELEBRATE, 1.0F, 0.3F);
+            world.spawnParticle(Particle.WITCH, loc.clone().add(0, 1, 0), 80, 1.0, 1.0, 1.0, 0.1);
+        }
+
+        npc.getNavigator().cancelNavigation();
+        SentinelTrait s = npc.getOrAddTrait(SentinelTrait.class);
+        s.chaseRange = 0.0D;
+
+        reduceCooldowns(0.5D);
+        cooldowns.put(WitchAbility.HEX_CIRCLE, 0);
+        if (state != WitchState.CASTING) {
+            startCasting(WitchAbility.SHARED_VESSEL);
+        }
+    }
+
+    private void reduceCooldowns(double factor) {
+        cooldowns.replaceAll((k, v) -> Math.max(0, (int) Math.round(v * factor)));
+    }
+
+    private boolean playerHasHeavyArmor(Player player) {
+        ItemStack[] armor = player.getInventory().getArmorContents();
+        for (ItemStack piece : armor) {
+            if (piece == null || piece.getType().isAir()) continue;
+            String name = piece.getType().name();
+            if (name.startsWith("NETHERITE_") || name.startsWith("DIAMOND_")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Reflects an incoming arrow back at the shooter at high speed. */

@@ -5,12 +5,14 @@ import com.yourname.bloodmoon.mobs.ClownNPC;
 import com.yourname.bloodmoon.mobs.GhostNPC;
 import com.yourname.bloodmoon.mobs.ScarecrowNPC;
 import com.yourname.bloodmoon.mobs.VampireNPC;
+import com.yourname.bloodmoon.mobs.WerewolfNPC;
 import com.yourname.bloodmoon.mobs.WitchNPC;
 import com.yourname.bloodmoon.mobs.ZombieNPC;
 import com.yourname.bloodmoon.traits.ClownTrait;
 import com.yourname.bloodmoon.traits.GhostTrait;
 import com.yourname.bloodmoon.traits.ScarecrowTrait;
 import com.yourname.bloodmoon.traits.VampireTrait;
+import com.yourname.bloodmoon.traits.WerewolfTrait;
 import com.yourname.bloodmoon.traits.WitchTrait;
 import com.yourname.bloodmoon.traits.ZombieTrait;
 import net.citizensnpcs.api.event.NPCDamageEvent;
@@ -82,6 +84,13 @@ public final class NPCListener implements Listener {
             event.setDamage(ghost.reduceIncomingDamage(event.getDamage()));
             ghost.onTakeDamage(event.getDamage());
             event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_ALLAY_HURT, 0.85F, 0.6F);
+            return;
+        }
+
+        WerewolfNPC werewolf = plugin.getNPCManager().getWerewolf(event.getNPC());
+        if (werewolf != null && event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
+            werewolf.onTakeDamage();
+            event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_WOLF_HURT, 0.95F, 0.75F);
         }
     }
 
@@ -132,6 +141,14 @@ public final class NPCListener implements Listener {
             event.getDrops().clear();
             event.setDroppedExp(0);
             ghost.startDeathSequence();
+            return;
+        }
+
+        WerewolfNPC werewolf = plugin.getNPCManager().getWerewolf(event.getNPC());
+        if (werewolf != null) {
+            event.getDrops().clear();
+            event.setDroppedExp(0);
+            werewolf.startDeathSequence();
         }
 
     }
@@ -165,6 +182,11 @@ public final class NPCListener implements Listener {
         }
         if (event.getNPC().hasTrait(GhostTrait.class)) {
             GhostTrait trait = event.getNPC().getOrAddTrait(GhostTrait.class);
+            trait.handleSentinelAttack(event);
+            return;
+        }
+        if (event.getNPC().hasTrait(WerewolfTrait.class)) {
+            WerewolfTrait trait = event.getNPC().getOrAddTrait(WerewolfTrait.class);
             trait.handleSentinelAttack(event);
         }
     }

@@ -23,6 +23,60 @@ import org.bukkit.scheduler.BukkitRunnable;
  */
 public final class BloodMoonManager {
 
+    public enum DifficultyProfile {
+        EASY("easy", 0.85D, 0.90D, 0.90D, 1.12D),
+        MEDIUM("medium", 1.00D, 1.00D, 1.00D, 1.00D),
+        HARD("hard", 1.20D, 1.25D, 1.25D, 0.85D),
+        NIGHTMARE("nightmare", 1.38D, 1.55D, 1.60D, 0.72D);
+
+        private final String token;
+        private final double nonVampireHealthMultiplier;
+        private final double rewardMultiplier;
+        private final double expMultiplier;
+        private final double abilityCadenceMultiplier;
+
+        DifficultyProfile(String token, double nonVampireHealthMultiplier, double rewardMultiplier, double expMultiplier, double abilityCadenceMultiplier) {
+            this.token = token;
+            this.nonVampireHealthMultiplier = nonVampireHealthMultiplier;
+            this.rewardMultiplier = rewardMultiplier;
+            this.expMultiplier = expMultiplier;
+            this.abilityCadenceMultiplier = abilityCadenceMultiplier;
+        }
+
+        public String getToken() {
+            return token;
+        }
+
+        public double getNonVampireHealthMultiplier() {
+            return nonVampireHealthMultiplier;
+        }
+
+        public double getRewardMultiplier() {
+            return rewardMultiplier;
+        }
+
+        public double getExpMultiplier() {
+            return expMultiplier;
+        }
+
+        public double getAbilityCadenceMultiplier() {
+            return abilityCadenceMultiplier;
+        }
+
+        public static DifficultyProfile fromToken(String token) {
+            if (token == null || token.isBlank()) {
+                return null;
+            }
+            String normalized = token.trim().toLowerCase();
+            for (DifficultyProfile profile : values()) {
+                if (profile.token.equals(normalized)) {
+                    return profile;
+                }
+            }
+            return null;
+        }
+    }
+
     private static final long NIGHT_START = 13000L;
     private static final long SUNRISE_END = 23500L;
 
@@ -35,6 +89,7 @@ public final class BloodMoonManager {
     private BukkitRunnable vampireSpawnTask;
     private BukkitRunnable ambientParticleTask;
     private Integer chanceOverride;
+    private DifficultyProfile difficultyProfile = DifficultyProfile.MEDIUM;
 
     private static final Particle.DustOptions BLOOD_AMBIENT = new Particle.DustOptions(Color.fromRGB(160, 0, 0), 1.2F);
 
@@ -220,6 +275,39 @@ public final class BloodMoonManager {
         return chanceOverride != null;
     }
 
+    public DifficultyProfile getDifficultyProfile() {
+        return difficultyProfile;
+    }
+
+    public String getDifficultyToken() {
+        return difficultyProfile.getToken();
+    }
+
+    public boolean setDifficulty(String token) {
+        DifficultyProfile parsed = DifficultyProfile.fromToken(token);
+        if (parsed == null) {
+            return false;
+        }
+        difficultyProfile = parsed;
+        return true;
+    }
+
+    public double getNonVampireHealthMultiplier() {
+        return difficultyProfile.getNonVampireHealthMultiplier();
+    }
+
+    public double getRewardMultiplier() {
+        return difficultyProfile.getRewardMultiplier();
+    }
+
+    public double getExpMultiplier() {
+        return difficultyProfile.getExpMultiplier();
+    }
+
+    public double getAbilityCadenceMultiplier() {
+        return difficultyProfile.getAbilityCadenceMultiplier();
+    }
+
     /**
      * Formats the time until the next roll window for status output.
      *
@@ -387,6 +475,12 @@ public final class BloodMoonManager {
                 }
                 plugin.getNPCManager().spawnGhostNear(player);
             }
+            for (int index = 0; index < Math.max(1, plugin.getConfigManager().getWerewolfMaxPerPlayer()); index++) {
+                if (plugin.getNPCManager().countWerewolvesNear(player, 96.0D) >= plugin.getConfigManager().getWerewolfMaxPerPlayer()) {
+                    break;
+                }
+                plugin.getNPCManager().spawnWerewolfNear(player);
+            }
         }
     }
 
@@ -441,6 +535,10 @@ public final class BloodMoonManager {
             if (plugin.getNPCManager().countGhostsNear(player, 96.0D) < plugin.getConfigManager().getGhostMaxPerPlayer()
                 && random.nextDouble() <= 0.07D) {
                 plugin.getNPCManager().spawnGhostNear(player);
+            }
+            if (plugin.getNPCManager().countWerewolvesNear(player, 96.0D) < plugin.getConfigManager().getWerewolfMaxPerPlayer()
+                && random.nextDouble() <= 0.06D) {
+                plugin.getNPCManager().spawnWerewolfNear(player);
             }
         }
     }

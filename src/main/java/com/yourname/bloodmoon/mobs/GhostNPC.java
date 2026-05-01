@@ -61,6 +61,7 @@ public final class GhostNPC {
     private final Location spawnLocation;
     private final Random random = new Random();
     private final Map<GhostAbility, Integer> cooldowns = new EnumMap<>(GhostAbility.class);
+    private final Map<GhostAbility, Integer> abilityUseCounts = new EnumMap<>(GhostAbility.class);
     private final List<BukkitRunnable> tasks = new ArrayList<>();
     private final List<ItemStack> stolenItems = new ArrayList<>();
     private final List<NPC> echoIllusions = new ArrayList<>();
@@ -183,6 +184,7 @@ public final class GhostNPC {
                 }
             }
             stolenItems.clear();
+            dropLoot(world, death);
             ExperienceOrb orb = world.spawn(death.clone().add(0, 0.25, 0), ExperienceOrb.class);
             orb.setExperience(25 + random.nextInt(15));
         }
@@ -258,12 +260,36 @@ public final class GhostNPC {
         }
     }
 
+    private void dropLoot(World world, Location location) {
+        if (random.nextDouble() <= 0.62D) world.dropItemNaturally(location, new ItemStack(Material.PAPER, 1 + random.nextInt(3)));
+        if (random.nextDouble() <= 0.44D) world.dropItemNaturally(location, new ItemStack(Material.STRING, 1 + random.nextInt(2)));
+        if (random.nextDouble() <= 0.32D) world.dropItemNaturally(location, new ItemStack(Material.WHITE_WOOL, 1));
+        if (random.nextDouble() <= 0.38D) world.dropItemNaturally(location, new ItemStack(Material.GLASS_BOTTLE, 1 + random.nextInt(2)));
+        if (random.nextDouble() <= 0.40D) world.dropItemNaturally(location, new ItemStack(Material.BONE, 1 + random.nextInt(2)));
+        if (random.nextDouble() <= 0.40D) world.dropItemNaturally(location, new ItemStack(Material.SNOWBALL, 2 + random.nextInt(3)));
+        if (random.nextDouble() <= 0.20D) world.dropItemNaturally(location, new ItemStack(Material.PHANTOM_MEMBRANE, 1));
+        if (random.nextDouble() <= 0.24D) world.dropItemNaturally(location, new ItemStack(Material.SOUL_SAND, 1));
+        if (random.nextDouble() <= 0.18D) world.dropItemNaturally(location, new ItemStack(Material.BLUE_ICE, 1));
+        if (random.nextDouble() <= 0.28D) world.dropItemNaturally(location, new ItemStack(Material.QUARTZ, 1 + random.nextInt(2)));
+
+        if (random.nextDouble() <= 0.08D) world.dropItemNaturally(location, new ItemStack(Material.GHAST_TEAR, 1));
+        if (random.nextDouble() <= 0.09D) world.dropItemNaturally(location, new ItemStack(Material.ENDER_PEARL, 1));
+        if (random.nextDouble() <= 0.08D) world.dropItemNaturally(location, new ItemStack(Material.CLOCK, 1));
+        if (random.nextDouble() <= 0.08D) world.dropItemNaturally(location, new ItemStack(Material.COMPASS, 1));
+        if (random.nextDouble() <= 0.10D) world.dropItemNaturally(location, new ItemStack(Material.EXPERIENCE_BOTTLE, 1 + random.nextInt(2)));
+        if (random.nextDouble() <= 0.07D) world.dropItemNaturally(location, new ItemStack(Material.SPECTRAL_ARROW, 2 + random.nextInt(3)));
+        if (random.nextDouble() <= 0.05D) world.dropItemNaturally(location, new ItemStack(Material.MUSIC_DISC_13, 1));
+        if (random.nextDouble() <= 0.07D) world.dropItemNaturally(location, new ItemStack(Material.NAUTILUS_SHELL, 1));
+        if (random.nextDouble() <= 0.05D) world.dropItemNaturally(location, new ItemStack(Material.CRYING_OBSIDIAN, 1));
+        if (random.nextDouble() <= 0.07D) world.dropItemNaturally(location, new ItemStack(Material.ENCHANTED_BOOK, 1));
+    }
+
     private void configureSentinel() {
         SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
         sentinel.setInvincible(false);
         sentinel.setHealth(plugin.getConfigManager().getGhostHealth());
         sentinel.health = plugin.getConfigManager().getGhostHealth();
-        sentinel.damage = 2.0D;
+        sentinel.damage = 1.25D;
         sentinel.respawnTime = -1;
         sentinel.chaseRange = 0.0D;
         sentinel.armor = 0.05D;
@@ -362,7 +388,8 @@ public final class GhostNPC {
         double distanceSquared = getCurrentLocation().distanceSquared(player.getLocation());
         tickStalking(player, distanceSquared);
 
-        if (state == GhostState.STALKING && vanishingTicks <= 0 && stateTicks % 45 == 0 && distanceSquared < 1600.0D) {
+        int abilityInterval = Math.max(16, (int) Math.round(34.0D * plugin.getBloodMoonManager().getAbilityCadenceMultiplier()));
+        if (state == GhostState.STALKING && vanishingTicks <= 0 && stateTicks % abilityInterval == 0 && distanceSquared < 2000.0D) {
             GhostAbility ability = chooseAbility();
             if (ability != null) {
                 executeAbility(ability, player);
@@ -380,7 +407,12 @@ public final class GhostNPC {
             return;
         }
         if (currentDistance <= 6.0D) {
-            startRush(player);
+            if (random.nextDouble() <= 0.32D) {
+                startRush(player);
+            } else {
+                teleportAway(player);
+                startVanishing(40 + random.nextInt(30));
+            }
             return;
         }
         if (stateTicks % 25 == 0
@@ -511,9 +543,24 @@ public final class GhostNPC {
     }
 
     private GhostAbility chooseAbility() {
-        List<GhostAbility> pool = new ArrayList<>();
+        List<GhostAbility> available = new ArrayList<>();
         for (GhostAbility ability : GhostAbility.values()) {
             if (cooldowns.getOrDefault(ability, 0) <= 0) {
+                available.add(ability);
+            }
+        }
+        if (available.isEmpty()) {
+            return null;
+        }
+
+        int minUses = available.stream().mapToInt(a -> abilityUseCounts.getOrDefault(a, 0)).min().orElse(0);
+        List<GhostAbility> underused = available.stream().filter(a -> abilityUseCounts.getOrDefault(a, 0) == minUses).toList();
+        if (!underused.isEmpty() && random.nextDouble() <= 0.58D) {
+            return underused.get(random.nextInt(underused.size()));
+        }
+
+        List<GhostAbility> pool = new ArrayList<>();
+        for (GhostAbility ability : available) {
                 int weight = switch (ability) {
                     case MIND_CONTROL -> 1;
                     case PARANORMAL_ACTIVITY -> 2;
@@ -524,12 +571,12 @@ public final class GhostNPC {
                 for (int index = 0; index < weight; index++) {
                     pool.add(ability);
                 }
-            }
         }
         return pool.isEmpty() ? null : pool.get(random.nextInt(pool.size()));
     }
 
     private void executeAbility(GhostAbility ability, Player player) {
+        abilityUseCounts.merge(ability, 1, Integer::sum);
         breakVanishing();
         switch (ability) {
             case MIND_CONTROL -> castMindControl(player);

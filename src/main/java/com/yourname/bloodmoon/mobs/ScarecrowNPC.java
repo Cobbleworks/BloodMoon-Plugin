@@ -29,6 +29,8 @@ public final class ScarecrowNPC {
     private static final Particle.DustOptions DUST_BLACK = new Particle.DustOptions(Color.fromRGB( 20,   0,  20), 1.3F);
     private static final Particle.DustOptions DUST_DARK  = new Particle.DustOptions(Color.fromRGB( 20,  70,  70), 1.0F);
     private static final Particle.DustOptions DUST_RED   = new Particle.DustOptions(Color.fromRGB(200,  10,  10), 1.0F);
+    private static final Particle.DustOptions DUST_GREEN = new Particle.DustOptions(Color.fromRGB( 70, 185, 110), 1.15F);
+    private static final Particle.DustOptions DUST_WHITE = new Particle.DustOptions(Color.fromRGB(235, 245, 235), 1.05F);
 
     // ─── Enums ────────────────────────────────────────────────────────────────
     private enum ScarecrowState { COMBAT, CASTING, DEAD }
@@ -42,6 +44,7 @@ public final class ScarecrowNPC {
     private final Location spawnLocation;
     private final Random random = new Random();
     private final Map<ScarecrowAbility, Integer> cooldowns = new EnumMap<>(ScarecrowAbility.class);
+    private final Map<ScarecrowAbility, Integer> abilityUseCounts = new EnumMap<>(ScarecrowAbility.class);
     private final List<BukkitRunnable> tasks = new ArrayList<>();
     private final List<Parrot> crows = new ArrayList<>();
     private final List<Location> witherRoseLocations = new ArrayList<>();
@@ -109,10 +112,13 @@ public final class ScarecrowNPC {
             world.playSound(death, Sound.ENTITY_SKELETON_DEATH, 1.0F, 0.8F);
             world.spawnParticle(Particle.DUST, death.clone().add(0, 1, 0), 30, 0.6, 0.7, 0.6, 0, DUST_CYAN);
             world.spawnParticle(Particle.SMOKE, death.clone().add(0, 1, 0), 20, 0.4, 0.5, 0.4, 0.04);
-            if (random.nextDouble() <= 0.4) world.dropItemNaturally(death, new ItemStack(Material.WHEAT_SEEDS, 2 + random.nextInt(3)));
-            if (random.nextDouble() <= 0.15) world.dropItemNaturally(death, new ItemStack(Material.CARVED_PUMPKIN, 1));
+            dropLoot(world, death);
+            if (random.nextDouble() <= Math.max(0.0D, plugin.getBloodMoonManager().getRewardMultiplier() - 1.0D)) {
+                dropLoot(world, death);
+            }
             ExperienceOrb orb = world.spawn(death.clone().add(0, 0.25, 0), ExperienceOrb.class);
-            orb.setExperience(40 + random.nextInt(20));
+            orb.setExperience((int) Math.max(1.0D,
+                (40 + random.nextInt(20)) * plugin.getBloodMoonManager().getExpMultiplier()));
         }
         BukkitRunnable cleanupTask = new BukkitRunnable() {
             @Override public void run() { cleanup(); }
@@ -237,7 +243,8 @@ public final class ScarecrowNPC {
             if (loc.getWorld() != null) loc.getWorld().playSound(loc, Sound.ENTITY_SKELETON_AMBIENT, 0.6F, 0.9F + random.nextFloat() * 0.2F);
         }
 
-        if (stateTicks % 28 == 0) {
+        int abilityInterval = Math.max(16, (int) Math.round(28.0D * plugin.getBloodMoonManager().getAbilityCadenceMultiplier()));
+        if (stateTicks % abilityInterval == 0) {
             ScarecrowAbility ability = chooseAbility();
             if (ability != null) startCasting(ability);
         }
@@ -269,9 +276,24 @@ public final class ScarecrowNPC {
     }
 
     private ScarecrowAbility chooseAbility() {
+        List<ScarecrowAbility> available = new ArrayList<>();
+        for (ScarecrowAbility ability : ScarecrowAbility.values()) {
+            if (cooldowns.getOrDefault(ability, 0) <= 0) {
+                available.add(ability);
+            }
+        }
+        if (available.isEmpty()) {
+            return null;
+        }
+
+        int minUses = available.stream().mapToInt(a -> abilityUseCounts.getOrDefault(a, 0)).min().orElse(0);
+        List<ScarecrowAbility> underused = available.stream().filter(a -> abilityUseCounts.getOrDefault(a, 0) == minUses).toList();
+        if (!underused.isEmpty() && random.nextDouble() <= 0.6D) {
+            return underused.get(random.nextInt(underused.size()));
+        }
+
         List<ScarecrowAbility> pool = new ArrayList<>();
-        for (ScarecrowAbility a : ScarecrowAbility.values()) {
-            if (cooldowns.getOrDefault(a, 0) > 0) continue;
+        for (ScarecrowAbility a : available) {
             int weight = switch (a) {
                 case FEAR, DRAIN, CROWSTORM -> 1;
                 case BLOOM, REAP            -> 2;
@@ -284,6 +306,7 @@ public final class ScarecrowNPC {
     }
 
     private void executeAbility(ScarecrowAbility ability) {
+        abilityUseCounts.merge(ability, 1, Integer::sum);
         switch (ability) {
             case FEAR      -> castFear();
             case DRAIN     -> castDrain();
@@ -372,9 +395,8 @@ public final class ScarecrowNPC {
     }
 
     /**
-     * Drain: leap toward target, then connect up to 7 nearby players with cyan/black lines.
-     * Each connected player is drained for half a heart constantly. Scarecrow heals from it.
-     * Lasts 5 seconds; connection breaks when a player leaves 7-block range.
+     * Harvest Drain: roots the scarecrow in place and channels a web of glowing tendrils.
+     * All living entities caught in range are drained while the scarecrow heals for the same amount.
      */
     private void castDrain() {
         LivingEntity caster = getLivingEntity();
@@ -383,55 +405,103 @@ public final class ScarecrowNPC {
         if (tgt == null || !tgt.isOnline()) return;
         World world = caster.getWorld();
 
-        // Leap toward target
-        Vector toTarget = tgt.getLocation().toVector().subtract(caster.getLocation().toVector()).normalize();
-        caster.setVelocity(toTarget.multiply(0.6D).setY(0.7D));
-        world.playSound(caster.getLocation(), Sound.ENTITY_SKELETON_STEP, 1.0F, 0.55F);
-        world.spawnParticle(Particle.DUST, caster.getLocation().add(0, 1, 0), 12, 0.4, 0.4, 0.4, 0, DUST_CYAN);
+        beforeCast = ScarecrowState.COMBAT;
+        state = ScarecrowState.CASTING;
+        stateTicks = 0;
+        castTicks = 120;
+        Location root = caster.getLocation().clone();
+        world.playSound(root, Sound.BLOCK_ROOTED_DIRT_BREAK, 1.0F, 0.6F);
+        world.playSound(root, Sound.ENTITY_WITHER_AMBIENT, 0.5F, 1.45F);
+        world.spawnParticle(Particle.BLOCK, root.clone().add(0, 0.1, 0), 24, 0.45, 0.0, 0.45, 0.02, Material.MOSS_BLOCK.createBlockData());
+        world.spawnParticle(Particle.DUST, root.clone().add(0, 1.0, 0), 18, 0.35, 0.45, 0.35, 0, DUST_GREEN);
 
         BukkitRunnable drain = new BukkitRunnable() {
             int t = 0;
             @Override public void run() {
                 t++;
-                if (t > 100 || isDead()) { cancel(); return; }
-
-                Location casterLoc = getCurrentLocation().add(0, 1.2, 0);
-                List<Player> connected = new ArrayList<>();
-                for (Player p : world.getPlayers()) {
-                    if (!p.isDead() && p.isOnline()
-                            && p.getLocation().distanceSquared(getCurrentLocation()) <= 49.0D) {
-                        connected.add(p);
-                        if (connected.size() >= 7) break;
-                    }
+                if (t > 100 || isDead()) {
+                    state = ScarecrowState.COMBAT;
+                    stateTicks = 0;
+                    castTicks = 0;
+                    cancel();
+                    return;
                 }
-                if (connected.isEmpty()) { cancel(); return; }
+
+                LivingEntity entity = getLivingEntity();
+                if (entity == null) {
+                    state = ScarecrowState.COMBAT;
+                    stateTicks = 0;
+                    castTicks = 0;
+                    cancel();
+                    return;
+                }
+
+                npc.getNavigator().cancelNavigation();
+                entity.setVelocity(new Vector(0, 0, 0));
+                Location base = root.clone();
+                base.setYaw(entity.getLocation().getYaw());
+                base.setPitch(-35.0F);
+                if (entity instanceof Player npcPlayer) {
+                    npcPlayer.teleport(base, PlayerTeleportEvent.TeleportCause.PLUGIN);
+                    if (t % 8 == 0) {
+                        playCitizensPlayerAnimation(npcPlayer, "ARM_SWING");
+                    }
+                } else {
+                    entity.teleport(base);
+                }
+
+                Location casterLoc = entity.getLocation().clone().add(0, 1.6, 0);
+                Location leftShoulder = casterLoc.clone().add(-0.35D, -0.15D + Math.sin(t * 0.7D) * 0.04D, 0.0D);
+                Location rightShoulder = casterLoc.clone().add(0.35D, -0.15D + Math.cos(t * 0.7D) * 0.04D, 0.0D);
+                world.spawnParticle(Particle.DUST, casterLoc, 7, 0.18, 0.55, 0.18, 0, DUST_WHITE);
+                world.spawnParticle(Particle.DUST, casterLoc, 8, 0.28, 0.60, 0.28, 0, DUST_GREEN);
+                world.spawnParticle(Particle.BLOCK, entity.getLocation().clone().add(0, 0.08, 0), 5, 0.25, 0.0, 0.25, 0.01, Material.ROOTED_DIRT.createBlockData());
+
+                List<LivingEntity> connected = getDrainTargets(entity, 8.0D);
+                if (connected.isEmpty() && t > 25) {
+                    state = ScarecrowState.COMBAT;
+                    stateTicks = 0;
+                    castTicks = 0;
+                    cancel();
+                    return;
+                }
 
                 double totalHeal = 0;
-                for (Player p : connected) {
-                    // Draw both dust colors for a layered cyan/black beam
-                    drawLine(p.getEyeLocation(), casterLoc, DUST_CYAN);
-                    drawLine(p.getEyeLocation(), casterLoc, DUST_BLACK);
-                    // Drain half a heart every 4 ticks (~2.5 per second)
-                    if (t % 4 == 0) {
-                        p.damage(1.0D);
-                        totalHeal += 0.5D;
+                int index = 0;
+                for (LivingEntity victim : connected) {
+                    Location victimLoc = victim.getLocation().clone().add(0, victim.getHeight() * 0.6D, 0);
+                    drawOrganicTendril(leftShoulder, victimLoc, DUST_GREEN, t * 0.18D + index * 0.5D, 0.28D);
+                    drawOrganicTendril(rightShoulder, victimLoc, DUST_WHITE, t * 0.23D + index * 0.65D, 0.22D);
+                    drawOrganicTendril(casterLoc, victimLoc, DUST_BLACK, t * 0.15D + index * 0.35D, 0.12D);
+                    if (t % 5 == 0) {
+                        victim.damage(1.0D, entity);
+                        totalHeal += 1.0D;
+                        world.spawnParticle(Particle.DUST, victimLoc, 4, 0.12, 0.12, 0.12, 0, DUST_WHITE);
+                        if (victim instanceof Player playerVictim) {
+                            playerVictim.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 25, 0, false, true, true));
+                        }
                     }
+                    index++;
                 }
 
                 if (totalHeal > 0) {
-                    LivingEntity e = getLivingEntity();
-                    if (e != null) {
-                        var hpAttr = e.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+                    if (entity != null) {
+                        var hpAttr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
                         double maxHp = hpAttr != null ? hpAttr.getValue() : 40.0D;
-                        e.setHealth(Math.min(maxHp, e.getHealth() + totalHeal));
+                        entity.setHealth(Math.min(maxHp, entity.getHealth() + totalHeal));
                     }
                 }
 
-                if (t == 1) world.playSound(casterLoc, Sound.ENTITY_WITHER_AMBIENT, 0.6F, 1.4F);
+                if (t % 12 == 0) {
+                    world.playSound(casterLoc, Sound.ENTITY_ENDERMAN_SCREAM, 0.22F, 1.7F);
+                }
+                if (t % 20 == 0) {
+                    world.playSound(casterLoc, Sound.BLOCK_SCULK_CATALYST_BLOOM, 0.55F, 1.35F);
+                }
             }
         };
         tasks.add(drain);
-        drain.runTaskTimer(plugin, 6L, 1L);
+        drain.runTaskTimer(plugin, 0L, 1L);
     }
 
     /**
@@ -888,6 +958,56 @@ public final class ScarecrowNPC {
         witherRoseLocations.clear();
     }
 
+    private void dropLoot(World world, Location location) {
+        if (random.nextDouble() <= 0.72D) world.dropItemNaturally(location, new ItemStack(Material.WHEAT_SEEDS, 2 + random.nextInt(4)));
+        if (random.nextDouble() <= 0.68D) world.dropItemNaturally(location, new ItemStack(Material.WHEAT, 2 + random.nextInt(4)));
+        if (random.nextDouble() <= 0.55D) world.dropItemNaturally(location, new ItemStack(Material.BEETROOT_SEEDS, 2 + random.nextInt(3)));
+        if (random.nextDouble() <= 0.46D) world.dropItemNaturally(location, new ItemStack(Material.PUMPKIN_SEEDS, 1 + random.nextInt(3)));
+        if (random.nextDouble() <= 0.46D) world.dropItemNaturally(location, new ItemStack(Material.MELON_SEEDS, 1 + random.nextInt(3)));
+        if (random.nextDouble() <= 0.32D) world.dropItemNaturally(location, new ItemStack(Material.HAY_BLOCK, 1));
+        if (random.nextDouble() <= 0.58D) world.dropItemNaturally(location, new ItemStack(Material.STICK, 2 + random.nextInt(3)));
+        if (random.nextDouble() <= 0.42D) world.dropItemNaturally(location, new ItemStack(Material.STRING, 1 + random.nextInt(3)));
+        if (random.nextDouble() <= 0.36D) world.dropItemNaturally(location, new ItemStack(Material.BONE_MEAL, 2 + random.nextInt(3)));
+        if (random.nextDouble() <= 0.30D) world.dropItemNaturally(location, new ItemStack(Material.BEETROOT, 1 + random.nextInt(2)));
+
+        if (random.nextDouble() <= 0.16D) world.dropItemNaturally(location, new ItemStack(Material.CARVED_PUMPKIN, 1));
+        if (random.nextDouble() <= 0.08D) world.dropItemNaturally(location, new ItemStack(Material.JACK_O_LANTERN, 1));
+        if (random.nextDouble() <= 0.07D) world.dropItemNaturally(location, new ItemStack(Material.BOW, 1));
+        if (random.nextDouble() <= 0.06D) world.dropItemNaturally(location, new ItemStack(Material.GOLDEN_HOE, 1));
+        if (random.nextDouble() <= 0.09D) world.dropItemNaturally(location, new ItemStack(Material.PUMPKIN_PIE, 1));
+        if (random.nextDouble() <= 0.09D) world.dropItemNaturally(location, new ItemStack(Material.HONEY_BOTTLE, 1));
+        if (random.nextDouble() <= 0.06D) world.dropItemNaturally(location, new ItemStack(Material.SUSPICIOUS_STEW, 1));
+        if (random.nextDouble() <= 0.07D) world.dropItemNaturally(location, new ItemStack(Material.LANTERN, 1));
+        if (random.nextDouble() <= 0.07D) world.dropItemNaturally(location, new ItemStack(Material.LEATHER_BOOTS, 1));
+        if (random.nextDouble() <= 0.08D) world.dropItemNaturally(location, new ItemStack(Material.SHEARS, 1));
+    }
+
+    private List<LivingEntity> getDrainTargets(LivingEntity caster, double radius) {
+        List<LivingEntity> targets = new ArrayList<>();
+        for (Entity nearby : caster.getNearbyEntities(radius, radius * 0.6D, radius)) {
+            if (!(nearby instanceof LivingEntity living)) {
+                continue;
+            }
+            if (living.isDead() || living.equals(caster) || nearby instanceof ArmorStand) {
+                continue;
+            }
+            if (nearby.hasMetadata("NPC")) {
+                continue;
+            }
+            targets.add(living);
+        }
+        return targets;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void playCitizensPlayerAnimation(Player player, String animationName) {
+        try {
+            Class<? extends Enum> animationClass = Class.forName("net.citizensnpcs.util.PlayerAnimation").asSubclass(Enum.class);
+            Enum animation = Enum.valueOf(animationClass, animationName);
+            animationClass.getMethod("play", Player.class).invoke(animation, player);
+        } catch (ReflectiveOperationException ignored) {}
+    }
+
     /** Draws a particle line between two locations. */
     private void drawLine(Location a, Location b, Particle.DustOptions dust) {
         if (a.getWorld() == null || a.getWorld() != b.getWorld()) return;
@@ -899,6 +1019,29 @@ public final class ScarecrowNPC {
         for (double d = 0; d < len; d += 0.4D) {
             pos.getWorld().spawnParticle(Particle.DUST, pos, 1, 0, 0, 0, 0, dust);
             pos.add(step);
+        }
+    }
+
+    private void drawOrganicTendril(Location start, Location end, Particle.DustOptions dust, double phase, double wobble) {
+        if (start.getWorld() == null || start.getWorld() != end.getWorld()) return;
+        Vector line = end.toVector().subtract(start.toVector());
+        double length = line.length();
+        if (length < 0.01D) return;
+        Vector direction = line.clone().normalize();
+        Vector perpendicular = new Vector(-direction.getZ(), 0.0D, direction.getX());
+        if (perpendicular.lengthSquared() < 0.01D) {
+            perpendicular = new Vector(1.0D, 0.0D, 0.0D);
+        } else {
+            perpendicular.normalize();
+        }
+        Location point = start.clone();
+        for (double step = 0.0D; step < length; step += 0.28D) {
+            double wave = Math.sin(phase + step * 1.5D) * wobble;
+            double lift = Math.cos(phase * 0.7D + step * 1.1D) * wobble * 0.45D;
+            Vector offset = perpendicular.clone().multiply(wave).setY(lift);
+            Location particle = point.clone().add(offset);
+            particle.getWorld().spawnParticle(Particle.DUST, particle, 1, 0.0D, 0.0D, 0.0D, 0.0D, dust);
+            point.add(direction.clone().multiply(0.28D));
         }
     }
 }

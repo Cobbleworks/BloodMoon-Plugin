@@ -163,6 +163,7 @@ public final class ZombieNPC {
     private final Location spawnLocation;
     private final Random random;
     private final Map<ZombieAbility, Integer> cooldowns;
+    private final Map<ZombieAbility, Integer> abilityUseCounts;
     private final List<BukkitRunnable> ownedTasks;
     private final List<TrailSegment> trailSegments;
 
@@ -194,6 +195,7 @@ public final class ZombieNPC {
         this.spawnLocation   = spawnLocation.clone();
         this.random          = new Random();
         this.cooldowns       = new EnumMap<>(ZombieAbility.class);
+        this.abilityUseCounts = new EnumMap<>(ZombieAbility.class);
         this.ownedTasks      = new ArrayList<>();
         this.trailSegments   = new ArrayList<>();
         this.state           = ZombieState.INFECTED_RAGE;
@@ -316,6 +318,9 @@ public final class ZombieNPC {
         }
 
         dropLoot(deathLocation.getWorld(), deathLocation);
+        if (random.nextDouble() <= Math.max(0.0D, plugin.getBloodMoonManager().getRewardMultiplier() - 1.0D)) {
+            dropLoot(deathLocation.getWorld(), deathLocation);
+        }
 
         final Location deathLoc = deathLocation.clone();
 
@@ -603,7 +608,8 @@ public final class ZombieNPC {
                 getCurrentLocation(), Sound.ENTITY_ZOMBIE_AMBIENT, 0.9F, 0.65F);
         }
 
-        if (stateTicks % COMBAT_ABILITY_INTERVAL == 0) {
+        int abilityInterval = Math.max(16, (int) Math.round(COMBAT_ABILITY_INTERVAL * plugin.getBloodMoonManager().getAbilityCadenceMultiplier()));
+        if (stateTicks % abilityInterval == 0) {
             ZombieAbility ability = chooseAbility();
             if (ability != null && canUseAbility(ability)) {
                 startCasting(ability);
@@ -651,6 +657,7 @@ public final class ZombieNPC {
     }
 
     private void executeAbility(ZombieAbility ability) {
+        abilityUseCounts.merge(ability, 1, Integer::sum);
         switch (ability) {
             case ACID_SPIT   -> castAcidSpit();
             case ROT_ZONE    -> castRotZone();
@@ -1167,14 +1174,36 @@ public final class ZombieNPC {
         if (random.nextDouble() <= 0.60D) {
             world.dropItemNaturally(location, new ItemStack(Material.BONE, randomRange(1, 4)));
         }
+        if (random.nextDouble() <= 0.40D) {
+            world.dropItemNaturally(location, new ItemStack(Material.SLIME_BALL, randomRange(2, 4)));
+        }
+        if (random.nextDouble() <= 0.34D) {
+            world.dropItemNaturally(location, new ItemStack(Material.POTATO, randomRange(1, 2)));
+        }
+        if (random.nextDouble() <= 0.28D) {
+            world.dropItemNaturally(location, new ItemStack(Material.CARROT, randomRange(1, 2)));
+        }
+        if (random.nextDouble() <= 0.26D) {
+            world.dropItemNaturally(location, new ItemStack(Material.LEATHER, randomRange(1, 2)));
+        }
+        if (random.nextDouble() <= 0.25D) {
+            world.dropItemNaturally(location, new ItemStack(Material.STRING, randomRange(1, 3)));
+        }
+        if (random.nextDouble() <= 0.25D) {
+            world.dropItemNaturally(location, new ItemStack(Material.FLINT, randomRange(1, 2)));
+        }
+        if (random.nextDouble() <= 0.20D) {
+            world.dropItemNaturally(location, new ItemStack(Material.IRON_NUGGET, randomRange(2, 4)));
+        }
+        if (random.nextDouble() <= 0.18D) {
+            world.dropItemNaturally(location, new ItemStack(Material.SPIDER_EYE, 1));
+        }
+
         if (random.nextDouble() <= 0.25D) {
             world.dropItemNaturally(location, new ItemStack(Material.IRON_INGOT, randomRange(1, 2)));
         }
         if (random.nextDouble() <= 0.15D) {
             world.dropItemNaturally(location, new ItemStack(Material.CARVED_PUMPKIN, 1));
-        }
-        if (random.nextDouble() <= 0.40D) {
-            world.dropItemNaturally(location, new ItemStack(Material.SLIME_BALL, randomRange(2, 4)));
         }
         if (random.nextDouble() <= 0.08D) {
             world.dropItemNaturally(location, new ItemStack(Material.GOLDEN_APPLE, 1));
@@ -1196,11 +1225,24 @@ public final class ZombieNPC {
             }
             world.dropItemNaturally(location, book);
         }
+        if (random.nextDouble() <= 0.06D) {
+            world.dropItemNaturally(location, new ItemStack(Material.CHAINMAIL_CHESTPLATE, 1));
+        }
+        if (random.nextDouble() <= 0.06D) {
+            world.dropItemNaturally(location, new ItemStack(Material.SHIELD, 1));
+        }
+        if (random.nextDouble() <= 0.07D) {
+            world.dropItemNaturally(location, new ItemStack(Material.IRON_SHOVEL, 1));
+        }
+        if (random.nextDouble() <= 0.05D) {
+            world.dropItemNaturally(location, new ItemStack(Material.NAME_TAG, 1));
+        }
         if (random.nextDouble() <= 0.03D) {
             world.dropItemNaturally(location, new ItemStack(Material.ZOMBIE_HEAD, 1));
         }
         ExperienceOrb orb = world.spawn(location.clone().add(0D, 0.25D, 0D), ExperienceOrb.class);
-        orb.setExperience(randomRange(35, 55));
+        orb.setExperience((int) Math.max(1.0D,
+            randomRange(35, 55) * plugin.getBloodMoonManager().getExpMultiplier()));
     }
 
     // -------------------------------------------------------------------------
@@ -1222,21 +1264,32 @@ public final class ZombieNPC {
     }
 
     private ZombieAbility chooseAbility() {
-        int total = 0;
+        List<ZombieAbility> available = new ArrayList<>();
         for (ZombieAbility ability : ZombieAbility.values()) {
             if (canUseAbility(ability)) {
-                total += ability.getWeight();
+                available.add(ability);
             }
+        }
+        if (available.isEmpty()) {
+            return null;
+        }
+
+        int minUses = available.stream().mapToInt(a -> abilityUseCounts.getOrDefault(a, 0)).min().orElse(0);
+        List<ZombieAbility> underused = available.stream().filter(a -> abilityUseCounts.getOrDefault(a, 0) == minUses).toList();
+        if (!underused.isEmpty() && random.nextDouble() <= 0.60D) {
+            return underused.get(random.nextInt(underused.size()));
+        }
+
+        int total = 0;
+        for (ZombieAbility ability : available) {
+            total += ability.getWeight();
         }
         if (total <= 0) {
             return null;
         }
         int roll = random.nextInt(total);
         int cumulative = 0;
-        for (ZombieAbility ability : ZombieAbility.values()) {
-            if (!canUseAbility(ability)) {
-                continue;
-            }
+        for (ZombieAbility ability : available) {
             cumulative += ability.getWeight();
             if (roll < cumulative) {
                 return ability;
