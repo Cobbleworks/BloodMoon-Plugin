@@ -651,7 +651,7 @@ public final class WerewolfNPC {
             return;
         }
         World world = entity.getWorld();
-        world.playSound(entity.getLocation(), Sound.ENTITY_WOLF_HOWL, 1.2F, 0.75F);
+        world.playSound(entity.getLocation(), Sound.ENTITY_WOLF_AMBIENT, 1.2F, 0.75F);
         for (int index = countLivingPackWolves(); index < 2; index++) {
             Vector offset = new Vector(index == 0 ? 2.0D : -2.0D, 0, 1.2D);
             Location spawn = entity.getLocation().clone().add(offset);
@@ -729,7 +729,7 @@ public final class WerewolfNPC {
         Location current = getCurrentLocation();
         World world = current.getWorld();
         if (world != null) {
-            world.playSound(current, Sound.ENTITY_WOLF_HOWL, 1.0F, 1.2F);
+            world.playSound(current, Sound.ENTITY_WOLF_AMBIENT, 1.0F, 1.2F);
         }
     }
 
@@ -837,7 +837,7 @@ public final class WerewolfNPC {
         Location current = getCurrentLocation();
         World world = current.getWorld();
         if (world != null) {
-            world.playSound(current, Sound.ENTITY_WOLF_HOWL, 1.3F, 0.55F);
+            world.playSound(current, Sound.ENTITY_WOLF_AMBIENT, 1.3F, 0.55F);
             world.spawnParticle(Particle.DUST, current.clone().add(0, 1.4, 0), 26, 0.35, 0.5, 0.35, 0, DUST_SILVER);
         }
     }
@@ -1039,7 +1039,7 @@ public final class WerewolfNPC {
                     cancel();
                     return;
                 }
-                current.getWorld().playSound(current.getLocation(), ticks % 80 == 0 ? Sound.ENTITY_WOLF_HOWL : Sound.ENTITY_WOLF_GROWL, 0.55F, 0.75F + random.nextFloat() * 0.3F);
+                current.getWorld().playSound(current.getLocation(), ticks % 80 == 0 ? Sound.ENTITY_WOLF_AMBIENT : Sound.ENTITY_WOLF_GROWL, 0.55F, 0.75F + random.nextFloat() * 0.3F);
                 current.setMetadata(INFECTION_PULSE_KEY, new FixedMetadataValue(plugin, System.currentTimeMillis() + 500L));
             }
         };

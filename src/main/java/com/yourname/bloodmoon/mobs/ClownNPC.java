@@ -52,7 +52,7 @@ public final class ClownNPC {
     public enum ClownState { WANDERING, COMBAT, CASTING, TAUNTING, MANIC, DEAD }
 
     public enum ClownAbility {
-        FIREWORK_VOLLEY(22), BUNNY_SWARM(17), CONFETTI_CANNON(18), WIND_BURST(12), CHAOS_DASH(11), PARROT_BARRAGE(12), DUCK_INFERNO(11), JUGGLE(13);
+        FIREWORK_VOLLEY(22), BUNNY_SWARM(17), CONFETTI_CANNON(18), WIND_BURST(12), CHAOS_DASH(11), PARROT_BARRAGE(12), DUCK_INFERNO(11), JUGGLE(13), ANVIL_DROP(16);
         private final int weight;
         ClownAbility(int w) { this.weight = w; }
         public int getWeight() { return weight; }
@@ -71,11 +71,12 @@ public final class ClownNPC {
     private static final int PARROT_BARRAGE_COOLDOWN    = 260;
     private static final int DUCK_INFERNO_COOLDOWN      = 220;
     private static final int JUGGLE_COOLDOWN            = 210;
+    private static final int ANVIL_DROP_COOLDOWN        = 200;
     private static final int    FIREWORK_COUNT          = 3;
     private static final double FIREWORK_DAMAGE         = 7.0D;
     private static final double FIREWORK_HIT_RANGE      = 1.6D;
     private static final int    FIREWORK_LIFESPAN_TICKS = 70;
-    private static final int    BUNNY_SWARM_COUNT       = 2;
+    private static final int    BUNNY_SWARM_COUNT       = 3;
     private static final double HOOK_HIT_RANGE          = 1.5D;
     private static final int    HOOK_LIFESPAN_TICKS     = 60;
     private static final double HOOK_PUSH_STRENGTH      = 1.8D;
@@ -84,6 +85,17 @@ public final class ClownNPC {
     private static final double CHAOS_DASH_DAMAGE       = 5.0D;
     private static final int    MAX_BUNNIES             = 4;
     private static final int    BAIT_TRAP_COOLDOWN_MAX  = 600;
+    private static final int    BURN_PATCH_DURATION_TICKS = 140;
+
+    private static final class BurnPatch {
+        private final Location loc;
+        private final long bornTick;
+
+        private BurnPatch(Location loc, long bornTick) {
+            this.loc = loc.clone();
+            this.bornTick = bornTick;
+        }
+    }
 
     private static final Particle.DustOptions JESTER_PINK  = new Particle.DustOptions(Color.fromRGB(255, 80, 160), 1.2F);
     private static final Particle.DustOptions JESTER_CYAN  = new Particle.DustOptions(Color.fromRGB(0, 210, 255), 1.1F);
@@ -100,6 +112,7 @@ public final class ClownNPC {
     private final Map<ClownAbility, Integer> cooldowns;
     private final Map<ClownAbility, Integer> abilityUseCounts;
     private final List<BukkitRunnable> ownedTasks;
+    private final List<BurnPatch> burnPatches;
     private final ClownBunnySwarm bunnySwarm;
 
     private ClownState state;
@@ -127,6 +140,7 @@ public final class ClownNPC {
         this.cooldowns     = new EnumMap<>(ClownAbility.class);
         this.abilityUseCounts = new EnumMap<>(ClownAbility.class);
         this.ownedTasks    = new ArrayList<>();
+        this.burnPatches   = new ArrayList<>();
         this.bunnySwarm    = new ClownBunnySwarm(plugin, this);
         this.state         = ClownState.WANDERING;
         this.stateBeforeCasting = ClownState.COMBAT;
@@ -201,6 +215,7 @@ public final class ClownNPC {
         state = ClownState.DEAD; stateTicks = 0;
         Location loc = getCurrentLocation();
         cancelControllerOnly(); cancelOwnedTasks(); bunnySwarm.cleanup();
+        burnPatches.clear();
         World world = loc.getWorld();
         if (world != null) {
             spawnDeathExplosion(world, loc);
@@ -217,6 +232,7 @@ public final class ClownNPC {
         if (cleanedUp) return;
         cleanedUp = true;
         cancelControllerOnly(); cancelOwnedTasks(); bunnySwarm.cleanup();
+        burnPatches.clear();
         if (npc.isSpawned()) npc.despawn();
         try { npc.destroy(); } catch (Exception ignored) {}
         plugin.getNPCManager().unregisterClown(npc.getId());
@@ -317,6 +333,7 @@ public final class ClownNPC {
     private void tick() {
         if (cleanedUp || deathSequenceStarted) return;
         lifeTicks++; stateTicks++; decrementCooldowns(); updateLastKnownLocation();
+        tickBurningGround();
         if (damageTeleportCooldown > 0) damageTeleportCooldown--;
         if (baitTrapCooldown > 0) baitTrapCooldown--;
         switch (state) {
@@ -450,6 +467,7 @@ public final class ClownNPC {
             case PARROT_BARRAGE  -> random.nextInt(8)  + 20;
             case DUCK_INFERNO    -> random.nextInt(8)  + 18;
             case JUGGLE          -> random.nextInt(10) + 22;
+            case ANVIL_DROP      -> random.nextInt(8)  + 16;
         };
         npc.getNavigator().cancelNavigation();
         Location loc = getCurrentLocation(); World world = loc.getWorld();
@@ -489,6 +507,10 @@ public final class ClownNPC {
                     world.playSound(loc, Sound.BLOCK_NOTE_BLOCK_BELL, 0.85F, 1.7F);
                     world.playSound(loc, Sound.ITEM_FIRECHARGE_USE, 0.5F, 1.2F);
                 }
+                case ANVIL_DROP -> {
+                    world.playSound(loc, Sound.BLOCK_ANVIL_PLACE, 0.7F, 0.9F);
+                    world.playSound(loc, Sound.BLOCK_NOTE_BLOCK_PLING, 0.6F, 0.6F);
+                }
             }
         }
     }
@@ -512,6 +534,7 @@ public final class ClownNPC {
             case CHAOS_DASH      -> spawnChaosDashCastingParticles(world, base);
             case PARROT_BARRAGE, DUCK_INFERNO -> spawnParrotCastingParticles(world, base);
             case JUGGLE -> spawnParrotCastingParticles(world, base);
+            case ANVIL_DROP -> spawnWindBurstCastingParticles(world, base);
         }
     }
 
@@ -528,6 +551,7 @@ public final class ClownNPC {
             case CHAOS_DASH      -> animateChaosDash(npcPlayer);
             case PARROT_BARRAGE, DUCK_INFERNO -> animateParrotBarrage(npcPlayer);
             case JUGGLE -> animateParrotBarrage(npcPlayer);
+            case ANVIL_DROP -> animateHookPull(npcPlayer);
         }
     }
 
@@ -648,6 +672,7 @@ public final class ClownNPC {
             case PARROT_BARRAGE  -> castParrotBarrage();
             case DUCK_INFERNO    -> castDuckInferno();
             case JUGGLE          -> castJuggle();
+            case ANVIL_DROP      -> castAnvilDropAbility();
         }
     }
 
@@ -663,9 +688,14 @@ public final class ClownNPC {
             return null;
         }
 
+        List<ClownAbility> unused = available.stream().filter(a -> abilityUseCounts.getOrDefault(a, 0) == 0).toList();
+        if (!unused.isEmpty()) {
+            return unused.get(random.nextInt(unused.size()));
+        }
+
         int minUses = available.stream().mapToInt(a -> abilityUseCounts.getOrDefault(a, 0)).min().orElse(0);
         List<ClownAbility> underused = available.stream().filter(a -> abilityUseCounts.getOrDefault(a, 0) == minUses).toList();
-        if (!underused.isEmpty() && random.nextDouble() <= 0.62D) {
+        if (!underused.isEmpty() && random.nextDouble() <= 0.80D) {
             return underused.get(random.nextInt(underused.size()));
         }
 
@@ -687,7 +717,7 @@ public final class ClownNPC {
         if (ability == null || state == ClownState.DEAD) return false;
         if (cooldowns.getOrDefault(ability, 0) > 0) return false;
         return switch (ability) {
-            case FIREWORK_VOLLEY, CONFETTI_CANNON, WIND_BURST, CHAOS_DASH, PARROT_BARRAGE, DUCK_INFERNO, JUGGLE -> target != null && target.isOnline() && !target.isDead();
+            case FIREWORK_VOLLEY, CONFETTI_CANNON, WIND_BURST, CHAOS_DASH, PARROT_BARRAGE, DUCK_INFERNO, JUGGLE, ANVIL_DROP -> target != null && target.isOnline() && !target.isDead();
             case BUNNY_SWARM -> true;
         };
     }
@@ -784,7 +814,7 @@ public final class ClownNPC {
             world.spawnParticle(Particle.DUST, loc.clone().add(0,1,0), 30, 0.7, 0.6, 0.7, 0, JESTER_PINK);
         }
         List<org.bukkit.entity.Rabbit> orbiting = new ArrayList<>();
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < BUNNY_SWARM_COUNT; i++) {
             Location spawn = loc.clone().add(randomDouble(-0.8, 0.8), 0.4D, randomDouble(-0.8, 0.8));
             org.bukkit.entity.Rabbit rabbit = world.spawn(spawn, org.bukkit.entity.Rabbit.class);
             rabbit.setAI(false);
@@ -795,7 +825,7 @@ public final class ClownNPC {
 
         BukkitRunnable bunnyShow = new BukkitRunnable() {
             int ticks;
-            final int launcher = random.nextInt(orbiting.size());
+            final boolean[] launched = new boolean[orbiting.size()];
 
             @Override
             public void run() {
@@ -810,17 +840,20 @@ public final class ClownNPC {
                 for (int i = 0; i < orbiting.size(); i++) {
                     org.bukkit.entity.Rabbit rabbit = orbiting.get(i);
                     if (!rabbit.isValid()) continue;
-                    if (i == launcher && ticks > 46) {
+                    if (ticks > 42 + (i * 8)) {
+                        launched[i] = true;
+                    }
+                    if (launched[i]) {
                         Vector toward = player.getLocation().toVector().subtract(rabbit.getLocation().toVector());
                         if (toward.lengthSquared() > 0.01D) {
-                            rabbit.teleport(rabbit.getLocation().add(toward.normalize().multiply(0.62D)));
+                            rabbit.teleport(rabbit.getLocation().add(toward.normalize().multiply(0.75D)));
                         }
                         rabbit.getWorld().spawnParticle(Particle.FLAME, rabbit.getLocation().add(0, 0.25D, 0), 6, 0.12, 0.12, 0.12, 0.01);
+                        rabbit.getWorld().spawnParticle(Particle.DUST, rabbit.getLocation().add(0, 0.25D, 0), 3, 0.08, 0.08, 0.08, 0.0, JESTER_ORANGE);
                         if (player.isOnline() && !player.isDead() && player.getLocation().distanceSquared(rabbit.getLocation()) <= 2.25D) {
                             explodeDuck(rabbit.getLocation(), caster);
                             rabbit.remove();
-                            cancel();
-                            return;
+                            continue;
                         }
                         continue;
                     }
@@ -835,6 +868,12 @@ public final class ClownNPC {
         };
         ownedTasks.add(bunnyShow);
         bunnyShow.runTaskTimer(plugin, 1L, 1L);
+        returnToCombat();
+    }
+
+    private void castAnvilDropAbility() {
+        setCooldown(ClownAbility.ANVIL_DROP, ANVIL_DROP_COOLDOWN);
+        castAnvilPrank();
         returnToCombat();
     }
 
@@ -1102,6 +1141,7 @@ public final class ClownNPC {
                     }
                 }
                 Location trail = duck.getLocation().clone().add(0, 0.05, 0);
+                burnPatches.add(new BurnPatch(trail, lifeTicks));
                 duck.getWorld().spawnParticle(Particle.FLAME,           trail,                       14, 0.20, 0.12, 0.20, 0.025);
                 duck.getWorld().spawnParticle(Particle.SOUL_FIRE_FLAME, trail.clone().add(0,0.15,0),  4, 0.12, 0.10, 0.12, 0.015);
                 duck.getWorld().spawnParticle(Particle.DUST,            trail.clone().add(0,0.1,0),   8, 0.20, 0.10, 0.20, 0.0, JESTER_ORANGE);
@@ -1143,6 +1183,7 @@ public final class ClownNPC {
                     cancel();
                     return;
                 }
+                burnPatches.add(new BurnPatch(location.clone().add(randomDouble(-0.6, 0.6), 0.05D, randomDouble(-0.6, 0.6)), lifeTicks));
                 double decay = 1.0D - (ticks / 60.0D);
                 Location p = location.clone().add(randomDouble(-0.6, 0.6), 0.05D, randomDouble(-0.6, 0.6));
                 world.spawnParticle(Particle.FLAME, p, Math.max(1, (int) Math.round(6 * decay)), 0.15, 0.08, 0.15, 0.01);
@@ -1155,6 +1196,37 @@ public final class ClownNPC {
             if (!(nearby instanceof Player p)) continue;
             p.damage(4.5D, caster);
             p.setFireTicks(Math.max(p.getFireTicks(), 60));
+        }
+    }
+
+    private void tickBurningGround() {
+        if (burnPatches.isEmpty()) {
+            return;
+        }
+        burnPatches.removeIf(p -> lifeTicks - p.bornTick > BURN_PATCH_DURATION_TICKS || p.loc.getWorld() == null);
+        if (burnPatches.isEmpty()) {
+            return;
+        }
+
+        for (BurnPatch patch : burnPatches) {
+            World world = patch.loc.getWorld();
+            if (world == null) {
+                continue;
+            }
+            world.spawnParticle(Particle.FLAME, patch.loc.clone().add(0, 0.05, 0), 2, 0.18, 0.02, 0.18, 0.01);
+            world.spawnParticle(Particle.DUST, patch.loc.clone().add(0, 0.07, 0), 2, 0.16, 0.02, 0.16, 0.0, JESTER_ORANGE);
+            if (lifeTicks % 6 != 0) {
+                continue;
+            }
+            for (Player p : world.getPlayers()) {
+                if (p.isDead()) {
+                    continue;
+                }
+                if (p.getLocation().distanceSquared(patch.loc) <= 1.44D) {
+                    p.setFireTicks(Math.max(p.getFireTicks(), 40));
+                    p.damage(0.7D);
+                }
+            }
         }
     }
 
@@ -1283,7 +1355,7 @@ public final class ClownNPC {
     private void castAnvilPrank() {
         Player player = ensureTarget(35.0D); LivingEntity caster = getLivingEntity();
         if (player == null || caster == null) { return; }
-        Location spawn = player.getLocation().clone().add(0, 9.0, 0);
+        Location spawn = player.getLocation().clone().add(0, 10.0, 0);
         World world = spawn.getWorld();
         if (world == null) { return; }
         FallingBlock anvil = world.spawnFallingBlock(spawn, Material.ANVIL.createBlockData());

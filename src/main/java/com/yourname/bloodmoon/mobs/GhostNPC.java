@@ -493,7 +493,16 @@ public final class GhostNPC {
 
         World world = caster.getWorld();
         Location from = caster.getLocation().clone();
-        Vector dir = player.getLocation().toVector().subtract(from.toVector()).normalize();
+        if (player.getWorld() != world) {
+            state = GhostState.STALKING;
+            return;
+        }
+        Vector dir = player.getLocation().toVector().subtract(from.toVector());
+        if (dir.lengthSquared() < 0.0001D) {
+            state = GhostState.STALKING;
+            return;
+        }
+        dir.normalize();
 
         world.playSound(from, Sound.ENTITY_WITHER_AMBIENT, 0.9F, 1.9F);
         world.spawnParticle(Particle.DUST, from.clone().add(0, 1, 0), 16, 0.2, 0.3, 0.2, 0, DUST_WHITE);
@@ -523,7 +532,7 @@ public final class GhostNPC {
                     currentWorld.spawnParticle(Particle.SNOWFLAKE, current.clone().add(0, 1, 0), 2, 0.2, 0.2, 0.2, 0.05);
                 }
 
-                if (!stolen && player.isOnline() && !player.isDead() && current.distanceSquared(player.getLocation()) < 9.0D) {
+                if (!stolen && player.isOnline() && !player.isDead() && player.getWorld() == current.getWorld() && current.distanceSquared(player.getLocation()) < 9.0D) {
                     stolen = true;
                     ItemStack held = player.getInventory().getItemInMainHand();
                     if (held.getType() != Material.AIR && held.getAmount() > 0) {
@@ -613,6 +622,9 @@ public final class GhostNPC {
                 continue;
             }
             if (plugin.getNPCManager().isBloodMoonNpc(candidate.getEntity())) {
+                continue;
+            }
+            if (candidate.getEntity().getWorld() != getCurrentLocation().getWorld()) {
                 continue;
             }
             double distance = candidate.getEntity().getLocation().distanceSquared(getCurrentLocation());
