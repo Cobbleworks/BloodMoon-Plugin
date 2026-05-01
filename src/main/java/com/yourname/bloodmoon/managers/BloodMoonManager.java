@@ -419,9 +419,9 @@ public final class BloodMoonManager {
 
     private void forceStorm(World world) {
         world.setStorm(true);
-        world.setThundering(true);
+        world.setThundering(false);
         world.setWeatherDuration(24000);
-        world.setThunderDuration(24000);
+        world.setThunderDuration(0);
     }
 
     private void stopStorm(World world) {

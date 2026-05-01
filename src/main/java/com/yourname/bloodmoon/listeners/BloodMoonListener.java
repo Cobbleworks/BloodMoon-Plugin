@@ -6,7 +6,6 @@ import net.citizensnpcs.api.event.NPCDeathEvent;
 import org.bukkit.World;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.world.TimeSkipEvent;
 import org.bukkit.event.world.WorldLoadEvent;
 
@@ -51,21 +50,6 @@ public final class BloodMoonListener implements Listener {
             event.setDroppedExp(0);
             event.getDrops().clear();
         }
-    }
-
-    @EventHandler(ignoreCancelled = true)
-    public void onCreatureSpawn(CreatureSpawnEvent event) {
-        if (!plugin.getBloodMoonManager().isActive(event.getLocation().getWorld())) {
-            return;
-        }
-
-        CreatureSpawnEvent.SpawnReason reason = event.getSpawnReason();
-        if (reason == CreatureSpawnEvent.SpawnReason.CUSTOM) {
-            return;
-        }
-
-        // During active Blood Moon windows, only plugin-driven custom encounter mobs should spawn.
-        event.setCancelled(true);
     }
 
     private boolean crossesNightStart(long oldTime, long newTime) {
