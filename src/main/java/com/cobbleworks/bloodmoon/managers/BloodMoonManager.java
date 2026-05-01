@@ -180,9 +180,7 @@ public final class BloodMoonManager {
         forceStorm(world);
         broadcastStart(world);
 
-        startVampireSpawnTask();
         startAmbientParticles();
-        spawnInitialVampires(world);
         return true;
     }
 
@@ -540,22 +538,9 @@ public final class BloodMoonManager {
         if (maxPerPlayer <= 0 || currentNearCount >= maxPerPlayer) {
             return;
         }
-        if (countTotalSpecialsNearPlayer(player) >= plugin.getConfigManager().getMaxSpecialMobsPerPlayer()) {
-            return;
-        }
         if (random.nextDouble() <= Math.max(0.0D, Math.min(1.0D, chance))) {
             spawnAction.run();
         }
-    }
-
-    private int countTotalSpecialsNearPlayer(Player player) {
-        return plugin.getNPCManager().countVampiresNear(player, 96.0D)
-            + plugin.getNPCManager().countClownsNear(player, 96.0D)
-            + plugin.getNPCManager().countZombiesNear(player, 96.0D)
-            + plugin.getNPCManager().countWitchesNear(player, 96.0D)
-            + plugin.getNPCManager().countScarecrowsNear(player, 96.0D)
-            + plugin.getNPCManager().countGhostsNear(player, 96.0D)
-            + plugin.getNPCManager().countWerewolvesNear(player, 96.0D);
     }
 
 

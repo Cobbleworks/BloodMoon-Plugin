@@ -37,8 +37,8 @@ public final class ConfigManager {
         return Math.max(1, getConfig().getInt("bloodmoon.chance", 24));
     }
 
-    public int getMaxSpecialMobsPerPlayer() {
-        return Math.max(1, getConfig().getInt("bloodmoon.max-special-mobs-per-player", 3));
+    public double getSpecialMobReplaceChance() {
+        return Math.max(0.0D, Math.min(1.0D, getConfig().getDouble("bloodmoon.special-mob-replace-chance", 0.018D)));
     }
 
     public List<String> getEnabledWorlds() {
@@ -317,7 +317,7 @@ public final class ConfigManager {
 
     private void addDefaults(FileConfiguration config) {
         config.addDefault("bloodmoon.chance", 24);
-        config.addDefault("bloodmoon.max-special-mobs-per-player", 3);
+        config.addDefault("bloodmoon.special-mob-replace-chance", 0.018D);
         config.addDefault("bloodmoon.worlds", List.of("world"));
         config.addDefault("vampire.health", 40.0D);
         config.addDefault("vampire.stalk-ticks-min", 80);
