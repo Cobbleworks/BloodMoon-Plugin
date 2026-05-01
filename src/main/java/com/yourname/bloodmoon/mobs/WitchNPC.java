@@ -163,6 +163,7 @@ public final class WitchNPC {
         cancelTasks();
         brandActive = false;
         runeLocations.clear();
+        clearLingeringPlayerEffects();
         clones.forEach(c -> { if (c.isValid()) c.remove(); });
         clones.clear();
         Location death = getCurrentLocation();
@@ -192,6 +193,7 @@ public final class WitchNPC {
         cancelTasks();
         brandActive = false;
         runeLocations.clear();
+        clearLingeringPlayerEffects();
         clones.forEach(c -> { if (c.isValid()) c.remove(); });
         clones.clear();
         if (npc.isSpawned()) npc.despawn();
@@ -1564,4 +1566,12 @@ public final class WitchNPC {
     private double randomDouble(double min, double max) { return min + random.nextDouble() * (max - min); }
     private void cancelControllerOnly() { if (controllerTask != null) { controllerTask.cancel(); controllerTask = null; } }
     private void cancelTasks() { for (BukkitRunnable t : tasks) { try { t.cancel(); } catch (Exception ignored) {} } tasks.clear(); }
+    private void clearLingeringPlayerEffects() {
+        for (World world : Bukkit.getWorlds()) {
+            for (Player player : world.getPlayers()) {
+                player.removeMetadata("bloodmoon-witch-void-cage", plugin);
+                player.removeMetadata("bloodmoon-witch-silenced", plugin);
+            }
+        }
+    }
 }
