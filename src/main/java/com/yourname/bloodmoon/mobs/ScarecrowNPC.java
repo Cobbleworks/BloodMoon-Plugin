@@ -9,6 +9,7 @@ import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.Ageable;
+import org.bukkit.entity.Bat;
 import org.bukkit.entity.*;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
@@ -46,7 +47,7 @@ public final class ScarecrowNPC {
     private final Map<ScarecrowAbility, Integer> cooldowns = new EnumMap<>(ScarecrowAbility.class);
     private final Map<ScarecrowAbility, Integer> abilityUseCounts = new EnumMap<>(ScarecrowAbility.class);
     private final List<BukkitRunnable> tasks = new ArrayList<>();
-    private final List<Parrot> crows = new ArrayList<>();
+    private final List<Bat> stormBats = new ArrayList<>();
     private final List<Location> witherRoseLocations = new ArrayList<>();
 
     private ScarecrowState state = ScarecrowState.COMBAT;
@@ -117,8 +118,8 @@ public final class ScarecrowNPC {
         state = ScarecrowState.DEAD;
         cancelControllerOnly();
         cancelTasks();
-        crows.forEach(c -> { if (c.isValid()) c.remove(); });
-        crows.clear();
+        stormBats.forEach(b -> { if (b.isValid()) b.remove(); });
+        stormBats.clear();
         cleanupWitherRoses();
         Location death = getCurrentLocation();
         World world = death.getWorld();
@@ -146,8 +147,8 @@ public final class ScarecrowNPC {
         cleaned = true;
         cancelControllerOnly();
         cancelTasks();
-        crows.forEach(c -> { if (c.isValid()) c.remove(); });
-        crows.clear();
+        stormBats.forEach(b -> { if (b.isValid()) b.remove(); });
+        stormBats.clear();
         cleanupWitherRoses();
         if (npc.isSpawned()) npc.despawn();
         npc.destroy();
@@ -248,7 +249,7 @@ public final class ScarecrowNPC {
         // Passive: Fearmonger – consume nearby mature wheat crops
         if (stateTicks % 40 == 0) tickFearmonger();
 
-        npc.getNavigator().setTarget(player, true);
+        runCombatMovementPattern(player);
         npc.faceLocation(player.getEyeLocation());
 
         // Ambient skeleton sound
@@ -265,6 +266,7 @@ public final class ScarecrowNPC {
     }
 
     private void tickCasting() {
+        runCastingParticles();
         if (stateTicks < castTicks) return;
         ScarecrowAbility ability = pending;
         pending = null;
@@ -287,6 +289,52 @@ public final class ScarecrowNPC {
         };
         Location loc = getCurrentLocation();
         if (loc.getWorld() != null) loc.getWorld().playSound(loc, Sound.ENTITY_SKELETON_AMBIENT, 0.7F, 0.65F + random.nextFloat() * 0.3F);
+    }
+
+    private void runCastingParticles() {
+        if (pending == null) {
+            return;
+        }
+        Location base = getCurrentLocation().clone().add(0.0D, 1.0D, 0.0D);
+        World world = base.getWorld();
+        if (world == null) {
+            return;
+        }
+        switch (pending) {
+            case FEAR -> {
+                world.spawnParticle(Particle.DUST, base, 6, 0.20D, 0.25D, 0.20D, 0.0D, DUST_CYAN);
+                world.spawnParticle(Particle.DUST, base, 4, 0.16D, 0.20D, 0.16D, 0.0D, DUST_BLACK);
+            }
+            case DRAIN -> {
+                world.spawnParticle(Particle.DUST, base, 8, 0.22D, 0.35D, 0.22D, 0.0D, DUST_GREEN);
+                world.spawnParticle(Particle.DUST, base, 4, 0.18D, 0.28D, 0.18D, 0.0D, DUST_WHITE);
+            }
+            case CROWSTORM -> {
+                world.spawnParticle(Particle.DUST, base, 7, 0.28D, 0.32D, 0.28D, 0.0D, DUST_BLACK);
+                world.spawnParticle(Particle.SMOKE, base, 4, 0.22D, 0.24D, 0.22D, 0.015D);
+            }
+            default -> world.spawnParticle(Particle.DUST, base, 4, 0.18D, 0.22D, 0.18D, 0.0D, DUST_DARK);
+        }
+    }
+
+    private void runCombatMovementPattern(Player player) {
+        if (stateTicks % 18 == 0) {
+            double radius = 3.0D + random.nextDouble() * 2.2D;
+            double angle = random.nextDouble() * Math.PI * 2.0D;
+            Location offset = player.getLocation().clone().add(Math.cos(angle) * radius, 0.0D, Math.sin(angle) * radius);
+            offset.setY(player.getLocation().getY());
+            npc.getNavigator().setTarget(offset);
+        } else {
+            npc.getNavigator().setTarget(player, true);
+        }
+
+        if (stateTicks % 25 == 0) {
+            Location loc = getCurrentLocation();
+            World world = loc.getWorld();
+            if (world != null) {
+                world.spawnParticle(Particle.DUST, loc.clone().add(0, 1, 0), 5, 0.32D, 0.35D, 0.32D, 0.0D, DUST_DARK);
+            }
+        }
     }
 
     private ScarecrowAbility chooseAbility() {
@@ -374,7 +422,7 @@ public final class ScarecrowNPC {
                 world.spawnParticle(Particle.DUST, pos[0], 3, 0.10, 0.10, 0.10, 0, DUST_BLACK);
                 world.spawnParticle(Particle.SMOKE, pos[0], 2, 0.04, 0.04, 0.04, 0.01);
                 for (Player p : world.getPlayers()) {
-                    if (p.isDead() || p.getLocation().distanceSquared(pos[0]) > 1.2D) continue;
+                    if (p.isDead() || p.getLocation().distanceSquared(pos[0]) > 2.4D * 2.4D) continue;
                     applyFear(p);
                     world.playSound(pos[0], Sound.ENTITY_WITHER_AMBIENT, 0.5F, 1.8F);
                     cancel();
@@ -409,7 +457,7 @@ public final class ScarecrowNPC {
     }
 
     /**
-     * Harvest Drain: roots the scarecrow in place and channels a web of glowing tendrils.
+     * Harvest Drain: roots the scarecrow in place and channels compact vine streams.
      * All living entities caught in range are drained while the scarecrow heals for the same amount.
      */
     private void castDrain() {
@@ -484,13 +532,16 @@ public final class ScarecrowNPC {
                 int index = 0;
                 for (LivingEntity victim : connected) {
                     Location victimLoc = victim.getLocation().clone().add(0, victim.getHeight() * 0.6D, 0);
-                    drawOrganicTendril(leftShoulder, victimLoc, DUST_GREEN, t * 0.18D + index * 0.5D, 0.28D);
-                    drawOrganicTendril(rightShoulder, victimLoc, DUST_WHITE, t * 0.23D + index * 0.65D, 0.22D);
-                    drawOrganicTendril(casterLoc, victimLoc, DUST_BLACK, t * 0.15D + index * 0.35D, 0.12D);
-                    if (t % 5 == 0) {
+                    for (int strand = 0; strand < 3; strand++) {
+                        double progress = ((t * 0.10D) + (strand * 0.22D) + (index * 0.11D)) % 1.0D;
+                        Location stream = victimLoc.clone().add(casterLoc.clone().subtract(victimLoc).toVector().multiply(progress));
+                        world.spawnParticle(Particle.DUST, stream, 1, 0.02D, 0.03D, 0.02D, 0.0D, DUST_GREEN);
+                    }
+                    world.spawnParticle(Particle.DUST, victimLoc, 2, 0.10D, 0.10D, 0.10D, 0.0D, DUST_WHITE);
+                    if (t % 6 == 0) {
                         victim.damage(1.0D, entity);
                         totalHeal += 1.0D;
-                        world.spawnParticle(Particle.DUST, victimLoc, 4, 0.12, 0.12, 0.12, 0, DUST_WHITE);
+                        world.spawnParticle(Particle.DUST, victimLoc, 3, 0.12, 0.12, 0.12, 0, DUST_WHITE);
                         if (victim instanceof Player playerVictim) {
                             playerVictim.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 25, 0, false, true, true));
                         }
@@ -712,34 +763,43 @@ public final class ScarecrowNPC {
     }
 
     /**
-     * Crowstorm: 30 gray parrots orbit the scarecrow. Players inside the 6-block radius
-     * take heavy constant damage (similar to Fiddlesticks' Crowstorm).
+     * Crowstorm: scattered bat swarm with layered orbit bands around the scarecrow.
      */
     private void castCrowstorm() {
         LivingEntity caster = getLivingEntity();
         if (caster == null) return;
         World world = caster.getWorld();
         Location center = caster.getLocation().clone();
-        world.playSound(center, Sound.ENTITY_PARROT_FLY, 1.0F, 0.6F);
+        world.playSound(center, Sound.ENTITY_BAT_TAKEOFF, 1.0F, 0.8F);
         world.spawnParticle(Particle.DUST, center.clone().add(0, 1, 0), 30, 1.2, 0.5, 1.2, 0, DUST_BLACK);
 
-        List<Parrot> storm = new ArrayList<>();
-        for (int i = 0; i < 30; i++) {
-            double a      = (Math.PI * 2.0D * i) / 30.0D;
-            double radius = 4.5D + random.nextDouble() * 1.5D;
+        final int batCount = 24;
+        final double[] radiusOffsets = new double[batCount];
+        final double[] heightOffsets = new double[batCount];
+        final double[] angularOffsets = new double[batCount];
+        final double[] spinRates = new double[batCount];
+
+        List<Bat> storm = new ArrayList<>();
+        for (int i = 0; i < batCount; i++) {
+            radiusOffsets[i] = 2.8D + random.nextDouble() * 3.6D;
+            heightOffsets[i] = 0.6D + random.nextDouble() * 3.2D;
+            angularOffsets[i] = random.nextDouble() * Math.PI * 2.0D;
+            spinRates[i] = 0.04D + random.nextDouble() * 0.07D;
+
+            double a = angularOffsets[i];
+            double radius = radiusOffsets[i];
             Location spawnLoc = center.clone().add(
                 Math.cos(a) * radius,
-                1.5D + random.nextDouble() * 3.0D,
+                heightOffsets[i],
                 Math.sin(a) * radius);
             try {
-                Parrot parrot = world.spawn(spawnLoc, Parrot.class, p -> {
-                    p.setVariant(Parrot.Variant.GRAY);
-                    p.setInvulnerable(true);
-                    p.setSilent(true);
-                    p.setAI(false);
+                Bat bat = world.spawn(spawnLoc, Bat.class, b -> {
+                    b.setInvulnerable(true);
+                    b.setSilent(true);
+                    b.setAI(false);
                 });
-                storm.add(parrot);
-                crows.add(parrot);
+                storm.add(bat);
+                stormBats.add(bat);
             } catch (Exception ignored) {}
         }
 
@@ -749,20 +809,20 @@ public final class ScarecrowNPC {
             @Override public void run() {
                 t++;
                 if (t > 200 || isDead()) {
-                    storm.forEach(p -> { if (p.isValid()) p.remove(); });
-                    crows.removeAll(storm);
+                    storm.forEach(b -> { if (b.isValid()) b.remove(); });
+                    stormBats.removeAll(storm);
                     cancel();
                     return;
                 }
-                angle += 0.07D;
                 Location current = getCurrentLocation();
 
                 for (int i = 0; i < storm.size(); i++) {
-                    Parrot parrot = storm.get(i);
-                    if (!parrot.isValid()) continue;
-                    double a      = angle + (Math.PI * 2.0D * i) / storm.size();
-                    double height = 2.2D + Math.sin(angle * 2.5D + i * 0.4D) * 1.2D;
-                    parrot.teleport(current.clone().add(Math.cos(a) * 5.0D, height, Math.sin(a) * 5.0D));
+                    Bat bat = storm.get(i);
+                    if (!bat.isValid()) continue;
+                    double a = angularOffsets[i] + (t * spinRates[i]);
+                    double radialPulse = radiusOffsets[i] + Math.sin((t * 0.09D) + i) * 0.25D;
+                    double height = heightOffsets[i] + Math.sin((t * 0.13D) + (i * 0.5D)) * 0.45D;
+                    bat.teleport(current.clone().add(Math.cos(a) * radialPulse, height, Math.sin(a) * radialPulse));
                 }
 
                 // Damage players inside the 6-block radius every 5 ticks
@@ -774,7 +834,7 @@ public final class ScarecrowNPC {
                     }
                 }
 
-                if (t % 20 == 0) world.playSound(current, Sound.ENTITY_PARROT_FLY, 0.5F, 0.65F + random.nextFloat() * 0.35F);
+                if (t % 20 == 0) world.playSound(current, Sound.ENTITY_BAT_AMBIENT, 0.45F, 0.75F + random.nextFloat() * 0.25F);
             }
         };
         tasks.add(crowTask);
