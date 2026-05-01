@@ -228,9 +228,9 @@ public final class OverheadHealthBarManager {
     private String buildSegmentBar(double progress) {
         int segments = 10;
         int filled = (int) Math.round(Math.max(0.0D, Math.min(1.0D, progress)) * segments);
-        StringBuilder builder = new StringBuilder("[");
+        StringBuilder builder = new StringBuilder("§7[");
         for (int i = 0; i < segments; i++) {
-            builder.append(i < filled ? "§c■" : "§8□");
+            builder.append(i < filled ? "§c■" : "§7□");
         }
         builder.append("§7]");
         return builder.toString();
