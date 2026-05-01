@@ -86,6 +86,7 @@ public final class ClownNPC {
     private static final int    MAX_BUNNIES             = 4;
     private static final int    BAIT_TRAP_COOLDOWN_MAX  = 600;
     private static final int    BURN_PATCH_DURATION_TICKS = 140;
+    private static final int    ANVIL_GROUND_LIFETIME_TICKS = 40;
 
     private static final class BurnPatch {
         private final Location loc;
@@ -825,28 +826,39 @@ public final class ClownNPC {
 
         BukkitRunnable bunnyShow = new BukkitRunnable() {
             int ticks;
+            int nextLaunch = 0;
+            int launchPulse = 0;
             final boolean[] launched = new boolean[orbiting.size()];
+            final int[] dashAge = new int[orbiting.size()];
 
             @Override
             public void run() {
                 ticks++;
-                if (isDead() || ticks > 80) {
+                if (isDead() || ticks > 170) {
                     for (org.bukkit.entity.Rabbit rabbit : orbiting) {
                         if (rabbit.isValid()) rabbit.remove();
                     }
                     cancel();
                     return;
                 }
+
+                if (ticks >= 60 && nextLaunch < orbiting.size()) {
+                    launchPulse++;
+                    if (launchPulse >= 16) {
+                        launched[nextLaunch] = true;
+                        launchPulse = 0;
+                        nextLaunch++;
+                    }
+                }
+
                 for (int i = 0; i < orbiting.size(); i++) {
                     org.bukkit.entity.Rabbit rabbit = orbiting.get(i);
                     if (!rabbit.isValid()) continue;
-                    if (ticks > 42 + (i * 8)) {
-                        launched[i] = true;
-                    }
                     if (launched[i]) {
+                        dashAge[i]++;
                         Vector toward = player.getLocation().toVector().subtract(rabbit.getLocation().toVector());
                         if (toward.lengthSquared() > 0.01D) {
-                            rabbit.teleport(rabbit.getLocation().add(toward.normalize().multiply(0.75D)));
+                            rabbit.teleport(rabbit.getLocation().add(toward.normalize().multiply(0.90D)));
                         }
                         rabbit.getWorld().spawnParticle(Particle.FLAME, rabbit.getLocation().add(0, 0.25D, 0), 6, 0.12, 0.12, 0.12, 0.01);
                         rabbit.getWorld().spawnParticle(Particle.DUST, rabbit.getLocation().add(0, 0.25D, 0), 3, 0.08, 0.08, 0.08, 0.0, JESTER_ORANGE);
@@ -855,14 +867,21 @@ public final class ClownNPC {
                             rabbit.remove();
                             continue;
                         }
+                        if (dashAge[i] >= 20) {
+                            explodeDuck(rabbit.getLocation(), caster);
+                            rabbit.remove();
+                            continue;
+                        }
                         continue;
                     }
 
-                    double angle = (ticks * 0.26D * (1.0D + i * 0.12D)) + (i * (Math.PI / 2.0D));
-                    double radius = 1.2D + Math.sin(ticks * 0.18D + i) * 0.22D;
-                    Location spin = loc.clone().add(Math.cos(angle) * radius, 0.9D + Math.sin(ticks * 0.33D + i) * 0.28D, Math.sin(angle) * radius);
+                    double ascend = Math.min(4.0D, ticks * 0.09D);
+                    double angle = (ticks * 0.22D) + (i * (Math.PI * 2.0D / Math.max(1, orbiting.size())));
+                    double radius = 1.9D + Math.sin(ticks * 0.15D + i) * 0.26D;
+                    Location spin = loc.clone().add(Math.cos(angle) * radius, 1.2D + ascend + Math.sin(ticks * 0.22D + i) * 0.18D, Math.sin(angle) * radius);
                     rabbit.teleport(spin);
                     rabbit.getWorld().spawnParticle(Particle.DUST, spin.clone().add(0, 0.2D, 0), 2, 0.08, 0.08, 0.08, 0.0, i % 2 == 0 ? JESTER_CYAN : JESTER_PURPLE);
+                    rabbit.getWorld().spawnParticle(Particle.CLOUD, spin.clone().add(0, 0.05D, 0), 1, 0.05, 0.03, 0.05, 0.002);
                 }
             }
         };
@@ -1380,9 +1399,17 @@ public final class ClownNPC {
         Location spawn = player.getLocation().clone().add(0, 10.0, 0);
         World world = spawn.getWorld();
         if (world == null) { return; }
+        Location placedSource = spawn.clone();
+        placedSource.setX(Math.floor(placedSource.getX()) + 0.5D);
+        placedSource.setY(Math.floor(placedSource.getY()) + 0.01D);
+        placedSource.setZ(Math.floor(placedSource.getZ()) + 0.5D);
+
+        world.spawnParticle(Particle.BLOCK, placedSource, 14, 0.18, 0.04, 0.18, Material.ANVIL.createBlockData());
         FallingBlock anvil = world.spawnFallingBlock(spawn, Material.ANVIL.createBlockData());
         anvil.setDropItem(false);
         anvil.setHurtEntities(true);
+        anvil.setGravity(true);
+        anvil.setVelocity(new Vector(0.0D, -0.05D, 0.0D));
         try { anvil.setCancelDrop(true); } catch (NoSuchMethodError ignored) {}
         world.playSound(spawn, Sound.BLOCK_ANVIL_PLACE, 0.65F, 0.8F);
 
@@ -1394,8 +1421,23 @@ public final class ClownNPC {
                 if (!anvil.isValid() || anvil.isDead() || age > 60 || anvil.isOnGround()) {
                     Location impact = anvil.getLocation();
                     if (anvil.isValid()) anvil.remove();
+                    org.bukkit.block.Block landed = world.getBlockAt(impact);
+                    if (landed.getType().isAir() || landed.isPassable()) {
+                        landed.setType(Material.ANVIL, false);
+                    }
                     world.spawnParticle(Particle.BLOCK, impact, 20, 0.35, 0.2, 0.35, Material.ANVIL.createBlockData());
                     world.playSound(impact, Sound.BLOCK_ANVIL_LAND, 0.9F, 1.0F);
+                    BukkitRunnable cleanup = new BukkitRunnable() {
+                        @Override
+                        public void run() {
+                            if (landed.getType() == Material.ANVIL) {
+                                landed.setType(Material.AIR, false);
+                                world.spawnParticle(Particle.BLOCK, landed.getLocation().clone().add(0.5D, 0.5D, 0.5D), 10, 0.2, 0.2, 0.2, Material.ANVIL.createBlockData());
+                            }
+                        }
+                    };
+                    ownedTasks.add(cleanup);
+                    cleanup.runTaskLater(plugin, ANVIL_GROUND_LIFETIME_TICKS);
                     cancel();
                     return;
                 }

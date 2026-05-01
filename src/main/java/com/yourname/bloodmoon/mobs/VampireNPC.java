@@ -103,6 +103,8 @@ public final class VampireNPC {
     private static final int BLOOD_SHIELD_DURATION = 100;
     private static final int BLOOD_SHIELD_COOLDOWN = 1200;
     private static final int BLOOD_MAGIC_COOLDOWN = 80;
+    private static final int BLOOD_MAGIC_VOLLEY_COUNT = 3;
+    private static final int BLOOD_MAGIC_VOLLEY_DELAY = 12;
     private static final int DRAIN_LIFE_COOLDOWN = 180;
     private static final int HEMOPLAGUE_COOLDOWN = 260;
     private static final int SUMMON_BATS_COOLDOWN = 180;
@@ -125,9 +127,13 @@ public final class VampireNPC {
     private static final double TIDES_OF_BLOOD_BOLT_DAMAGE = 3.0D;
     private static final double EXECUTION_DASH_DAMAGE = 7.0D;
     private static final double EXECUTION_DASH_EXECUTE_THRESHOLD = 0.15D;
+    private static final double BLOOD_MAGIC_INITIAL_SPEED = 0.48D;
+    private static final double BLOOD_MAGIC_HOMING_STRENGTH = 0.022D;
+    private static final double BLOOD_MAGIC_HEAL_ON_HIT_PERCENT = 0.05D;
     private static final Particle.DustOptions BLOOD_DUST = new Particle.DustOptions(Color.fromRGB(140, 0, 0), 1.2F);
     private static final Particle.DustOptions DARK_BLOOD_DUST = new Particle.DustOptions(Color.fromRGB(80, 0, 0), 1.0F);
     private static final Particle.DustOptions BRIGHT_BLOOD_DUST = new Particle.DustOptions(Color.fromRGB(190, 0, 0), 1.45F);
+    private static final Particle.DustOptions SHADOW_DUST = new Particle.DustOptions(Color.fromRGB(18, 18, 22), 1.0F);
 
     private final BloodMoonPlugin plugin;
     private final NPC npc;
@@ -950,13 +956,14 @@ public final class VampireNPC {
             double height = 1.0D + (step * 0.16D);
             Location handPoint = base.clone().add(Math.cos(offset) * radius, height, Math.sin(offset) * radius);
             world.spawnParticle(Particle.DUST, handPoint, 3, 0.07D, 0.10D, 0.07D, 0.0D, BRIGHT_BLOOD_DUST);
-            world.spawnParticle(Particle.DUST_COLOR_TRANSITION, handPoint, 2, 0.03D, 0.03D, 0.03D, 0.0D,
-                new Particle.DustTransition(Color.fromRGB(90, 0, 0), Color.fromRGB(220, 20, 20), 1.35F));
-            world.spawnParticle(Particle.ENCHANT, handPoint, 1, 0.01D, 0.01D, 0.01D, 0.0D);
+            world.spawnParticle(Particle.DUST, handPoint, 2, 0.05D, 0.08D, 0.05D, 0.0D, DARK_BLOOD_DUST);
+            world.spawnParticle(Particle.DUST, handPoint, 1, 0.04D, 0.06D, 0.04D, 0.0D, SHADOW_DUST);
+            world.spawnParticle(Particle.SMOKE, handPoint, 1, 0.03D, 0.03D, 0.03D, 0.002D);
         }
         if (stateTicks % 5 == 0) {
             Location crown = base.clone().add(0.0D, 1.8D, 0.0D);
-            world.spawnParticle(Particle.CRIT, crown, 6, 0.22D, 0.08D, 0.22D, 0.02D);
+            world.spawnParticle(Particle.DUST, crown, 4, 0.18D, 0.08D, 0.18D, 0.0D, DARK_BLOOD_DUST);
+            world.spawnParticle(Particle.DUST, crown, 3, 0.14D, 0.06D, 0.14D, 0.0D, SHADOW_DUST);
         }
     }
 
@@ -1335,10 +1342,22 @@ public final class VampireNPC {
             world.playSound(start, Sound.ENTITY_ILLUSIONER_CAST_SPELL, 1.0F, 0.55F);
             world.playSound(start, Sound.BLOCK_BREWING_STAND_BREW, 0.65F, 0.75F);
             world.spawnParticle(Particle.DUST, start, 18, 0.35D, 0.25D, 0.35D, 0.0D, BRIGHT_BLOOD_DUST);
-            world.spawnParticle(Particle.ENCHANT, start, 14, 0.45D, 0.25D, 0.45D, 0.02D);
+            world.spawnParticle(Particle.DUST, start, 12, 0.32D, 0.22D, 0.32D, 0.0D, DARK_BLOOD_DUST);
+            world.spawnParticle(Particle.DUST, start, 8, 0.28D, 0.20D, 0.28D, 0.0D, SHADOW_DUST);
+            world.spawnParticle(Particle.SMOKE, start, 8, 0.40D, 0.25D, 0.40D, 0.010D);
         }
-        for (int index = 0; index < 3; index++) {
-            BloodMagicProjectile projectile = new BloodMagicProjectile(plugin, caster, player, start.clone().add(0.0D, index * 0.12D, 0.0D), index);
+        for (int index = 0; index < BLOOD_MAGIC_VOLLEY_COUNT; index++) {
+            BloodMagicProjectile projectile = new BloodMagicProjectile(
+                plugin,
+                caster,
+                player,
+                start.clone().add(0.0D, index * 0.12D, 0.0D),
+                index,
+                BLOOD_MAGIC_VOLLEY_DELAY,
+                BLOOD_MAGIC_INITIAL_SPEED,
+                BLOOD_MAGIC_HOMING_STRENGTH,
+                BLOOD_MAGIC_HEAL_ON_HIT_PERCENT
+            );
             projectile.launch();
         }
         state = VampireState.COMBAT;
