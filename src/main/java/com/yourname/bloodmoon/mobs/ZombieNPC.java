@@ -1132,10 +1132,10 @@ public final class ZombieNPC {
         world.spawnParticle(Particle.EXPLOSION,
             loc.clone().add(0D, 0.5D, 0D), 3, 0.5D, 0.3D, 0.5D, 0D);
         world.spawnParticle(Particle.DUST, loc.clone().add(0D, 0.5D, 0D),
-            70, 2.0D, 1.0D, 2.0D, 0D,
+            42, 2.0D, 1.0D, 2.0D, 0D,
             new Particle.DustOptions(Color.fromRGB(40, 190, 40), 1.5F));
         world.spawnParticle(Particle.SMOKE, loc.clone().add(0D, 0.5D, 0D),
-            30, 1.0D, 0.5D, 1.0D, 0.05D);
+            20, 1.0D, 0.5D, 1.0D, 0.05D);
 
         // Blast damage (4 block radius)
         for (Player p : world.getPlayers()) {

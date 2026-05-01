@@ -437,9 +437,9 @@ public final class ClownNPC {
                 world.playSound(loc, Sound.ENTITY_WITCH_CELEBRATE, 1.2F, 0.25F);
                 world.playSound(loc, Sound.ENTITY_GHAST_SCREAM, 0.6F, 0.5F);
                 world.playSound(loc, Sound.ENTITY_ENDERMAN_SCREAM, 0.5F, 0.8F);
-                world.spawnParticle(Particle.FIREWORK, loc, 80, 1.2, 1.2, 1.2, 0.12);
-                world.spawnParticle(Particle.DUST, loc.clone().add(0,1,0), 40, 1.0, 1.0, 1.0, 0, JESTER_PINK);
-                world.spawnParticle(Particle.DUST, loc.clone().add(0,1,0), 30, 1.0, 1.0, 1.0, 0, JESTER_GOLD);
+                world.spawnParticle(Particle.FIREWORK, loc, 50, 1.2, 1.2, 1.2, 0.12);
+                world.spawnParticle(Particle.DUST, loc.clone().add(0,1,0), 26, 1.0, 1.0, 1.0, 0, JESTER_PINK);
+                world.spawnParticle(Particle.DUST, loc.clone().add(0,1,0), 20, 1.0, 1.0, 1.0, 0, JESTER_GOLD);
             }
             entity.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 20*60, 1, true, true, true));
         }
@@ -1084,10 +1084,10 @@ public final class ClownNPC {
         performBalloonGlide(dest, () -> {
             World dw = dest.getWorld();
             if (dw != null) {
-                dw.spawnParticle(Particle.FIREWORK, dest, 60, 0.8, 0.8, 0.8, 0.12);
-                dw.spawnParticle(Particle.DUST, dest.clone().add(0,1,0), 30, 0.6, 0.8, 0.6, 0, JESTER_GOLD);
-                dw.spawnParticle(Particle.DUST, dest.clone().add(0,1,0), 20, 0.5, 0.7, 0.5, 0, JESTER_CYAN);
-                dw.spawnParticle(Particle.DUST, dest.clone().add(0,1,0), 14, 0.45, 0.65, 0.45, 0, JESTER_PURPLE);
+                dw.spawnParticle(Particle.FIREWORK, dest, 36, 0.8, 0.8, 0.8, 0.12);
+                dw.spawnParticle(Particle.DUST, dest.clone().add(0,1,0), 18, 0.6, 0.8, 0.6, 0, JESTER_GOLD);
+                dw.spawnParticle(Particle.DUST, dest.clone().add(0,1,0), 12, 0.5, 0.7, 0.5, 0, JESTER_CYAN);
+                dw.spawnParticle(Particle.DUST, dest.clone().add(0,1,0), 8, 0.45, 0.65, 0.45, 0, JESTER_PURPLE);
                 dw.playSound(dest, Sound.ENTITY_WITCH_CELEBRATE, 1.0F, 0.4F);
                 dw.playSound(dest, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 0.8F, 0.6F);
             }
@@ -1225,9 +1225,9 @@ public final class ClownNPC {
     private void explodeDuck(Location location, LivingEntity caster) {
         World world = location.getWorld();
         if (world == null) return;
-        world.spawnParticle(Particle.FLAME, location.clone().add(0, 0.3, 0), 45, 0.8, 0.4, 0.8, 0.02);
-        world.spawnParticle(Particle.DUST, location.clone().add(0, 0.3, 0), 30, 0.9, 0.5, 0.9, 0.0, JESTER_ORANGE);
-        world.spawnParticle(Particle.SMOKE, location.clone().add(0, 0.2, 0), 35, 0.8, 0.3, 0.8, 0.04);
+        world.spawnParticle(Particle.FLAME, location.clone().add(0, 0.3, 0), 28, 0.8, 0.4, 0.8, 0.02);
+        world.spawnParticle(Particle.DUST, location.clone().add(0, 0.3, 0), 18, 0.9, 0.5, 0.9, 0.0, JESTER_ORANGE);
+        world.spawnParticle(Particle.SMOKE, location.clone().add(0, 0.2, 0), 22, 0.8, 0.3, 0.8, 0.04);
         world.playSound(location, Sound.ENTITY_GENERIC_EXPLODE, 0.8F, 1.4F);
         BukkitRunnable lingeringTrail = new BukkitRunnable() {
             int ticks = 0;
@@ -1841,9 +1841,9 @@ public final class ClownNPC {
 
     private void triggerBaitExplosion(Location loc, Player player, LivingEntity caster) {
         World world = loc.getWorld(); if (world == null) return;
-        world.spawnParticle(Particle.FIREWORK, loc.clone().add(0,0.5,0), 60, 0.8, 0.8, 0.8, 0.1);
-        world.spawnParticle(Particle.DUST,     loc.clone().add(0,0.5,0), 30, 0.5, 0.5, 0.5, 0, JESTER_GOLD);
-        world.spawnParticle(Particle.DUST,     loc.clone().add(0,0.5,0), 25, 0.5, 0.5, 0.5, 0, JESTER_PINK);
+        world.spawnParticle(Particle.FIREWORK, loc.clone().add(0,0.5,0), 38, 0.8, 0.8, 0.8, 0.1);
+        world.spawnParticle(Particle.DUST,     loc.clone().add(0,0.5,0), 18, 0.5, 0.5, 0.5, 0, JESTER_GOLD);
+        world.spawnParticle(Particle.DUST,     loc.clone().add(0,0.5,0), 15, 0.5, 0.5, 0.5, 0, JESTER_PINK);
         world.playSound(loc, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 1.0F, 0.7F);
         world.playSound(loc, Sound.ENTITY_WITCH_CELEBRATE, 0.9F, 0.4F);
         if (player.isOnline() && !player.isDead() && player.getLocation().distanceSquared(loc) <= 9.0D) {
@@ -1899,10 +1899,10 @@ public final class ClownNPC {
     }
 
     private void spawnDeathExplosion(World world, Location loc) {
-        world.spawnParticle(Particle.FIREWORK, loc, 120, 1.5, 1.5, 1.5, 0.14);
-        world.spawnParticle(Particle.DUST, loc.clone().add(0,1,0), 60, 1.0, 1.0, 1.0, 0, JESTER_PINK);
-        world.spawnParticle(Particle.DUST, loc.clone().add(0,1,0), 50, 0.9, 0.9, 0.9, 0, JESTER_GOLD);
-        world.spawnParticle(Particle.DUST, loc.clone().add(0,1,0), 40, 0.8, 0.8, 0.8, 0, JESTER_CYAN);
+        world.spawnParticle(Particle.FIREWORK, loc, 70, 1.5, 1.5, 1.5, 0.14);
+        world.spawnParticle(Particle.DUST, loc.clone().add(0,1,0), 36, 1.0, 1.0, 1.0, 0, JESTER_PINK);
+        world.spawnParticle(Particle.DUST, loc.clone().add(0,1,0), 30, 0.9, 0.9, 0.9, 0, JESTER_GOLD);
+        world.spawnParticle(Particle.DUST, loc.clone().add(0,1,0), 24, 0.8, 0.8, 0.8, 0, JESTER_CYAN);
         world.spawnParticle(Particle.EXPLOSION_EMITTER, loc, 2);
     }
 

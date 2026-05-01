@@ -732,7 +732,7 @@ public final class WitchNPC {
                             le.setVelocity(new Vector(0, 0.8D, 0));
                         }
                     }
-                    world.spawnParticle(Particle.DUST, center.clone().add(0, 0.5, 0), 80, radius, 0.3, radius, 0, DUST_VIOLET);
+                    world.spawnParticle(Particle.DUST, center.clone().add(0, 0.5, 0), 45, radius, 0.3, radius, 0, DUST_VIOLET);
                     cancel(); return;
                 }
                 // Animated runic ring – density and colour shift over time
@@ -1453,8 +1453,8 @@ public final class WitchNPC {
         if (world != null) {
             world.playSound(loc, Sound.ENTITY_ENDER_DRAGON_GROWL, 0.8F, 1.6F);
             world.playSound(loc, Sound.ENTITY_WITHER_SPAWN, 0.6F, 0.8F);
-            world.spawnParticle(Particle.DUST, loc.clone().add(0, 1, 0), 60, 1.0, 1.0, 1.0, 0, DUST_CRIMSON);
-            world.spawnParticle(Particle.DUST, loc.clone().add(0, 1, 0), 40, 0.8, 0.8, 0.8, 0, DUST_VIOLET);
+            world.spawnParticle(Particle.DUST, loc.clone().add(0, 1, 0), 36, 1.0, 1.0, 1.0, 0, DUST_CRIMSON);
+            world.spawnParticle(Particle.DUST, loc.clone().add(0, 1, 0), 24, 0.8, 0.8, 0.8, 0, DUST_VIOLET);
             world.spawnParticle(Particle.EXPLOSION_EMITTER, loc, 1);
         }
 
@@ -1477,7 +1477,7 @@ public final class WitchNPC {
         if (world != null) {
             world.playSound(loc, Sound.ENTITY_WITHER_DEATH, 0.7F, 1.8F);
             world.playSound(loc, Sound.ENTITY_WITCH_CELEBRATE, 1.0F, 0.3F);
-            world.spawnParticle(Particle.WITCH, loc.clone().add(0, 1, 0), 80, 1.0, 1.0, 1.0, 0.1);
+            world.spawnParticle(Particle.WITCH, loc.clone().add(0, 1, 0), 46, 1.0, 1.0, 1.0, 0.1);
         }
 
         npc.getNavigator().cancelNavigation();
