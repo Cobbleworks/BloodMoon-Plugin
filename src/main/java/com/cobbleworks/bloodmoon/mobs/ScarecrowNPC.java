@@ -807,7 +807,7 @@ public final class ScarecrowNPC {
             }
             // Announce to nearby players
             for (Player p : world.getPlayers()) {
-                if (p.getLocation().distanceSquared(loc) <= 900.0D) {
+                if (p.getLocation().distanceSquared(loc) <= 900.0D && plugin.hasBossMessages(p.getUniqueId())) {
                     p.sendMessage("§6§lThe Scarecrow enters the HARVESTER phase!");
                 }
             }
@@ -1107,7 +1107,7 @@ public final class ScarecrowNPC {
         List<Location> placed = new ArrayList<>();
         for (int i = 0; i < 8 + random.nextInt(4); i++) {
             double angle = random.nextDouble() * Math.PI * 2.0D;
-            double dist  = 1.2D + random.nextDouble() * 3.8D;
+            double dist  = random.nextDouble() * 1.5D;
             int bx = tgt.getLocation().getBlockX() + (int) Math.round(Math.cos(angle) * dist);
             int bz = tgt.getLocation().getBlockZ() + (int) Math.round(Math.sin(angle) * dist);
             int by = world.getHighestBlockYAt(bx, bz);
@@ -1299,7 +1299,8 @@ public final class ScarecrowNPC {
     }
 
     /**
-     * Crowstorm (reworked): embers + crows swarm around the target area and dive repeatedly.
+     * Crowstorm (reworked): a firestorm of orange embers and flames orbiting the Scarecrow,
+     * punishing any player who ventures within its burning radius.
      */
     private void castCrowstorm() {
         LivingEntity caster = getLivingEntity();
@@ -1307,75 +1308,66 @@ public final class ScarecrowNPC {
         Player tgt = ensureTarget(42.0D);
         if (tgt == null) return;
         World world = caster.getWorld();
-        Location center = tgt.getLocation().clone().add(0.0D, 1.0D, 0.0D);
-        world.playSound(center, Sound.ENTITY_BAT_TAKEOFF, 1.0F, 0.8F);
-        world.playSound(center, Sound.ENTITY_BLAZE_SHOOT, 0.65F, 1.0F);
-        world.spawnParticle(Particle.DUST, center.clone().add(0, 1, 0), 24, 1.2, 0.5, 1.2, 0, DUST_BLACK);
-        world.spawnParticle(Particle.FLAME, center, 20, 1.0, 0.6, 1.0, 0.02);
+        Location center = caster.getLocation().clone().add(0.0D, 1.0D, 0.0D);
+        world.playSound(center, Sound.ENTITY_BLAZE_SHOOT, 1.0F, 0.7F);
+        world.playSound(center, Sound.ITEM_FIRECHARGE_USE, 0.6F, 0.6F);
+        world.playSound(center, Sound.ENTITY_WITHER_AMBIENT, 0.4F, 0.75F);
+        world.spawnParticle(Particle.DUST,  center.clone().add(0, 1, 0), 35, 1.2, 0.6, 1.2, 0, DUST_AMBER);
+        world.spawnParticle(Particle.DUST,  center.clone().add(0, 1, 0), 20, 1.0, 0.4, 1.0, 0, DUST_ORANGE);
+        world.spawnParticle(Particle.FLAME, center, 30, 1.2, 0.8, 1.2, 0.04);
+        world.spawnParticle(Particle.LAVA,  center, 14, 0.8, 0.4, 0.8, 0);
 
-        final int batCount = 14;
-        final double[] radiusOffsets = new double[batCount];
-        final double[] heightOffsets = new double[batCount];
-        final double[] angularOffsets = new double[batCount];
-        final double[] spinRates = new double[batCount];
-
-        List<Bat> storm = new ArrayList<>();
-        for (int i = 0; i < batCount; i++) {
-            radiusOffsets[i] = 1.6D + random.nextDouble() * 2.0D;
-            heightOffsets[i] = 0.4D + random.nextDouble() * 1.8D;
-            angularOffsets[i] = random.nextDouble() * Math.PI * 2.0D;
-            spinRates[i] = 0.08D + random.nextDouble() * 0.09D;
-
-            double a = angularOffsets[i];
-            double radius = radiusOffsets[i];
-            Location spawnLoc = center.clone().add(
-                Math.cos(a) * radius,
-                heightOffsets[i],
-                Math.sin(a) * radius);
-            try {
-                Bat bat = world.spawn(spawnLoc, Bat.class, b -> {
-                    b.setInvulnerable(true);
-                    b.setSilent(true);
-                    b.setAI(false);
-                });
-                storm.add(bat);
-                stormBats.add(bat);
-            } catch (Exception ignored) {}
-        }
+        final double OUTER_RADIUS  = 3.6D;
+        final double INNER_RADIUS  = 1.8D;
+        final double DAMAGE_RADIUS = 4.0D;
 
         BukkitRunnable crowTask = new BukkitRunnable() {
             int t = 0;
             @Override public void run() {
                 t++;
                 if (t > 140 || isDead() || !tgt.isOnline() || tgt.isDead()) {
-                    storm.forEach(b -> { if (b.isValid()) b.remove(); });
-                    stormBats.removeAll(storm);
                     cancel();
                     return;
                 }
-                Location current = tgt.getLocation().clone().add(0.0D, 1.0D, 0.0D);
+                // Storm center tracks the scarecrow
+                Location sc = caster.getLocation().clone().add(0.0D, 1.5D, 0.0D);
 
-                for (int i = 0; i < storm.size(); i++) {
-                    Bat bat = storm.get(i);
-                    if (!bat.isValid()) continue;
-                    double a = angularOffsets[i] + (t * spinRates[i]);
-                    double radialPulse = radiusOffsets[i] + Math.sin((t * 0.09D) + i) * 0.25D;
-                    double height = heightOffsets[i] + Math.sin((t * 0.13D) + (i * 0.5D)) * 0.45D;
-                    bat.teleport(current.clone().add(Math.cos(a) * radialPulse, height, Math.sin(a) * radialPulse));
+                // Outer ring — 16 amber+flame orbit points
+                for (int i = 0; i < 16; i++) {
+                    double angle  = (Math.PI * 2.0D / 16.0D) * i + (t * 0.07D);
+                    double radius = OUTER_RADIUS + Math.sin(t * 0.09D + i * 0.4D) * 0.4D;
+                    double height = Math.sin(t * 0.07D + i * 0.5D) * 1.1D;
+                    Location p = sc.clone().add(Math.cos(angle) * radius, height, Math.sin(angle) * radius);
+                    if (t % 2 == 0) world.spawnParticle(Particle.DUST,  p, 2, 0.05, 0.05, 0.05, 0, DUST_AMBER);
+                    if (t % 3 == 0) world.spawnParticle(Particle.FLAME, p, 1, 0.04, 0.04, 0.04, 0.01);
                 }
 
-                // Dive pulses punish anyone staying in the storm center.
+                // Inner vortex — 8 orange points spinning faster
+                for (int i = 0; i < 8; i++) {
+                    double angle  = (Math.PI * 2.0D / 8.0D) * i + (t * 0.14D);
+                    double radius = INNER_RADIUS + Math.sin(t * 0.13D + i) * 0.3D;
+                    double height = 0.4D + Math.sin(t * 0.10D + i * 0.6D) * 0.7D;
+                    Location p = sc.clone().add(Math.cos(angle) * radius, height, Math.sin(angle) * radius);
+                    if (t % 2 == 0) world.spawnParticle(Particle.DUST,  p, 1, 0.04, 0.04, 0.04, 0, DUST_ORANGE);
+                    if (t % 5 == 0) world.spawnParticle(Particle.LAVA,  p, 1, 0.08, 0.08, 0.08, 0);
+                }
+
+                // Ambient fire sound pulse
+                if (t % 25 == 0) {
+                    world.playSound(sc, Sound.BLOCK_FIRE_AMBIENT, 0.55F, 0.7F + random.nextFloat() * 0.3F);
+                }
+
+                // Punish players standing within the storm radius
                 if (t % 8 == 0) {
+                    double radiusSq = DAMAGE_RADIUS * DAMAGE_RADIUS;
                     for (Player p : world.getPlayers()) {
-                        if (p.isDead() || p.getLocation().distanceSquared(current) > 16.0D) continue;
+                        if (p.isDead() || p.getLocation().distanceSquared(caster.getLocation()) > radiusSq) continue;
                         p.damage(2.0D + fearmongerStacks * 0.15D, caster);
-                        p.setFireTicks(Math.max(p.getFireTicks(), 30));
-                        world.spawnParticle(Particle.DUST, p.getLocation().add(0, 1, 0), 4, 0.3, 0.3, 0.3, 0, DUST_BLACK);
-                        world.spawnParticle(Particle.FLAME, p.getLocation().add(0, 1, 0), 5, 0.25, 0.25, 0.25, 0.01);
+                        p.setFireTicks(Math.max(p.getFireTicks(), 40));
+                        world.spawnParticle(Particle.DUST,  p.getLocation().add(0, 1, 0), 6, 0.25, 0.3, 0.25, 0, DUST_AMBER);
+                        world.spawnParticle(Particle.FLAME, p.getLocation().add(0, 1, 0), 5, 0.2,  0.2, 0.2,  0.02);
                     }
                 }
-
-                if (t % 20 == 0) world.playSound(current, Sound.ENTITY_BAT_AMBIENT, 0.45F, 0.75F + random.nextFloat() * 0.25F);
             }
         };
         tasks.add(crowTask);

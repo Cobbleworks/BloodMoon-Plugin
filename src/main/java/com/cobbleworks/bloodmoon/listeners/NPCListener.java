@@ -19,11 +19,13 @@ import net.citizensnpcs.api.event.NPCDamageEvent;
 import net.citizensnpcs.api.event.NPCDeathEvent;
 import net.citizensnpcs.api.npc.NPC;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 import org.bukkit.Sound;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
 import org.mcmonkey.sentinel.events.SentinelAttackEvent;
 
 /**
@@ -209,6 +211,29 @@ public final class NPCListener implements Listener {
             WerewolfTrait trait = event.getNPC().getOrAddTrait(WerewolfTrait.class);
             trait.handleSentinelAttack(event);
         }
+    }
+
+    /**
+     * Prevents vanilla mobs from targeting Blood Moon NPCs.
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onEntityTarget(EntityTargetLivingEntityEvent event) {
+        if (event.getTarget() == null) return;
+        if (resolveBloodMoonNpc(event.getTarget()) != null) {
+            event.setCancelled(true);
+        }
+    }
+
+    /**
+     * Prevents vanilla mobs (and stray projectiles from mobs) from damaging Blood Moon NPCs.
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onMobDamageNpc(EntityDamageByEntityEvent event) {
+        if (resolveBloodMoonNpc(event.getEntity()) == null) return;
+        Entity damager = event.getDamager();
+        if (damager instanceof Player) return;
+        if (resolveBloodMoonNpc(damager) != null) return;
+        event.setCancelled(true);
     }
 
     private NPC resolveBloodMoonNpc(Entity entity) {

@@ -13,7 +13,10 @@ import com.cobbleworks.bloodmoon.managers.BloodMoonManager;
 import com.cobbleworks.bloodmoon.managers.NPCManager;
 import com.cobbleworks.bloodmoon.managers.OverheadHealthBarManager;
 import com.cobbleworks.bloodmoon.utils.ConfigManager;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -33,6 +36,7 @@ public final class BloodMoonPlugin extends JavaPlugin {
     private DecayPlagueEffect decayPlagueEffect;
     private MindHexEffect mindHexEffect;
     private OverheadHealthBarManager overheadHealthBarManager;
+    private final Set<UUID> bossMessagesEnabled = new HashSet<>();
 
     /**
      * Gets the active plugin instance.
@@ -151,6 +155,31 @@ public final class BloodMoonPlugin extends JavaPlugin {
 
     public OverheadHealthBarManager getOverheadHealthBarManager() {
         return overheadHealthBarManager;
+    }
+
+    /**
+     * Returns whether a player has enabled Blood Moon boss messages.
+     *
+     * @param uuid player UUID
+     * @return true if enabled
+     */
+    public boolean hasBossMessages(UUID uuid) {
+        return bossMessagesEnabled.contains(uuid);
+    }
+
+    /**
+     * Toggles boss messages for a player.
+     *
+     * @param uuid player UUID
+     * @return new state — true if now enabled, false if now disabled
+     */
+    public boolean toggleBossMessages(UUID uuid) {
+        if (bossMessagesEnabled.contains(uuid)) {
+            bossMessagesEnabled.remove(uuid);
+            return false;
+        }
+        bossMessagesEnabled.add(uuid);
+        return true;
     }
 
     private boolean hasRequiredDependencies() {

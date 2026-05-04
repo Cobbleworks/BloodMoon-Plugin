@@ -30,6 +30,11 @@ public final class BloodMoonCommand implements CommandExecutor {
             return true;
         }
 
+        if (args.length > 0 && "messages".equalsIgnoreCase(args[0])) {
+            handleMessages(sender, args);
+            return true;
+        }
+
         if (!sender.hasPermission("bloodmoon.admin")) {
             MessageUtils.send(sender, "§cYou do not have permission to use BloodMoon.");
             return true;
@@ -279,6 +284,19 @@ public final class BloodMoonCommand implements CommandExecutor {
         MessageUtils.send(sender, "§7Exp multiplier: §f" + formatMultiplier(plugin.getBloodMoonManager().getExpMultiplier()));
     }
 
+    private void handleMessages(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            MessageUtils.send(sender, "\u00a7cOnly players can toggle boss messages.");
+            return;
+        }
+        boolean now = plugin.toggleBossMessages(player.getUniqueId());
+        if (now) {
+            MessageUtils.send(player, "\u00a7aBloodMoon boss messages \u00a72enabled\u00a7a. You will see phase announcements in chat.");
+        } else {
+            MessageUtils.send(player, "\u00a7eBloodMoon boss messages \u00a76disabled\u00a7e.");
+        }
+    }
+
     private void handleHealthBar(CommandSender sender, String[] args) {
         if (!(sender instanceof Player player)) {
             MessageUtils.send(sender, "§cOnly players can view special-mob overhead health bars.");
@@ -311,11 +329,11 @@ public final class BloodMoonCommand implements CommandExecutor {
         if (sender instanceof Player player && player.hasPermission("bloodmoon.healthbar")) {
             MessageUtils.send(sender, "§7/bloodmoon healthbar §8(view overhead-bar info)");
         }
+        MessageUtils.send(sender, "§7/bloodmoon messages §8(toggle boss phase messages on/off)");
         MessageUtils.send(sender, "§7/bloodmoon start [world]");
         MessageUtils.send(sender, "§7/bloodmoon stop [world]");
         MessageUtils.send(sender, "§7/bloodmoon status");
         MessageUtils.send(sender, "§7/bloodmoon spawn <vampire|clown|zombie|witch|scarecrow|ghost|werewolf> <player>");
-
         MessageUtils.send(sender, "§7/bloodmoon clear [world]");
         MessageUtils.send(sender, "§7/bloodmoon reload");
         MessageUtils.send(sender, "§7/bloodmoon chance <1-100>");

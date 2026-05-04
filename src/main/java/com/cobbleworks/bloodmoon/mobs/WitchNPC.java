@@ -1086,7 +1086,9 @@ public final class WitchNPC {
             player.getInventory().setArmorContents(armor);
             world.spawnParticle(Particle.CRIT, player.getLocation().add(0, 1, 0), 12, 0.3, 0.3, 0.3, 0.05);
             world.playSound(player.getLocation(), Sound.ENTITY_ITEM_BREAK, 0.9F, 0.8F);
-            player.sendMessage("\u00a75Your armor has been cursed by the witch!");
+            if (plugin.hasBossMessages(player.getUniqueId())) {
+                player.sendMessage("\u00a75Your armor has been cursed by the witch!");
+            }
         }
     }
 

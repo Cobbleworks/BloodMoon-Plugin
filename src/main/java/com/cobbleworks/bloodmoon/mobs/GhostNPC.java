@@ -1238,7 +1238,9 @@ public final class GhostNPC {
         World world = player.getWorld();
         world.playSound(player.getLocation(), Sound.BLOCK_BELL_USE, 0.5F, 0.55F);
         world.spawnParticle(Particle.DUST, player.getLocation().add(0, 1, 0), 12, 0.25, 0.35, 0.25, 0, DUST_WHITE);
-        player.sendMessage("§7§oThe ghost reaches for your item... hit it to interrupt!");
+        if (plugin.hasBossMessages(player.getUniqueId())) {
+            player.sendMessage("§7§oThe ghost reaches for your item... hit it to interrupt!");
+        }
 
         BukkitRunnable windup = new BukkitRunnable() {
             int ticks;

@@ -16,7 +16,7 @@ import org.bukkit.entity.Player;
 public final class BloodMoonTabCompleter implements TabCompleter {
 
     private static final List<String> ROOT = List.of("start", "stop", "status", "spawn", "clear", "reload", "chance", "difficulty");
-    private static final List<String> PLAYER_ROOT = List.of("healthbar");
+    private static final List<String> PLAYER_ROOT = List.of("healthbar", "messages");
     private static final List<String> DIFFICULTY_ORDER = List.of("easy", "medium", "hard", "nightmare");
 
     @Override

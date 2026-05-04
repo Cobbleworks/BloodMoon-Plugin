@@ -1606,7 +1606,7 @@ public final class ZombieNPC {
 
         // Announce to nearby players
         for (Player p : world.getPlayers()) {
-            if (p.getLocation().distanceSquared(loc) <= 900.0D) { // 30 block range
+            if (p.getLocation().distanceSquared(loc) <= 900.0D && plugin.hasBossMessages(p.getUniqueId())) { // 30 block range
                 p.sendMessage("§4§l☠ The Zombie enters a savage BERSERKER rage! ☠");
             }
         }

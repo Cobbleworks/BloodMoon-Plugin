@@ -1428,7 +1428,7 @@ public final class WerewolfNPC {
 
         // Periodic howl every 30 ticks handled via stateTicks % 30 in tickCombat — just announce once
         for (Player p : world.getPlayers()) {
-            if (p.getLocation().distanceSquared(loc) <= 900.0D) {
+            if (p.getLocation().distanceSquared(loc) <= 900.0D && plugin.hasBossMessages(p.getUniqueId())) {
                 p.sendMessage("§4§l☠ The Werewolf enters a primal FERAL RAGE! ☠");
             }
         }
