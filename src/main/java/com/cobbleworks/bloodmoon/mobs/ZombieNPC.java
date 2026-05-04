@@ -785,10 +785,9 @@ public final class ZombieNPC {
         if (entity == null) {
             return;
         }
-        // Keep slowly drifting toward the last known target instead of standing frozen
+        // Stand still during the cast — navigator drifting mid-cast causes floating
+        npc.getNavigator().cancelNavigation();
         if (target != null && target.isOnline() && !target.isDead()) {
-            setNavigationSpeed(0.62F);
-            npc.getNavigator().setTarget(target, true);
             npc.faceLocation(target.getEyeLocation());
         }
 
@@ -1283,8 +1282,14 @@ public final class ZombieNPC {
 
                 if (tick > TOTAL_TICKS || isDead()) {
                     leaping = false;
-                    Location landing = isDead() ? start : entity.getLocation().clone();
-                    triggerChargeLeapShockwave(landing, player);
+                    // Ground-snap to prevent the zombie floating after landing
+                    Location snap = entity.getLocation().clone();
+                    double groundY = world.getHighestBlockYAt(snap.getBlockX(), snap.getBlockZ()) + 0.1D;
+                    if (snap.getY() > groundY + 0.8D) {
+                        snap.setY(groundY);
+                        entity.teleport(snap);
+                    }
+                    triggerChargeLeapShockwave(entity.getLocation(), player);
                     cancel();
                     return;
                 }
@@ -1385,9 +1390,10 @@ public final class ZombieNPC {
             return;
         }
 
-        // Close the gap toward the player
+        // Close the gap toward the player — horizontal only to avoid leaving the zombie airborne
         Location entityLoc = entity.getLocation();
         Vector toPlayer = player.getLocation().toVector().subtract(entityLoc.toVector());
+        toPlayer.setY(0);
         if (toPlayer.lengthSquared() > 0.01D) {
             Location dest = entityLoc.clone().add(toPlayer.normalize().clone().multiply(1.0D));
             dest.setYaw(entityLoc.getYaw());
