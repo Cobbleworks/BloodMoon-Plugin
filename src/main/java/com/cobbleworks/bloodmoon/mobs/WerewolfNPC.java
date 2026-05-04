@@ -1424,7 +1424,6 @@ public final class WerewolfNPC {
 
         // Claw damage boost — next scratch will deal more
         entity.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, Integer.MAX_VALUE, 1, false, false));
-        entity.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING,  Integer.MAX_VALUE, 0, false, false));
 
         // Periodic howl every 30 ticks handled via stateTicks % 30 in tickCombat — just announce once
         for (Player p : world.getPlayers()) {
