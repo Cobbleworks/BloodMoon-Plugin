@@ -341,7 +341,6 @@ public final class NPCManager {
             return Optional.empty();
         }
 
-        location.getWorld().strikeLightningEffect(location);
         NPC npc = registry.createNPC(EntityType.PLAYER, "§2Infected");
         ZombieNPC controller = new ZombieNPC(plugin, npc, location, initialTarget);
         activeNpcIds.add(npc.getId());

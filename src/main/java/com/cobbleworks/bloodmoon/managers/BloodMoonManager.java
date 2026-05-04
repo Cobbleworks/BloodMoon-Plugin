@@ -403,22 +403,30 @@ public final class BloodMoonManager {
         for (World world : getActiveWorlds()) {
             for (Player player : world.getPlayers()) {
                 Location origin = player.getLocation();
-                for (int i = 0; i < 9; i++) {
+                for (int i = 0; i < 14; i++) {
                     double ox = (random.nextDouble() * 2.0 - 1.0) * 14.0;
                     double oy = random.nextDouble() * 6.0;
                     double oz = (random.nextDouble() * 2.0 - 1.0) * 14.0;
                     Location loc = origin.clone().add(ox, oy, oz);
-                    world.spawnParticle(Particle.ASH, loc, 2, 0.12D, 0.18D, 0.12D, 0.0D);
+                    world.spawnParticle(Particle.ASH, loc, 3, 0.16D, 0.22D, 0.16D, 0.0D);
                     if (random.nextDouble() < 0.65D) {
-                        world.spawnParticle(Particle.DUST, loc, 1, 0.16D, 0.22D, 0.16D, 0.0D, BLOOD_MIST);
+                        world.spawnParticle(Particle.DUST, loc, 2, 0.20D, 0.26D, 0.20D, 0.0D, BLOOD_MIST);
                     }
-                    if (random.nextDouble() < 0.35D) {
-                        world.spawnParticle(Particle.DUST, loc, 1, 0.14D, 0.18D, 0.14D, 0.0D, SHADOW_MIST);
+                    if (random.nextDouble() < 0.50D) {
+                        world.spawnParticle(Particle.DUST, loc, 2, 0.16D, 0.20D, 0.16D, 0.0D, SHADOW_MIST);
                     }
                 }
 
-                if (random.nextDouble() < 0.10D) {
+                if (random.nextDouble() < 0.18D) {
                     world.playSound(origin, Sound.AMBIENT_CRIMSON_FOREST_MOOD, 0.35F, 0.55F + random.nextFloat() * 0.2F);
+                }
+                if (random.nextDouble() < 0.06D) {
+                    world.playSound(origin, Sound.WEATHER_RAIN_ABOVE, 0.45F, 0.6F + random.nextFloat() * 0.2F);
+                }
+                if (random.nextDouble() < 0.015D) {
+                    Location strike = origin.clone().add((random.nextDouble() * 2.0D - 1.0D) * 22.0D, 0.0D, (random.nextDouble() * 2.0D - 1.0D) * 22.0D);
+                    strike.setY(world.getHighestBlockYAt(strike) + 1.0D);
+                    world.strikeLightningEffect(strike);
                 }
             }
         }
@@ -434,10 +442,10 @@ public final class BloodMoonManager {
     }
 
     private void forceStorm(World world) {
-        world.setStorm(false);
-        world.setThundering(false);
-        world.setWeatherDuration(12000);
-        world.setThunderDuration(0);
+        world.setStorm(true);
+        world.setThundering(true);
+        world.setWeatherDuration(24000);
+        world.setThunderDuration(24000);
     }
 
     private void stopStorm(World world) {

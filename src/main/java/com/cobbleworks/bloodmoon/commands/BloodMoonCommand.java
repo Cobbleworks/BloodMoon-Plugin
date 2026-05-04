@@ -4,7 +4,9 @@ import com.cobbleworks.bloodmoon.BloodMoonPlugin;
 import com.cobbleworks.bloodmoon.utils.MessageUtils;
 import java.util.List;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -116,38 +118,99 @@ public final class BloodMoonCommand implements CommandExecutor {
     }
 
     private void handleSpawn(CommandSender sender, String[] args) {
-        if (args.length < 3) {
-            MessageUtils.send(sender, "§cUsage: /bloodmoon spawn <vampire|clown|zombie|witch|scarecrow|ghost|werewolf> <player>");
+        if (args.length < 2) {
+            MessageUtils.send(sender, "§cUsage: /bloodmoon spawn <vampire|clown|zombie|witch|scarecrow|ghost|werewolf> [player]");
             return;
         }
-        Player player = Bukkit.getPlayerExact(args[2]);
-        if (player == null || !player.isOnline()) {
-            MessageUtils.send(sender, "§cPlayer not found.");
-            return;
+
+        // Determine spawn location: player look-target (2-arg) or near a named player (3-arg)
+        Player initialTarget;
+        Location spawnLoc;
+
+        if (args.length >= 3) {
+            // Legacy: /bloodmoon spawn <type> <player>
+            Player named = Bukkit.getPlayerExact(args[2]);
+            if (named == null || !named.isOnline()) {
+                MessageUtils.send(sender, "§cPlayer not found.");
+                return;
+            }
+            initialTarget = named;
+            spawnLoc = null; // let the Near-helper pick a location
+        } else {
+            // Direct look-at spawn: sender must be a player
+            if (!(sender instanceof Player issuer)) {
+                MessageUtils.send(sender, "§cConsole must specify a player: /bloodmoon spawn <type> <player>");
+                return;
+            }
+            initialTarget = issuer;
+            Block target = issuer.getTargetBlockExact(50);
+            if (target != null) {
+                spawnLoc = target.getLocation().add(0.5D, 1.0D, 0.5D);
+            } else {
+                // Nothing in sight — fall back to 5 blocks ahead
+                spawnLoc = issuer.getLocation().clone()
+                    .add(issuer.getLocation().getDirection().normalize().multiply(5.0D));
+                spawnLoc.setY(issuer.getWorld()
+                    .getHighestBlockYAt(spawnLoc.getBlockX(), spawnLoc.getBlockZ()) + 1.0D);
+            }
         }
-        switch (args[1].toLowerCase()) {
-            case "vampire" -> plugin.getNPCManager().spawnVampireNear(player).ifPresentOrElse(
-                v -> MessageUtils.send(sender, "§aSpawned vampire near §e" + player.getName() + "§a."),
-                () -> MessageUtils.send(sender, "§cCould not spawn. Citizens/Sentinel may not be ready."));
-            case "clown" -> plugin.getNPCManager().spawnClownNear(player).ifPresentOrElse(
-                c -> MessageUtils.send(sender, "§aSpawned clown near §e" + player.getName() + "§a."),
-                () -> MessageUtils.send(sender, "§cCould not spawn clown here right now."));
-            case "zombie" -> plugin.getNPCManager().spawnZombieNear(player).ifPresentOrElse(
-                z -> MessageUtils.send(sender, "§aSpawned zombie near §e" + player.getName() + "§a."),
-                () -> MessageUtils.send(sender, "§cCould not spawn zombie here right now."));
-            case "witch" -> plugin.getNPCManager().spawnWitchNear(player).ifPresentOrElse(
-                w -> MessageUtils.send(sender, "§aSpawned witch near §e" + player.getName() + "§a."),
-                () -> MessageUtils.send(sender, "§cCould not spawn witch here right now."));
-            case "scarecrow" -> plugin.getNPCManager().spawnScarecrowNear(player).ifPresentOrElse(
-                s -> MessageUtils.send(sender, "§aSpawned scarecrow near §e" + player.getName() + "§a."),
-                () -> MessageUtils.send(sender, "§cCould not spawn scarecrow here right now."));
-            case "ghost" -> plugin.getNPCManager().spawnGhostNear(player).ifPresentOrElse(
-                g -> MessageUtils.send(sender, "§aSpawned ghost near §e" + player.getName() + "§a."),
-                () -> MessageUtils.send(sender, "§cCould not spawn ghost here right now."));
-            case "werewolf" -> plugin.getNPCManager().spawnWerewolfNear(player).ifPresentOrElse(
-                w -> MessageUtils.send(sender, "§aSpawned werewolf near §e" + player.getName() + "§a."),
-                () -> MessageUtils.send(sender, "§cCould not spawn werewolf here right now."));
-            default -> MessageUtils.send(sender, "§cUnknown type. Use: vampire, clown, zombie, witch, scarecrow, ghost, or werewolf.");
+
+        String type = args[1].toLowerCase();
+        if (spawnLoc != null) {
+            // Spawn at exact look-at position
+            final Player target = initialTarget;
+            final Location loc  = spawnLoc;
+            switch (type) {
+                case "vampire"   -> plugin.getNPCManager().spawnVampire(loc, target).ifPresentOrElse(
+                    v -> MessageUtils.send(sender, "§aSpawned vampire at your target."),
+                    () -> MessageUtils.send(sender, "§cCould not spawn. Citizens/Sentinel may not be ready."));
+                case "clown"     -> plugin.getNPCManager().spawnClown(loc).ifPresentOrElse(
+                    c -> MessageUtils.send(sender, "§aSpawned clown at your target."),
+                    () -> MessageUtils.send(sender, "§cCould not spawn clown here."));
+                case "zombie"    -> plugin.getNPCManager().spawnZombie(loc, target).ifPresentOrElse(
+                    z -> MessageUtils.send(sender, "§aSpawned zombie at your target."),
+                    () -> MessageUtils.send(sender, "§cCould not spawn zombie here."));
+                case "witch"     -> plugin.getNPCManager().spawnWitch(loc, target).ifPresentOrElse(
+                    w -> MessageUtils.send(sender, "§aSpawned witch at your target."),
+                    () -> MessageUtils.send(sender, "§cCould not spawn witch here."));
+                case "scarecrow" -> plugin.getNPCManager().spawnScarecrow(loc, target).ifPresentOrElse(
+                    s -> MessageUtils.send(sender, "§aSpawned scarecrow at your target."),
+                    () -> MessageUtils.send(sender, "§cCould not spawn scarecrow here."));
+                case "ghost"     -> plugin.getNPCManager().spawnGhost(loc, target).ifPresentOrElse(
+                    g -> MessageUtils.send(sender, "§aSpawned ghost at your target."),
+                    () -> MessageUtils.send(sender, "§cCould not spawn ghost here."));
+                case "werewolf"  -> plugin.getNPCManager().spawnWerewolf(loc, target).ifPresentOrElse(
+                    w -> MessageUtils.send(sender, "§aSpawned werewolf at your target."),
+                    () -> MessageUtils.send(sender, "§cCould not spawn werewolf here."));
+                default -> MessageUtils.send(sender, "§cUnknown type. Use: vampire, clown, zombie, witch, scarecrow, ghost, or werewolf.");
+            }
+        } else {
+            // Spawn near the named player (legacy path)
+            final Player near = initialTarget;
+            switch (type) {
+                case "vampire"   -> plugin.getNPCManager().spawnVampireNear(near).ifPresentOrElse(
+                    v -> MessageUtils.send(sender, "§aSpawned vampire near §e" + near.getName() + "§a."),
+                    () -> MessageUtils.send(sender, "§cCould not spawn. Citizens/Sentinel may not be ready."));
+                case "clown"     -> plugin.getNPCManager().spawnClownNear(near).ifPresentOrElse(
+                    c -> MessageUtils.send(sender, "§aSpawned clown near §e" + near.getName() + "§a."),
+                    () -> MessageUtils.send(sender, "§cCould not spawn clown here right now."));
+                case "zombie"    -> plugin.getNPCManager().spawnZombieNear(near).ifPresentOrElse(
+                    z -> MessageUtils.send(sender, "§aSpawned zombie near §e" + near.getName() + "§a."),
+                    () -> MessageUtils.send(sender, "§cCould not spawn zombie here right now."));
+                case "witch"     -> plugin.getNPCManager().spawnWitchNear(near).ifPresentOrElse(
+                    w -> MessageUtils.send(sender, "§aSpawned witch near §e" + near.getName() + "§a."),
+                    () -> MessageUtils.send(sender, "§cCould not spawn witch here right now."));
+                case "scarecrow" -> plugin.getNPCManager().spawnScarecrowNear(near).ifPresentOrElse(
+                    s -> MessageUtils.send(sender, "§aSpawned scarecrow near §e" + near.getName() + "§a."),
+                    () -> MessageUtils.send(sender, "§cCould not spawn scarecrow here right now."));
+                case "ghost"     -> plugin.getNPCManager().spawnGhostNear(near).ifPresentOrElse(
+                    g -> MessageUtils.send(sender, "§aSpawned ghost near §e" + near.getName() + "§a."),
+                    () -> MessageUtils.send(sender, "§cCould not spawn ghost here right now."));
+                case "werewolf"  -> plugin.getNPCManager().spawnWerewolfNear(near).ifPresentOrElse(
+                    w -> MessageUtils.send(sender, "§aSpawned werewolf near §e" + near.getName() + "§a."),
+                    () -> MessageUtils.send(sender, "§cCould not spawn werewolf here right now."));
+                default -> MessageUtils.send(sender, "§cUnknown type. Use: vampire, clown, zombie, witch, scarecrow, ghost, or werewolf.");
+            }
         }
     }
 

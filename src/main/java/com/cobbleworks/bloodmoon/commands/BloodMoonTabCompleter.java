@@ -17,6 +17,7 @@ public final class BloodMoonTabCompleter implements TabCompleter {
 
     private static final List<String> ROOT = List.of("start", "stop", "status", "spawn", "clear", "reload", "chance", "difficulty");
     private static final List<String> PLAYER_ROOT = List.of("healthbar");
+    private static final List<String> DIFFICULTY_ORDER = List.of("easy", "medium", "hard", "nightmare");
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
@@ -55,7 +56,7 @@ public final class BloodMoonTabCompleter implements TabCompleter {
             return filter(List.of("1", "4", "8", "12", "25", "50", "100"), args[1]);
         }
         if (args.length == 2 && "difficulty".equals(sub)) {
-            return filter(List.of("easy", "medium", "hard", "nightmare"), args[1]);
+            return filter(DIFFICULTY_ORDER, args[1]);
         }
         return List.of();
     }

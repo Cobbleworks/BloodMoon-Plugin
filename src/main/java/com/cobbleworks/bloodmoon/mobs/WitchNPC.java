@@ -4,7 +4,9 @@ import com.cobbleworks.bloodmoon.BloodMoonPlugin;
 import com.cobbleworks.bloodmoon.traits.WitchTrait;
 import java.lang.reflect.Method;
 import java.util.*;
+import net.citizensnpcs.api.CitizensAPI;
 import net.citizensnpcs.api.npc.NPC;
+import net.citizensnpcs.api.npc.NPCRegistry;
 import net.citizensnpcs.api.trait.Trait;
 import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
@@ -31,6 +33,7 @@ public final class WitchNPC {
     private static final Particle.DustOptions DUST_CRIMSON = new Particle.DustOptions(Color.fromRGB(180, 10,  10),  1.2F);
     private static final Particle.DustOptions DUST_VIOLET  = new Particle.DustOptions(Color.fromRGB(140,  0, 200),  1.0F);
     private static final Particle.DustOptions DUST_BLACK   = new Particle.DustOptions(Color.fromRGB( 30,   0,  30),  1.2F);
+    private static final Particle.DustOptions DUST_DARK_PURPLE = new Particle.DustOptions(Color.fromRGB(72, 20, 120), 1.0F);
     private static final Particle.DustOptions DUST_AMBER   = new Particle.DustOptions(Color.fromRGB(255, 140,  20),  1.0F);
     private static final Particle.DustOptions DUST_FROST   = new Particle.DustOptions(Color.fromRGB(160, 220, 255),  1.1F);
     private static final Particle.DustOptions DUST_GOLD    = new Particle.DustOptions(Color.fromRGB(255, 200,   0),  1.0F);
@@ -72,7 +75,8 @@ public final class WitchNPC {
     private final Map<WitchAbility, Integer> cooldowns = new EnumMap<>(WitchAbility.class);
     private final Map<WitchAbility, Integer> abilityUseCounts = new EnumMap<>(WitchAbility.class);
     private final List<BukkitRunnable> tasks = new ArrayList<>();
-    private final List<Witch> clones = new ArrayList<>();
+    private final List<LivingEntity> clones = new ArrayList<>();
+    private final List<NPC> cloneNpcs = new ArrayList<>();
     private final List<Location> runeLocations = new ArrayList<>();
 
     // Deadly Spell accumulator
@@ -80,6 +84,8 @@ public final class WitchNPC {
     private boolean brandActive = false;
     // Reactive reposition cooldown (ticks)
     private int repositionCooldown = 0;
+    // While Void Cage is active, suppress evasive circle-steps so the witch stays punishable.
+    private int voidCageActiveTicks = 0;
 
     private WitchState state = WitchState.COMBAT;
     private WitchState beforeCast = WitchState.COMBAT;
@@ -144,13 +150,14 @@ public final class WitchNPC {
     /** Called by NPCListener when the witch takes a hit – feeds the Deadly Spell accumulator. */
     public void onTakeDamage(double damage) {
         if (brandActive && damage > 0) deadlySpellAccumulated += damage;
-        if (damage > 0.0D && repositionCooldown <= 0 && random.nextDouble() < 0.22D) {
+        if (damage > 0.0D && repositionCooldown <= 0 && voidCageActiveTicks <= 0 && random.nextDouble() < 0.22D) {
             doCircleStep();
             repositionCooldown = 46 + random.nextInt(24);
         }
     }
 
     public void handleSentinelAttack(SentinelAttackEvent event) {
+        event.setCancelled(true);
         if (!(event.getTarget() instanceof Player player) || state == WitchState.DEAD) return;
         target = player;
     }
@@ -164,8 +171,7 @@ public final class WitchNPC {
         brandActive = false;
         runeLocations.clear();
         clearLingeringPlayerEffects();
-        clones.forEach(c -> { if (c.isValid()) c.remove(); });
-        clones.clear();
+        clearMirrorClones();
         Location death = getCurrentLocation();
         World world = death.getWorld();
         if (world != null) {
@@ -194,20 +200,32 @@ public final class WitchNPC {
         brandActive = false;
         runeLocations.clear();
         clearLingeringPlayerEffects();
-        clones.forEach(c -> { if (c.isValid()) c.remove(); });
-        clones.clear();
+        clearMirrorClones();
+        LivingEntity witchEntity = getLivingEntity();
+        if (witchEntity != null) {
+            plugin.getOverheadHealthBarManager().removeBar(witchEntity.getUniqueId());
+        }
         if (npc.isSpawned()) npc.despawn();
         npc.destroy();
         plugin.getNPCManager().unregisterWitch(npc.getId());
     }
 
     public void handleCloneHit(Entity entity) {
-        if (entity instanceof Witch witch) {
-            witch.getWorld().spawnParticle(Particle.SMOKE, witch.getLocation().add(0, 1, 0), 14, 0.2, 0.3, 0.2, 0.03);
-            witch.getWorld().playSound(witch.getLocation(), Sound.ENTITY_WITCH_HURT, 0.7F, 1.3F);
-            witch.remove();
-            clones.remove(witch);
+        if (entity == null || !entity.hasMetadata("bloodmoon-witch-clone")) {
+            return;
         }
+        entity.getWorld().spawnParticle(Particle.SMOKE, entity.getLocation().add(0, 1, 0), 14, 0.2, 0.3, 0.2, 0.03);
+        entity.getWorld().playSound(entity.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 0.7F, 1.3F);
+        clones.remove(entity);
+        for (NPC cloneNpc : List.copyOf(cloneNpcs)) {
+            if (cloneNpc.getEntity() == entity) {
+                try { cloneNpc.despawn(); } catch (Exception ignored) {}
+                try { cloneNpc.destroy(); } catch (Exception ignored) {}
+                cloneNpcs.remove(cloneNpc);
+                break;
+            }
+        }
+        entity.remove();
     }
 
     // ─── NPC Setup ────────────────────────────────────────────────────────────
@@ -286,15 +304,13 @@ public final class WitchNPC {
         s.setInvincible(false);
         s.setHealth(plugin.getConfigManager().getWitchHealth());
         s.health = plugin.getConfigManager().getWitchHealth();
-        s.damage = 4.2D;
+        s.damage = 0.0D;
         s.respawnTime = -1;
         s.chaseRange = 30.0D;
         s.armor = 0.04D;
         s.protectFromIgnores = false;
         s.allTargets = new SentinelTargetList();
         s.addTarget("players");
-        s.addTarget("mobs");
-        s.addTarget("monsters");
         s.allIgnores = new SentinelTargetList();
         s.addIgnore("npcs");
     }
@@ -330,6 +346,7 @@ public final class WitchNPC {
         cooldowns.replaceAll((k, v) -> Math.max(0, v - 1));
         if (postCastRecoveryTicks > 0) postCastRecoveryTicks--;
         if (repositionCooldown > 0) repositionCooldown--;
+        if (voidCageActiveTicks > 0) voidCageActiveTicks--;
         onTraitTick();
         checkPhaseTransition();
 
@@ -601,23 +618,32 @@ public final class WitchNPC {
 
     // ─── SIGNATURE ABILITIES ─────────────────────────────────────────────────
 
-    /** Shared Vessel – crimson thread binds nearby players; damage one, all receive it. */
+    /** Shared Vessel – dark-purple vessel links up to 4 nearby targets; 50% damage mirrors to the others. */
     private void castSharedVessel() {
         Location casterLoc = getCurrentLocation();
+        LivingEntity caster = getLivingEntity();
         World world = casterLoc.getWorld();
         if (world == null) return;
-        List<Player> nearby = new ArrayList<>();
-        for (Player p : world.getPlayers()) {
-            if (!p.isDead() && p.getLocation().distanceSquared(casterLoc) <= 36.0D * 36.0D) nearby.add(p);
+
+        List<LivingEntity> nearby = new ArrayList<>();
+        for (Entity entity : world.getNearbyEntities(casterLoc, 14.0D, 6.0D, 14.0D)) {
+            if (!(entity instanceof LivingEntity living)) continue;
+            if (caster != null && living.getUniqueId().equals(caster.getUniqueId())) continue;
+            if (living.isDead()) continue;
+            if (living instanceof ArmorStand) continue;
+            nearby.add(living);
         }
+
         if (nearby.size() < 2) return;
-        if (nearby.size() > 3) nearby.subList(3, nearby.size()).clear();
-        List<Player> linked = List.copyOf(nearby);
+        nearby.sort(Comparator.comparingDouble(l -> l.getLocation().distanceSquared(casterLoc)));
+        if (nearby.size() > 4) nearby = nearby.subList(0, 4);
+        List<LivingEntity> linked = new ArrayList<>(nearby);
+
         world.playSound(casterLoc, Sound.ENTITY_WITHER_AMBIENT,   0.7F, 1.8F);
         world.playSound(casterLoc, Sound.BLOCK_BEACON_ACTIVATE, 0.5F, 0.5F);
 
         Map<UUID, Double> lastHealth = new HashMap<>();
-        for (Player p : linked) lastHealth.put(p.getUniqueId(), p.getHealth());
+        for (LivingEntity entity : linked) lastHealth.put(entity.getUniqueId(), entity.getHealth());
         Set<UUID> mirroringNow = new HashSet<>();
 
         BukkitRunnable task = new BukkitRunnable() {
@@ -625,27 +651,58 @@ public final class WitchNPC {
             @Override public void run() {
                 t++;
                 if (t > 200 || isDead()) { cancel(); return; }
-                // Pulsing crimson thread between linked players
+
+                linked.removeIf(entity -> !entity.isValid() || entity.isDead() || entity.getWorld() != world);
+                if (linked.size() < 2) {
+                    cancel();
+                    return;
+                }
+
+                boolean outOfRange = false;
+                for (int i = 0; i < linked.size(); i++) {
+                    for (int j = i + 1; j < linked.size(); j++) {
+                        if (linked.get(i).getLocation().distanceSquared(linked.get(j).getLocation()) > 12.0D * 12.0D) {
+                            outOfRange = true;
+                            break;
+                        }
+                    }
+                    if (outOfRange) {
+                        break;
+                    }
+                }
+                if (outOfRange) {
+                    world.playSound(casterLoc, Sound.BLOCK_AMETHYST_CLUSTER_BREAK, 0.6F, 0.7F);
+                    cancel();
+                    return;
+                }
+
+                // Pulsing dark-purple vessel lines between linked targets.
                 if (t % 2 == 0) {
                     for (int i = 0; i < linked.size(); i++) {
                         for (int j = i + 1; j < linked.size(); j++) {
-                            Player a = linked.get(i); Player b = linked.get(j);
-                            if (a.isOnline() && b.isOnline()) drawLine(a.getEyeLocation(), b.getEyeLocation(), DUST_CRIMSON);
+                            LivingEntity a = linked.get(i);
+                            LivingEntity b = linked.get(j);
+                            drawLine(a.getLocation().add(0.0D, a.getHeight() * 0.7D, 0.0D), b.getLocation().add(0.0D, b.getHeight() * 0.7D, 0.0D), DUST_DARK_PURPLE);
                         }
                     }
                 }
-                // Health-delta mirroring
-                for (Player p : linked) {
-                    if (!p.isOnline() || p.isDead()) continue;
-                    double now  = p.getHealth();
-                    double last = lastHealth.getOrDefault(p.getUniqueId(), now);
-                    lastHealth.put(p.getUniqueId(), now);
+
+                // Health-delta mirroring: 50% of incoming damage to other linked targets.
+                for (LivingEntity source : linked) {
+                    double now = source.getHealth();
+                    double last = lastHealth.getOrDefault(source.getUniqueId(), now);
+                    lastHealth.put(source.getUniqueId(), now);
                     double delta = now - last;
-                    if (delta < -0.05D && mirroringNow.add(p.getUniqueId())) {
-                        for (Player other : linked) {
-                            if (other == p || !other.isOnline() || other.isDead() || !mirroringNow.add(other.getUniqueId())) continue;
-                            other.damage(-delta);
-                            other.getWorld().spawnParticle(Particle.DUST, other.getLocation().add(0, 1, 0), 5, 0.2, 0.3, 0.2, 0, DUST_CRIMSON);
+                    if (delta < -0.05D && mirroringNow.add(source.getUniqueId())) {
+                        double mirroredDamage = -delta * 0.5D;
+                        for (LivingEntity other : linked) {
+                            if (other == source || !mirroringNow.add(other.getUniqueId())) continue;
+                            if (caster != null) {
+                                other.damage(mirroredDamage, caster);
+                            } else {
+                                other.damage(mirroredDamage);
+                            }
+                            other.getWorld().spawnParticle(Particle.DUST, other.getLocation().add(0, 1, 0), 5, 0.2, 0.3, 0.2, 0, DUST_DARK_PURPLE);
                         }
                         Bukkit.getScheduler().runTaskLater(plugin, () -> mirroringNow.clear(), 1L);
                     }
@@ -765,62 +822,207 @@ public final class WitchNPC {
     /** Mirror Image – spawns 2-3 indistinguishable phantom witches that cast weakened spells. */
     private void castMirrorImage() {
         LivingEntity caster = getLivingEntity();
-        if (caster == null) return;
+        if (caster == null || !CitizensAPI.hasImplementation()) return;
         Location base = caster.getLocation();
         World world = base.getWorld();
         if (world == null) return;
-        // Despawn existing clones first
-        clones.forEach(c -> { if (c.isValid()) c.remove(); });
-        clones.clear();
+        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        if (registry == null) return;
+
+        clearMirrorClones();
         world.playSound(base, Sound.ENTITY_ENDERMAN_TELEPORT, 0.9F, 1.3F);
         world.spawnParticle(Particle.SMOKE, base.clone().add(0, 1, 0), 25, 0.4, 0.4, 0.4, 0.04);
-        int count = 2 + (random.nextDouble() < 0.4D ? 1 : 0); // 2 or 3
-        for (int i = 0; i < count; i++) {
-            Location spawnLoc = base.clone().add(randomDouble(-4, 4), 0, randomDouble(-4, 4));
+
+        List<LivingEntity> sources = findMirrorSources(base, 28.0D);
+        for (int i = 0; i < 2; i++) {
+            Location spawnLoc = base.clone().add(randomDouble(-4.0D, 4.0D), 0.0D, randomDouble(-4.0D, 4.0D));
             spawnLoc.setY(world.getHighestBlockYAt(spawnLoc) + 1.0D);
-            Witch clone = world.spawn(spawnLoc, Witch.class);
-            clone.setAI(true);
-            clone.setSilent(false);
-            clone.setMetadata("bloodmoon-witch-clone", new FixedMetadataValue(plugin, npc.getId()));
-            clones.add(clone);
-            world.spawnParticle(Particle.DUST, spawnLoc.clone().add(0, 1, 0), 15, 0.3, 0.4, 0.3, 0, DUST_VIOLET);
+            LivingEntity source = i < sources.size() ? sources.get(i) : null;
+            spawnMirrorClone(source, spawnLoc, registry, caster);
         }
-        // Clones periodically fire weakened bolts
+
         BukkitRunnable cloneTask = new BukkitRunnable() {
             int t = 0;
-            @Override public void run() {
+
+            @Override
+            public void run() {
                 t++;
-                clones.removeIf(c -> !c.isValid());
-                if (t > 160 || clones.isEmpty() || isDead()) {
-                    clones.forEach(c -> {
-                        if (c.isValid()) {
-                            c.getWorld().spawnParticle(Particle.SMOKE, c.getLocation().add(0, 1, 0), 10, 0.2, 0.3, 0.2, 0.03);
-                            c.remove();
-                        }
-                    });
-                    clones.clear();
-                    cancel(); return;
+                clones.removeIf(c -> c == null || !c.isValid() || c.isDead());
+                if (t > 140 || clones.isEmpty() || isDead()) {
+                    clearMirrorClones();
+                    cancel();
+                    return;
                 }
-                if (t % 25 == 0) {
-                    Player nearestPlayer = findNearestPlayer(getCurrentLocation(), 40.0D);
-                    for (Witch clone : clones) {
-                        if (!clone.isValid() || nearestPlayer == null || nearestPlayer.isDead()) continue;
-                        clone.setTarget(nearestPlayer);
-                        Vector dir = nearestPlayer.getLocation().add(0, 1, 0).toVector().subtract(clone.getLocation().toVector());
-                        if (dir.lengthSquared() > 0.001D) dir.normalize();
-                        Location cur = clone.getLocation().clone().add(0, 1.2, 0);
-                        World w = clone.getWorld();
-                        for (int i = 0; i < 12; i++) {
-                            cur.add(dir.clone().multiply(0.4D));
-                            w.spawnParticle(Particle.DUST, cur, 1, 0.04, 0.04, 0.04, 0, DUST_VIOLET);
+
+                for (LivingEntity clone : clones) {
+                    if (clone == null || !clone.isValid() || clone.isDead()) {
+                        continue;
+                    }
+                    Player victim = findNearestPlayer(clone.getLocation(), 20.0D);
+                    if (victim == null || victim.isDead()) {
+                        continue;
+                    }
+
+                    if (clone instanceof Player) {
+                        Vector dir = victim.getLocation().toVector().subtract(clone.getLocation().toVector());
+                        if (dir.lengthSquared() > 0.001D) {
+                            Vector move = dir.normalize().multiply(0.28D);
+                            clone.setVelocity(new Vector(move.getX(), Math.max(-0.08D, clone.getVelocity().getY()), move.getZ()));
+                            Location look = clone.getLocation();
+                            look.setDirection(dir);
+                            clone.teleport(look, PlayerTeleportEvent.TeleportCause.PLUGIN);
                         }
-                        if (nearestPlayer.getLocation().distanceSquared(cur) <= 8.0D) nearestPlayer.damage(1.2D);
+                    } else {
+                        steerCloneAggression(clone, victim);
+                    }
+
+                    World cw = clone.getWorld();
+                    cw.spawnParticle(Particle.DUST, clone.getLocation().add(0.0D, 1.0D, 0.0D), 3, 0.18D, 0.20D, 0.18D, 0.0D, DUST_VIOLET);
+                    if (t % 20 == 0 && clone.getLocation().distanceSquared(victim.getLocation()) <= 6.0D && clone instanceof Player) {
+                        victim.damage(2.0D, caster);
+                        cw.playSound(victim.getLocation(), Sound.ENTITY_PLAYER_HURT, 0.45F, 0.85F);
                     }
                 }
             }
         };
         tasks.add(cloneTask);
         cloneTask.runTaskTimer(plugin, 1L, 1L);
+    }
+
+    private List<LivingEntity> findMirrorSources(Location origin, double range) {
+        World world = origin.getWorld();
+        if (world == null) {
+            return Collections.emptyList();
+        }
+        List<LivingEntity> candidates = new ArrayList<>();
+        LivingEntity self = getLivingEntity();
+        double radiusSq = range * range;
+        for (LivingEntity entity : world.getLivingEntities()) {
+            if (entity == null || !entity.isValid() || entity.isDead()) {
+                continue;
+            }
+            if (entity.equals(self) || entity instanceof ArmorStand || entity.hasMetadata("bloodmoon-witch-clone")) {
+                continue;
+            }
+            if (entity.getLocation().distanceSquared(origin) > radiusSq) {
+                continue;
+            }
+            candidates.add(entity);
+        }
+        Collections.shuffle(candidates, random);
+        if (candidates.size() > 2) {
+            return new ArrayList<>(candidates.subList(0, 2));
+        }
+        return candidates;
+    }
+
+    private void spawnMirrorClone(LivingEntity source, Location spawnLoc, NPCRegistry registry, LivingEntity caster) {
+        LivingEntity cloneEntity = null;
+
+        if (source instanceof Player sourcePlayer) {
+            cloneEntity = spawnPlayerMirrorClone(sourcePlayer.getName(), spawnLoc, registry);
+        } else if (source != null) {
+            cloneEntity = spawnMobMirrorClone(source, spawnLoc);
+        }
+
+        if (cloneEntity == null) {
+            String fallbackSkin = plugin.getConfigManager().getWitchSkinName();
+            cloneEntity = spawnPlayerMirrorClone((fallbackSkin == null || fallbackSkin.isBlank()) ? npc.getName() : fallbackSkin, spawnLoc, registry);
+        }
+
+        if (cloneEntity == null) {
+            return;
+        }
+
+        cloneEntity.setSilent(true);
+        cloneEntity.setCollidable(false);
+        cloneEntity.setMetadata("bloodmoon-witch-clone", new FixedMetadataValue(plugin, npc.getId()));
+        cloneEntity.setMetadata("bloodmoon-witch-clone-caster", new FixedMetadataValue(plugin, caster.getUniqueId().toString()));
+        clones.add(cloneEntity);
+        cloneEntity.getWorld().spawnParticle(Particle.DUST, spawnLoc.clone().add(0, 1, 0), 18, 0.3, 0.4, 0.3, 0.0D, DUST_VIOLET);
+    }
+
+    private LivingEntity spawnPlayerMirrorClone(String skinName, Location spawnLoc, NPCRegistry registry) {
+        NPC cloneNpc = registry.createNPC(EntityType.PLAYER, npc.getName());
+        cloneNpc.setProtected(false);
+        cloneNpc.data().setPersistent(NPC.Metadata.NAMEPLATE_VISIBLE, true);
+        cloneNpc.spawn(spawnLoc);
+
+        try {
+            Class<? extends Trait> skinTraitClass = Class.forName("net.citizensnpcs.trait.SkinTrait").asSubclass(Trait.class);
+            Trait skinTrait = cloneNpc.getOrAddTrait(skinTraitClass);
+            skinTraitClass.getMethod("setShouldUpdateSkins", boolean.class).invoke(skinTrait, false);
+            skinTraitClass.getMethod("setFetchDefaultSkin", boolean.class).invoke(skinTrait, false);
+            if (skinName != null && !skinName.isBlank()) {
+                skinTraitClass.getMethod("setSkinName", String.class, boolean.class).invoke(skinTrait, skinName, true);
+            }
+        } catch (ReflectiveOperationException ignored) {
+        }
+
+        if (!(cloneNpc.getEntity() instanceof LivingEntity cloneEntity)) {
+            try { cloneNpc.despawn(); } catch (Exception ignored) {}
+            try { cloneNpc.destroy(); } catch (Exception ignored) {}
+            return null;
+        }
+
+        cloneNpcs.add(cloneNpc);
+
+        // Cap player clone health to 12 HP so it isn't too tanky
+        var maxHpAttr = cloneEntity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        if (maxHpAttr != null) {
+            maxHpAttr.setBaseValue(12.0D);
+        }
+        cloneEntity.setHealth(12.0D);
+
+        return cloneEntity;
+    }
+
+    private LivingEntity spawnMobMirrorClone(LivingEntity source, Location spawnLoc) {
+        try {
+            Entity spawned = spawnLoc.getWorld().spawnEntity(spawnLoc, source.getType());
+            if (!(spawned instanceof LivingEntity cloneEntity)) {
+                spawned.remove();
+                return null;
+            }
+            if (source.getCustomName() != null) {
+                cloneEntity.setCustomName(source.getCustomName());
+                cloneEntity.setCustomNameVisible(source.isCustomNameVisible());
+            }
+            if (cloneEntity.getAttribute(Attribute.GENERIC_MAX_HEALTH) != null) {
+                cloneEntity.getAttribute(Attribute.GENERIC_MAX_HEALTH).setBaseValue(18.0D);
+                cloneEntity.setHealth(18.0D);
+            }
+            return cloneEntity;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private void steerCloneAggression(LivingEntity clone, Player victim) {
+        if (clone instanceof Mob mob) {
+            mob.setTarget(victim);
+        } else if (clone instanceof Wolf wolf) {
+            wolf.setTarget(victim);
+        } else {
+            Vector direction = victim.getLocation().toVector().subtract(clone.getLocation().toVector());
+            if (direction.lengthSquared() > 0.001D) {
+                clone.setVelocity(direction.normalize().multiply(0.30D));
+            }
+        }
+    }
+
+    private void clearMirrorClones() {
+        for (LivingEntity clone : List.copyOf(clones)) {
+            if (clone != null && clone.isValid()) {
+                clone.remove();
+            }
+        }
+        clones.clear();
+        for (NPC cloneNpc : List.copyOf(cloneNpcs)) {
+            try { cloneNpc.despawn(); } catch (Exception ignored) {}
+            try { cloneNpc.destroy(); } catch (Exception ignored) {}
+        }
+        cloneNpcs.clear();
     }
 
     // ─── CONTROL ABILITIES ────────────────────────────────────────────────────
@@ -934,6 +1136,7 @@ public final class WitchNPC {
         Location cageCenter = player.getLocation().clone();
         double cageRadius   = 2.5D;
         int    duration     = 60 + random.nextInt(20);
+        voidCageActiveTicks = Math.max(voidCageActiveTicks, duration + 10);
         // Encode cage data as metadata on the player
         player.setMetadata("bloodmoon-witch-void-cage",
             new FixedMetadataValue(plugin,
@@ -946,6 +1149,7 @@ public final class WitchNPC {
                 t++;
                 if (t > duration || isDead() || !player.isOnline()) {
                     player.removeMetadata("bloodmoon-witch-void-cage", plugin);
+                    voidCageActiveTicks = 0;
                     cancel(); return;
                 }
                 Location pl = player.getLocation();

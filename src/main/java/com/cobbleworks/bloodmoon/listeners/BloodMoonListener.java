@@ -12,8 +12,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.world.TimeSkipEvent;
 import org.bukkit.event.world.WorldLoadEvent;
+import com.cobbleworks.bloodmoon.mobs.ClownNPC;
 
 /**
  * Watches world time/weather lifecycle events for Blood Moon transitions.
@@ -89,6 +91,16 @@ public final class BloodMoonListener implements Listener {
             event.setCancelled(true);
             event.getEntity().remove();
         }
+    }
+
+    @EventHandler
+    public void onClownAnvilLand(EntityChangeBlockEvent event) {
+        if (!event.getEntity().hasMetadata(ClownNPC.CLOWN_ANVIL_METADATA)) {
+            return;
+        }
+        event.setCancelled(true);
+        event.getBlock().setType(org.bukkit.Material.AIR, false);
+        event.getEntity().remove();
     }
 
     private boolean trySpawnReplacement(Entity vanillaEntity, Player nearestPlayer) {

@@ -15,10 +15,14 @@ import java.util.Set;
 import java.util.UUID;
 import net.citizensnpcs.api.npc.NPC;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
+import org.bukkit.World;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitRunnable;
 
 /**
@@ -26,17 +30,23 @@ import org.bukkit.scheduler.BukkitRunnable;
  */
 public final class OverheadHealthBarManager {
 
+    private static final String BAR_OWNER_METADATA = "bloodmoon-healthbar-owner";
+
     private final BloodMoonPlugin plugin;
+    private final NamespacedKey barOwnerKey;
     private final Map<UUID, ArmorStand> barEntities = new HashMap<>();
     private final Set<UUID> touchedThisTick = new HashSet<>();
+    private int purgeCounter = 0;
     private BukkitRunnable updateTask;
 
     public OverheadHealthBarManager(BloodMoonPlugin plugin) {
         this.plugin = plugin;
+        this.barOwnerKey = new NamespacedKey(plugin, BAR_OWNER_METADATA);
     }
 
     public void start() {
         stop();
+        purgeAllManagedBars();
         updateTask = new BukkitRunnable() {
             @Override
             public void run() {
@@ -121,6 +131,12 @@ public final class OverheadHealthBarManager {
         }
 
         cleanupUntouchedBars();
+
+        // Every 200 ticks (~10 s) scan all loaded chunks for orphaned bars
+        if (++purgeCounter >= 20) {
+            purgeCounter = 0;
+            purgeOrphanedBars();
+        }
     }
 
     private void applyOverheadBar(NPC npc, double currentHealth, double maximumHealth) {
@@ -191,9 +207,11 @@ public final class OverheadHealthBarManager {
                 stand.setBasePlate(false);
                 stand.setArms(false);
             });
+            bar.getPersistentDataContainer().set(barOwnerKey, PersistentDataType.STRING, hostId.toString());
             barEntities.put(hostId, bar);
         }
 
+        cleanupDuplicateBarsForHost(living, hostId, bar);
         bar.teleport(getBarLocation(living));
         bar.setCustomName(barText);
         bar.setCustomNameVisible(true);
@@ -209,8 +227,30 @@ public final class OverheadHealthBarManager {
         staleIds.removeAll(touchedThisTick);
         for (UUID staleId : staleIds) {
             ArmorStand bar = barEntities.remove(staleId);
-            if (bar != null && bar.isValid()) {
-                bar.remove();
+            if (bar != null) {
+                bar.remove(); // safe even if entity is in an unloaded chunk (Paper 1.17+)
+            }
+        }
+    }
+
+    /**
+     * Scans all loaded-chunk entities for health bars that are no longer tracked
+     * in barEntities (e.g. bars whose ArmorStand survived a chunk unload/reload
+     * after their tracking reference was dropped). Runs every ~10 seconds.
+     */
+    private void purgeOrphanedBars() {
+        Set<UUID> tracked = new HashSet<>();
+        for (ArmorStand bar : barEntities.values()) {
+            if (bar != null) tracked.add(bar.getUniqueId());
+        }
+        for (World world : plugin.getServer().getWorlds()) {
+            for (Entity entity : world.getEntities()) {
+                if (!(entity instanceof ArmorStand stand)) continue;
+                if (tracked.contains(stand.getUniqueId())) continue;
+                boolean hasTag = stand.getPersistentDataContainer().has(barOwnerKey, PersistentDataType.STRING);
+                if (hasTag || isHealthBarByAppearance(stand)) {
+                    stand.remove();
+                }
             }
         }
     }
@@ -223,6 +263,72 @@ public final class OverheadHealthBarManager {
         }
         barEntities.clear();
         touchedThisTick.clear();
+    }
+
+    /**
+     * Explicitly removes the health bar for a given host entity UUID.
+     * Call this from each NPC's {@code cleanup()} to prevent orphaned bars
+     * when the NPC dies or is unregistered mid-cycle.
+     *
+     * @param entityId the {@link UUID} of the host entity whose bar should be removed
+     */
+    public void removeBar(UUID entityId) {
+        if (entityId == null) {
+            return;
+        }
+        ArmorStand bar = barEntities.remove(entityId);
+        if (bar != null && bar.isValid()) {
+            bar.remove();
+        }
+        touchedThisTick.remove(entityId);
+    }
+
+    private void cleanupDuplicateBarsForHost(LivingEntity host, UUID hostId, ArmorStand keep) {
+        World world = host.getWorld();
+        if (world == null) {
+            return;
+        }
+        for (Entity nearby : world.getNearbyEntities(host.getLocation(), 3.0D, 3.0D, 3.0D)) {
+            if (!(nearby instanceof ArmorStand stand) || stand == keep) {
+                continue;
+            }
+            PersistentDataContainer pdc = stand.getPersistentDataContainer();
+            if (!pdc.has(barOwnerKey, PersistentDataType.STRING)) {
+                continue;
+            }
+            String owner = pdc.get(barOwnerKey, PersistentDataType.STRING);
+            if (hostId.toString().equals(owner)) {
+                stand.remove();
+            }
+        }
+    }
+
+    private void purgeAllManagedBars() {
+        for (World world : plugin.getServer().getWorlds()) {
+            for (Entity entity : world.getEntities()) {
+                if (!(entity instanceof ArmorStand stand)) continue;
+                // Remove by PDC tag (current system)
+                if (stand.getPersistentDataContainer().has(barOwnerKey, PersistentDataType.STRING)) {
+                    stand.remove();
+                    continue;
+                }
+                // Remove by visual fingerprint (legacy bars from old metadata system, or crash survivors)
+                if (isHealthBarByAppearance(stand)) {
+                    stand.remove();
+                }
+            }
+        }
+    }
+
+    /**
+     * Identifies orphaned health bar ArmorStands by their visual characteristics.
+     * Used to clean up bars that lost their PDC tag (e.g. from old metadata-based builds).
+     */
+    private boolean isHealthBarByAppearance(ArmorStand stand) {
+        if (!stand.isInvisible() || !stand.isMarker() || !stand.isSmall()) return false;
+        if (stand.hasGravity() || !stand.isCustomNameVisible()) return false;
+        String name = stand.getCustomName();
+        return name != null && name.contains("§7[") && (name.contains("§c■") || name.contains("§7□"));
     }
 
     private String buildSegmentBar(double progress) {

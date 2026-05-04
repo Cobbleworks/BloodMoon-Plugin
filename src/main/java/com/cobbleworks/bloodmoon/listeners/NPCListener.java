@@ -62,6 +62,7 @@ public final class NPCListener implements Listener {
                     event.getNPC().getEntity().getLocation(),
                     Sound.ENTITY_ZOMBIE_HURT, 0.9F, 0.8F);
             }
+            zombie.onTakeDamage();
             return;
         }
 
@@ -75,6 +76,7 @@ public final class NPCListener implements Listener {
         ScarecrowNPC scarecrow = plugin.getNPCManager().getScarecrow(event.getNPC());
         if (scarecrow != null && event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
             event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_SKELETON_HURT, 0.95F, 0.85F);
+            scarecrow.onTakeDamage();
             return;
         }
 

@@ -19,6 +19,7 @@ import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
@@ -35,6 +36,7 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
+import java.lang.reflect.Method;
 import org.bukkit.util.Vector;
 import org.mcmonkey.sentinel.SentinelTrait;
 import org.mcmonkey.sentinel.events.SentinelAttackEvent;
@@ -42,9 +44,12 @@ import org.mcmonkey.sentinel.targeting.SentinelTargetList;
 
 public final class WerewolfNPC {
 
-    private static final Particle.DustOptions DUST_PURPLE = new Particle.DustOptions(Color.fromRGB(120, 30, 160), 1.2F);
-    private static final Particle.DustOptions DUST_RED = new Particle.DustOptions(Color.fromRGB(180, 20, 20), 1.1F);
-    private static final Particle.DustOptions DUST_SILVER = new Particle.DustOptions(Color.fromRGB(230, 230, 240), 1.2F);
+    private static final Particle.DustOptions DUST_PURPLE     = new Particle.DustOptions(Color.fromRGB(120, 30, 160),  1.2F);
+    private static final Particle.DustOptions DUST_RED        = new Particle.DustOptions(Color.fromRGB(180, 20, 20),   1.1F);
+    private static final Particle.DustOptions DUST_SILVER     = new Particle.DustOptions(Color.fromRGB(230, 230, 240), 1.2F);
+    private static final Particle.DustOptions DUST_AMBER      = new Particle.DustOptions(Color.fromRGB(220, 145, 30),  1.2F);
+    private static final Particle.DustOptions DUST_DARK_BLOOD = new Particle.DustOptions(Color.fromRGB(110,   8,  8),  1.1F);
+    private static final Particle.DustOptions DUST_MOONLIGHT  = new Particle.DustOptions(Color.fromRGB(195, 205, 255), 1.3F);
     private static final String INFECTION_KEY = "bloodmoon-werewolf-infection";
     private static final String INFECTION_PULSE_KEY = "bloodmoon-werewolf-infection-pulse";
     private static final String ARMOR_BREAK_KEY = "bloodmoon-werewolf-shattered-armor";
@@ -55,9 +60,11 @@ public final class WerewolfNPC {
     private static final Map<UUID, WerewolfBleedState> BLEED_STATES = new HashMap<>();
     private static final Map<UUID, BukkitRunnable> INFECTION_TASKS = new HashMap<>();
 
-    private enum WerewolfState { COMBAT, CASTING, DEAD }
+    private enum WerewolfState { PROWLING, COMBAT, CASTING, DEAD }
+    private static final int PROWLING_TICKS = 35;
     private enum WerewolfAbility {
-        BITE, FURIOUS_CLAWS, FAR_JUMP, WOLF_PACK, DEVOUR, TERRITORIAL_SNARL, PACK_FRENZY, BONE_SLAM
+        BITE, FURIOUS_CLAWS, FAR_JUMP, WOLF_PACK, DEVOUR, TERRITORIAL_SNARL, PACK_FRENZY, BONE_SLAM,
+        MOON_HOWL, SAVAGE_CHARGE, ALPHA_CALL
     }
 
     private final BloodMoonPlugin plugin;
@@ -69,7 +76,7 @@ public final class WerewolfNPC {
     private final List<BukkitRunnable> tasks = new ArrayList<>();
     private final List<Wolf> packWolves = new ArrayList<>();
 
-    private WerewolfState state = WerewolfState.COMBAT;
+    private WerewolfState state = WerewolfState.PROWLING;
     private WerewolfState beforeCast = WerewolfState.COMBAT;
     private WerewolfAbility pendingAbility;
     private BukkitRunnable controllerTask;
@@ -85,6 +92,7 @@ public final class WerewolfNPC {
     private int lunarSurgeTicks;
     private int bitesUntilInfection = 3 + random.nextInt(2);
     private boolean lunarSurgeUsed;
+    private boolean feralRageActive;
     private boolean cleaned;
     private boolean deathStarted;
 
@@ -151,6 +159,7 @@ public final class WerewolfNPC {
     }
 
     public void handleSentinelAttack(SentinelAttackEvent event) {
+        event.setCancelled(true);
         if (!(event.getTarget() instanceof Player player) || state == WerewolfState.DEAD) {
             return;
         }
@@ -159,8 +168,28 @@ public final class WerewolfNPC {
 
     public void onTakeDamage() {
         LivingEntity entity = getLivingEntity();
-        if (entity != null && entity.getHealth() <= entity.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue() * 0.3D) {
+        if (entity == null) {
+            return;
+        }
+        Location loc   = entity.getLocation();
+        World    world = entity.getWorld();
+        world.playSound(loc, Sound.ENTITY_WOLF_HURT, 0.9F, 0.75F + random.nextFloat() * 0.25F);
+        world.spawnParticle(Particle.DUST, loc.clone().add(0, 1.0D, 0), 12, 0.3D, 0.35D, 0.3D, 0D, DUST_RED);
+        world.spawnParticle(Particle.DUST, loc.clone().add(0, 1.0D, 0),  5, 0.2D, 0.2D,  0.2D, 0D, DUST_DARK_BLOOD);
+        world.spawnParticle(Particle.CRIT, loc.clone().add(0, 1.2D, 0),  4, 0.2D, 0.15D, 0.2D, 0.02D);
+        if (state == WerewolfState.PROWLING) {
+            state      = WerewolfState.COMBAT;
+            stateTicks = 0;
+        }
+        if (entity.getHealth() <= entity.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue() * 0.3D) {
             triggerLunarSurge();
+        }
+    }
+
+    public void triggerSnapFromDamage() {
+        if (state == WerewolfState.PROWLING) {
+            state      = WerewolfState.COMBAT;
+            stateTicks = 0;
         }
     }
 
@@ -205,6 +234,10 @@ public final class WerewolfNPC {
         cancelControllerOnly();
         cancelTasks();
         cleanupWolves();
+        LivingEntity entity = getLivingEntity();
+        if (entity != null) {
+            plugin.getOverheadHealthBarManager().removeBar(entity.getUniqueId());
+        }
         if (npc.isSpawned()) {
             npc.despawn();
         }
@@ -249,6 +282,7 @@ public final class WerewolfNPC {
         if (!npc.isSpawned()) {
             npc.spawn(spawnLocation.clone());
         }
+        npc.getNavigator().getDefaultParameters().speedModifier(0.9F).stationaryTicks(-1).avoidWater(false);
         LivingEntity entity = getLivingEntity();
         if (entity != null) {
             applyConfiguredHealth(entity);
@@ -288,13 +322,11 @@ public final class WerewolfNPC {
         sentinel.health = plugin.getConfigManager().getWerewolfHealth();
         sentinel.damage = 0.0D;
         sentinel.respawnTime = -1;
-        sentinel.chaseRange = 42.0D;
+        sentinel.chaseRange = 60.0D;
         sentinel.armor = 0.12D;
         sentinel.protectFromIgnores = false;
         sentinel.allTargets = new SentinelTargetList();
         sentinel.addTarget("players");
-        sentinel.addTarget("mobs");
-        sentinel.addTarget("monsters");
         sentinel.allIgnores = new SentinelTargetList();
         sentinel.addIgnore("npcs");
     }
@@ -355,6 +387,10 @@ public final class WerewolfNPC {
         cleanupInvalidWolves();
         tickPackWolves();
 
+        if (state == WerewolfState.PROWLING) {
+            tickProwling();
+            return;
+        }
         if (state == WerewolfState.CASTING) {
             tickCasting();
             return;
@@ -383,11 +419,32 @@ public final class WerewolfNPC {
         tickLunarSurge();
 
         double distanceSquared = entity.getLocation().distanceSquared(player.getLocation());
+        setNavigationSpeed(0.9F);
         npc.getNavigator().setTarget(player, true);
+        if (stateTicks % 8 == 0) {
+            lockSentinelChase(player, 54.0D);
+        }
         npc.faceLocation(player.getEyeLocation());
 
         if (entity.getHealth() <= entity.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue() * 0.3D) {
             triggerLunarSurge();
+        }
+
+        // FERAL RAGE phase — triggers once at ≤25% health
+        if (!feralRageActive) {
+            AttributeInstance maxHpAttr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+            double maxHp = maxHpAttr != null ? maxHpAttr.getValue() : plugin.getConfigManager().getWerewolfHealth();
+            if (entity.getHealth() / maxHp <= 0.25D) {
+                feralRageActive = true;
+                triggerFeralRagePhase(entity);
+            }
+        }
+
+        // Feral rage visual pulse — glowing claw swipes every 3 ticks
+        if (feralRageActive && stateTicks % 3 == 0) {
+            Location fl = entity.getLocation();
+            fl.getWorld().spawnParticle(Particle.DUST, fl.clone().add(0D, 1.0D, 0D),
+                3, 0.35D, 0.4D, 0.35D, 0D, DUST_RED);
         }
 
         int cadence = Math.max(16, (int) Math.round(26.0D * plugin.getBloodMoonManager().getAbilityCadenceMultiplier()));
@@ -416,6 +473,15 @@ public final class WerewolfNPC {
         if (distanceSquared <= 64.0D && cooldowns.getOrDefault(WerewolfAbility.FURIOUS_CLAWS, 0) <= 0 && stateTicks % Math.max(15, cadence) == 0) {
             candidates.add(WerewolfAbility.FURIOUS_CLAWS);
         }
+        if (cooldowns.getOrDefault(WerewolfAbility.MOON_HOWL, 0) <= 0 && stateTicks % Math.max(22, cadence + 14) == 0) {
+            candidates.add(WerewolfAbility.MOON_HOWL);
+        }
+        if (distanceSquared <= 200.0D && cooldowns.getOrDefault(WerewolfAbility.SAVAGE_CHARGE, 0) <= 0 && stateTicks % Math.max(18, cadence + 6) == 0) {
+            candidates.add(WerewolfAbility.SAVAGE_CHARGE);
+        }
+        if (cooldowns.getOrDefault(WerewolfAbility.ALPHA_CALL, 0) <= 0 && stateTicks % Math.max(28, cadence + 20) == 0) {
+            candidates.add(WerewolfAbility.ALPHA_CALL);
+        }
 
         WerewolfAbility selected = chooseAbility(candidates);
         if (selected != null) {
@@ -423,20 +489,30 @@ public final class WerewolfNPC {
             return;
         }
 
-        if (distanceSquared <= 6.25D && attackCooldown <= 0) {
-            performScratch(player, entity);
-        }
+        // Ability-only combat: no fallback vanilla-style scratch here.
     }
 
     private void tickCasting() {
+        LivingEntity entity = getLivingEntity();
+        if (entity != null && target != null && target.isOnline() && !target.isDead()) {
+            setNavigationSpeed(0.80F);
+            npc.getNavigator().setTarget(target, true);
+            if (stateTicks % 10 == 0) {
+                lockSentinelChase(target, 54.0D);
+            }
+            npc.faceLocation(target.getEyeLocation());
+        }
+        runCastingParticles();
+        updateCastingAnimation();
         if (stateTicks < castTicks) {
             return;
         }
         WerewolfAbility ability = pendingAbility;
         pendingAbility = null;
-        state = beforeCast;
+        resetCastingAnimation();
+        state      = beforeCast;
         stateTicks = 0;
-        castTicks = 0;
+        castTicks  = 0;
         if (ability != null) {
             executeAbility(ability);
         }
@@ -447,15 +523,65 @@ public final class WerewolfNPC {
             return;
         }
         pendingAbility = ability;
-        beforeCast = state;
-        state = WerewolfState.CASTING;
-        stateTicks = 0;
-        castTicks = ticks;
-        Location loc = getCurrentLocation();
-        World world = loc.getWorld();
-        if (world != null) {
-            world.playSound(loc, Sound.ENTITY_WOLF_GROWL, 1.0F, 0.65F + random.nextFloat() * 0.2F);
-            world.spawnParticle(Particle.DUST, loc.clone().add(0, 1, 0), 8, 0.25, 0.35, 0.25, 0, DUST_PURPLE);
+        beforeCast     = state;
+        state          = WerewolfState.CASTING;
+        stateTicks     = 0;
+        castTicks      = ticks;
+        npc.getNavigator().cancelNavigation();
+        Location loc   = getCurrentLocation();
+        World    world = loc.getWorld();
+        if (world == null) {
+            return;
+        }
+        switch (ability) {
+            case BITE -> {
+                world.playSound(loc, Sound.ENTITY_WOLF_GROWL,    1.1F, 0.55F);
+                world.playSound(loc, Sound.ENTITY_SKELETON_HURT, 0.65F, 1.8F);
+                world.spawnParticle(Particle.DUST, loc.clone().add(0, 1.0D, 0), 14, 0.35D, 0.4D, 0.35D, 0D, DUST_RED);
+                world.spawnParticle(Particle.DUST, loc.clone().add(0, 1.0D, 0),  6, 0.2D,  0.3D, 0.2D,  0D, DUST_DARK_BLOOD);
+            }
+            case FURIOUS_CLAWS -> {
+                world.playSound(loc, Sound.ENTITY_WOLF_GROWL,         1.1F, 0.75F);
+                world.playSound(loc, Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.8F, 0.6F);
+                world.spawnParticle(Particle.DUST, loc.clone().add(0, 1.1D, 0), 12, 0.4D, 0.3D, 0.4D, 0D, DUST_PURPLE);
+                world.spawnParticle(Particle.CRIT, loc.clone().add(0, 1.1D, 0),  4, 0.3D, 0.2D, 0.3D, 0.02D);
+            }
+            case FAR_JUMP -> {
+                world.playSound(loc, Sound.ENTITY_WOLF_AMBIENT, 1.2F, 0.45F);
+                world.playSound(loc, Sound.ENTITY_WOLF_GROWL,   0.9F, 0.4F);
+                world.spawnParticle(Particle.DUST,  loc.clone().add(0, 1.0D, 0), 16, 0.4D, 0.5D, 0.4D, 0D, DUST_SILVER);
+                world.spawnParticle(Particle.SMOKE, loc.clone().add(0, 0.3D, 0),  6, 0.3D, 0.1D, 0.3D, 0.03D);
+            }
+            case WOLF_PACK -> {
+                world.playSound(loc, Sound.ENTITY_WOLF_AMBIENT, 1.2F, 0.65F);
+                world.playSound(loc, Sound.ENTITY_WOLF_AMBIENT, 0.9F, 0.8F);
+                world.spawnParticle(Particle.DUST, loc.clone().add(0, 1.0D, 0), 14, 0.35D, 0.4D, 0.35D, 0D, DUST_AMBER);
+                world.spawnParticle(Particle.DUST, loc.clone().add(0, 1.0D, 0),  8, 0.25D, 0.3D, 0.25D, 0D, DUST_SILVER);
+            }
+            case DEVOUR -> {
+                world.playSound(loc, Sound.ENTITY_WOLF_GROWL,  1.1F, 0.35F);
+                world.playSound(loc, Sound.ENTITY_GENERIC_EAT, 0.7F, 0.5F);
+                world.spawnParticle(Particle.DUST, loc.clone().add(0, 1.0D, 0), 14, 0.3D, 0.4D, 0.3D, 0D, DUST_DARK_BLOOD);
+                world.spawnParticle(Particle.DUST, loc.clone().add(0, 1.0D, 0),  6, 0.2D, 0.3D, 0.2D, 0D, DUST_RED);
+            }
+            case TERRITORIAL_SNARL -> {
+                world.playSound(loc, Sound.ENTITY_WOLF_GROWL,  1.2F, 0.5F);
+                world.playSound(loc, Sound.BLOCK_GRAVEL_BREAK, 0.9F, 0.7F);
+                world.spawnParticle(Particle.DUST,  loc.clone().add(0, 1.0D, 0), 12, 0.35D, 0.3D, 0.35D, 0D, DUST_PURPLE);
+                world.spawnParticle(Particle.BLOCK, loc.clone().add(0, 0.2D, 0), 16, 0.5D,  0.1D, 0.5D, Material.DIRT.createBlockData());
+            }
+            case PACK_FRENZY -> {
+                world.playSound(loc, Sound.ENTITY_WOLF_AMBIENT,         1.1F, 1.1F);
+                world.playSound(loc, Sound.ENTITY_PLAYER_ATTACK_SWEEP,  0.8F, 0.7F);
+                world.spawnParticle(Particle.DUST, loc.clone().add(0, 1.0D, 0), 10, 0.3D,  0.4D, 0.3D,  0D, DUST_SILVER);
+                world.spawnParticle(Particle.DUST, loc.clone().add(0, 1.0D, 0),  8, 0.25D, 0.3D, 0.25D, 0D, DUST_RED);
+            }
+            case BONE_SLAM -> {
+                world.playSound(loc, Sound.ENTITY_PLAYER_ATTACK_KNOCKBACK, 1.0F, 0.5F);
+                world.playSound(loc, Sound.ENTITY_WOLF_GROWL,              0.9F, 0.5F);
+                world.spawnParticle(Particle.DUST,  loc.clone().add(0, 1.0D, 0), 12, 0.4D, 0.3D, 0.4D, 0D, DUST_PURPLE);
+                world.spawnParticle(Particle.BLOCK, loc.clone().add(0, 0.2D, 0), 10, 0.4D, 0.1D, 0.4D, Material.STONE.createBlockData());
+            }
         }
     }
 
@@ -470,6 +596,9 @@ public final class WerewolfNPC {
             case TERRITORIAL_SNARL -> castTerritorialSnarl();
             case PACK_FRENZY -> castPackFrenzy();
             case BONE_SLAM -> castBoneSlam();
+            case MOON_HOWL -> castMoonHowl();
+            case SAVAGE_CHARGE -> castSavageCharge();
+            case ALPHA_CALL -> castAlphaCall();
         }
         cooldowns.put(ability, switch (ability) {
             case BITE -> 110;
@@ -480,6 +609,9 @@ public final class WerewolfNPC {
             case TERRITORIAL_SNARL -> 220;
             case PACK_FRENZY -> 180;
             case BONE_SLAM -> 170;
+            case MOON_HOWL -> 280;
+            case SAVAGE_CHARGE -> 200;
+            case ALPHA_CALL -> 360;
         });
     }
 
@@ -505,6 +637,9 @@ public final class WerewolfNPC {
             case TERRITORIAL_SNARL -> 14;
             case PACK_FRENZY -> 12;
             case BONE_SLAM -> 18;
+            case MOON_HOWL -> 16;
+            case SAVAGE_CHARGE -> 14;
+            case ALPHA_CALL -> 20;
         };
     }
 
@@ -810,7 +945,7 @@ public final class WerewolfNPC {
         if (kb != null) {
             kb.setBaseValue(lunarSurgeTicks > 0 ? 1.0D : 0.25D);
         }
-        entity.getWorld().spawnParticle(Particle.DUST, entity.getLocation().add(0, 1.2, 0), healthFraction < 0.25D ? 4 : (healthFraction < 0.5D ? 2 : 1), 0.2, 0.3, 0.2, 0, DUST_RED);
+        emitWerewolfTellParticles(entity, healthFraction);
     }
 
     private void tickTerritory(Location current) {
@@ -843,9 +978,24 @@ public final class WerewolfNPC {
             return;
         }
         Location current = getCurrentLocation();
-        World world = current.getWorld();
-        if (world != null && stateTicks % 6 == 0) {
-            world.spawnParticle(Particle.DUST, current.clone().add(0, 1.5, 0), 6, 0.25, 0.35, 0.25, 0, DUST_SILVER);
+        World    world   = current.getWorld();
+        if (world == null) {
+            return;
+        }
+        // Spiral ring of moonlight particles
+        double angle = stateTicks * 0.48D;
+        for (int i = 0; i < 4; i++) {
+            double offset = angle + (i * (Math.PI / 2.0D));
+            Location ring = current.clone().add(
+                Math.cos(offset) * 0.9D, 1.2D + Math.sin(stateTicks * 0.18D + i) * 0.15D, Math.sin(offset) * 0.9D);
+            world.spawnParticle(Particle.DUST, ring, 1, 0.03D, 0.03D, 0.03D, 0D, DUST_MOONLIGHT);
+            if (i % 2 == 0) {
+                world.spawnParticle(Particle.DUST, ring, 1, 0.02D, 0.02D, 0.02D, 0D, DUST_SILVER);
+            }
+        }
+        // Periodic howl during surge
+        if (stateTicks % 80 == 0) {
+            world.playSound(current, Sound.ENTITY_WOLF_AMBIENT, 0.8F, 0.5F + random.nextFloat() * 0.15F);
         }
     }
 
@@ -856,10 +1006,21 @@ public final class WerewolfNPC {
         lunarSurgeUsed = true;
         lunarSurgeTicks = 240;
         Location current = getCurrentLocation();
-        World world = current.getWorld();
-        if (world != null) {
-            world.playSound(current, Sound.ENTITY_WOLF_AMBIENT, 1.3F, 0.55F);
-            world.spawnParticle(Particle.DUST, current.clone().add(0, 1.4, 0), 26, 0.35, 0.5, 0.35, 0, DUST_SILVER);
+        World    world   = current.getWorld();
+        if (world == null) {
+            return;
+        }
+        // Dramatic eruption burst — the wolf's rage peaks
+        world.playSound(current, Sound.ENTITY_WOLF_AMBIENT,          1.4F, 0.42F);
+        world.playSound(current, Sound.ENTITY_WOLF_GROWL,            1.2F, 0.35F);
+        world.playSound(current, Sound.ENTITY_GENERIC_EXPLODE,       0.6F, 1.55F);
+        world.spawnParticle(Particle.DUST,  current.clone().add(0, 1.4D, 0), 36, 0.5D, 0.65D, 0.5D, 0D, DUST_SILVER);
+        world.spawnParticle(Particle.DUST,  current.clone().add(0, 1.4D, 0), 18, 0.35D, 0.5D, 0.35D, 0D, DUST_MOONLIGHT);
+        world.spawnParticle(Particle.SMOKE, current.clone().add(0, 0.3D, 0), 20, 0.4D, 0.1D, 0.4D, 0.04D);
+        // Eruption ring
+        for (double a = 0; a < Math.PI * 2.0D; a += Math.PI / 10.0D) {
+            Location ring = current.clone().add(Math.cos(a) * 1.4D, 0.4D, Math.sin(a) * 1.4D);
+            world.spawnParticle(Particle.DUST, ring, 2, 0.04D, 0.1D, 0.04D, 0D, DUST_MOONLIGHT);
         }
     }
 
@@ -941,6 +1102,30 @@ public final class WerewolfNPC {
             }
         }
         return nearest;
+    }
+
+    private void setNavigationSpeed(float speed) {
+        try {
+            npc.getNavigator().getDefaultParameters().speedModifier(speed);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void lockSentinelChase(Player player, double chaseRange) {
+        if (player == null || !player.isOnline() || player.isDead()) {
+            return;
+        }
+        try {
+            SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
+            sentinel.allTargets = new SentinelTargetList();
+            sentinel.addTarget("players");
+            sentinel.addTarget("player:" + player.getName());
+            sentinel.allIgnores = new SentinelTargetList();
+            sentinel.addIgnore("npcs");
+            sentinel.chaseRange = Math.max(sentinel.chaseRange, chaseRange);
+            sentinel.respawnTime = -1;
+        } catch (Exception ignored) {
+        }
     }
 
     private LivingEntity getLivingEntity() {
@@ -1075,28 +1260,258 @@ public final class WerewolfNPC {
         }
     }
 
-    private void dropLoot(World world, Location location) {
-        if (random.nextDouble() <= 0.62D) world.dropItemNaturally(location, new ItemStack(Material.BONE, 2 + random.nextInt(3)));
-        if (random.nextDouble() <= 0.38D) world.dropItemNaturally(location, new ItemStack(Material.LEATHER, 1 + random.nextInt(2)));
-        if (random.nextDouble() <= 0.34D) world.dropItemNaturally(location, new ItemStack(Material.MUTTON, 1 + random.nextInt(2)));
-        if (random.nextDouble() <= 0.28D) world.dropItemNaturally(location, new ItemStack(Material.BEEF, 1 + random.nextInt(2)));
-        if (random.nextDouble() <= 0.22D) world.dropItemNaturally(location, new ItemStack(Material.RABBIT_HIDE, 1));
-        if (random.nextDouble() <= 0.18D) world.dropItemNaturally(location, new ItemStack(Material.RABBIT_FOOT, 1));
-        if (random.nextDouble() <= 0.30D) world.dropItemNaturally(location, new ItemStack(Material.STRING, 1 + random.nextInt(3)));
-        if (random.nextDouble() <= 0.16D) world.dropItemNaturally(location, new ItemStack(Material.LEAD, 1));
-        if (random.nextDouble() <= 0.16D) world.dropItemNaturally(location, new ItemStack(Material.WHITE_WOOL, 1));
-        if (random.nextDouble() <= 0.24D) world.dropItemNaturally(location, new ItemStack(Material.CHICKEN, 1 + random.nextInt(2)));
+    // -------------------------------------------------------------------------
+    // Active ability: MOON_HOWL — disorienting howl, nausea + blindness on nearby players
+    // -------------------------------------------------------------------------
 
-        if (random.nextDouble() <= 0.08D) world.dropItemNaturally(location, new ItemStack(Material.BONE_BLOCK, 1));
-        if (random.nextDouble() <= 0.07D) world.dropItemNaturally(location, new ItemStack(Material.ENCHANTED_BOOK, 1));
-        if (random.nextDouble() <= 0.07D) world.dropItemNaturally(location, new ItemStack(Material.IRON_AXE, 1));
-        if (random.nextDouble() <= 0.06D) world.dropItemNaturally(location, new ItemStack(Material.GOLDEN_APPLE, 1));
-        if (random.nextDouble() <= 0.06D) world.dropItemNaturally(location, new ItemStack(Material.CHAINMAIL_CHESTPLATE, 1));
-        if (random.nextDouble() <= 0.06D) world.dropItemNaturally(location, new ItemStack(Material.SHIELD, 1));
-        if (random.nextDouble() <= 0.05D) world.dropItemNaturally(location, new ItemStack(Material.COMPASS, 1));
-        if (random.nextDouble() <= 0.06D) world.dropItemNaturally(location, new ItemStack(Material.IRON_BOOTS, 1));
-        if (random.nextDouble() <= 0.05D) world.dropItemNaturally(location, new ItemStack(Material.RABBIT_STEW, 1));
-        if (random.nextDouble() <= 0.05D) world.dropItemNaturally(location, new ItemStack(Material.GOAT_HORN, 1));
+    private void castMoonHowl() {
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) {
+            return;
+        }
+        Location loc = entity.getLocation();
+        World world = entity.getWorld();
+
+        world.playSound(loc, Sound.ENTITY_WOLF_AMBIENT, 1.2F, 0.32F);
+        world.playSound(loc, Sound.ENTITY_WOLF_GROWL,   1.0F, 0.28F);
+        world.playSound(loc, Sound.ENTITY_WARDEN_SONIC_BOOM, 0.5F, 1.6F);
+        world.spawnParticle(Particle.DUST, loc.clone().add(0D, 1.2D, 0D), 30, 0.6D, 0.7D, 0.6D, 0D, DUST_MOONLIGHT);
+        world.spawnParticle(Particle.DUST, loc.clone().add(0D, 1.2D, 0D), 16, 0.4D, 0.5D, 0.4D, 0D, DUST_SILVER);
+
+        // Ring burst
+        for (int i = 0; i < 20; i++) {
+            double a = (Math.PI * 2.0D / 20.0D) * i;
+            world.spawnParticle(Particle.DUST,
+                loc.clone().add(Math.cos(a) * 2.0D, 1.0D, Math.sin(a) * 2.0D),
+                1, 0.05D, 0.05D, 0.05D, 0D, DUST_SILVER);
+        }
+
+        double radiusSq = 100.0D; // 10-block howl range
+        for (Player p : world.getPlayers()) {
+            if (p.isDead() || p.getLocation().distanceSquared(loc) > radiusSq) {
+                continue;
+            }
+            p.addPotionEffect(new PotionEffect(PotionEffectType.NAUSEA,    80, 0, false, true, true));
+            p.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 40, 0, false, true, true));
+            p.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS,  50, 1, false, true, true));
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Active ability: SAVAGE_CHARGE — sprint dash in a line, damaging all in path
+    // -------------------------------------------------------------------------
+
+    private void castSavageCharge() {
+        LivingEntity entity = getLivingEntity();
+        Player player = target;
+        if (entity == null || player == null || !player.isOnline() || player.isDead()) {
+            return;
+        }
+        World world = entity.getWorld();
+        Location start = entity.getLocation();
+
+        world.playSound(start, Sound.ENTITY_WOLF_GROWL,  1.0F, 0.55F);
+        world.playSound(start, Sound.ENTITY_ZOMBIE_BREAK_WOODEN_DOOR, 0.8F, 1.1F);
+
+        Vector dir = player.getLocation().toVector().subtract(start.toVector()).setY(0);
+        if (dir.lengthSquared() < 0.001D) {
+            return;
+        }
+        dir.normalize();
+
+        final double chargeSpeed = 0.9D;
+        final int chargeSteps   = 22;
+        final double hitRadiusSq = 2.25D; // 1.5 block hit radius
+
+        BukkitRunnable charge = new BukkitRunnable() {
+            int step = 0;
+
+            @Override
+            public void run() {
+                if (!entity.isValid() || step >= chargeSteps) {
+                    cancel();
+                    return;
+                }
+                step++;
+                entity.setVelocity(dir.clone().multiply(chargeSpeed).setY(0.08D));
+                Location pos = entity.getLocation();
+
+                // Trail particles
+                world.spawnParticle(Particle.DUST, pos.clone().add(0D, 0.5D, 0D),
+                    4, 0.2D, 0.3D, 0.2D, 0D, DUST_RED);
+                world.spawnParticle(Particle.BLOCK, pos.clone().add(0D, 0.1D, 0D),
+                    3, 0.2D, 0.05D, 0.2D, 0.05D, Material.DIRT.createBlockData());
+
+                // Damage players in path
+                for (Player p : world.getPlayers()) {
+                    if (!p.isDead() && p.getLocation().distanceSquared(pos) <= hitRadiusSq) {
+                        p.damage(5.5D);
+                        Vector kb = p.getLocation().toVector().subtract(pos.toVector()).setY(0);
+                        if (kb.lengthSquared() > 0.001D) {
+                            kb.normalize().multiply(1.2D).setY(0.6D);
+                            p.setVelocity(kb);
+                        }
+                    }
+                }
+            }
+        };
+        tasks.add(charge);
+        charge.runTaskTimer(plugin, 1L, 1L);
+    }
+
+    // -------------------------------------------------------------------------
+    // Active ability: ALPHA_CALL — empowers wolves + heals self slightly
+    // -------------------------------------------------------------------------
+
+    private void castAlphaCall() {
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) {
+            return;
+        }
+        Location loc = entity.getLocation();
+        World world = entity.getWorld();
+
+        world.playSound(loc, Sound.ENTITY_WOLF_AMBIENT, 1.2F, 0.28F);
+        world.playSound(loc, Sound.ENTITY_WOLF_GROWL,   1.0F, 0.38F);
+        world.spawnParticle(Particle.DUST, loc.clone().add(0D, 1.2D, 0D), 25, 0.5D, 0.6D, 0.5D, 0D, DUST_AMBER);
+        world.spawnParticle(Particle.SOUL_FIRE_FLAME, loc.clone().add(0D, 0.8D, 0D), 10, 0.4D, 0.3D, 0.4D, 0.04D);
+
+        // Self-heal 3.0 HP
+        double newHp = Math.min(entity.getHealth() + 3.0D,
+            entity.getAttribute(Attribute.GENERIC_MAX_HEALTH) != null
+                ? entity.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue()
+                : plugin.getConfigManager().getWerewolfHealth());
+        entity.setHealth(newHp);
+
+        // Buff all pack wolves — speed + frenzy-like state
+        for (Wolf wolf : packWolves) {
+            if (wolf == null || !wolf.isValid() || wolf.isDead()) {
+                continue;
+            }
+            wolf.addPotionEffect(new PotionEffect(PotionEffectType.SPEED,    120, 1, false, true));
+            wolf.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 120, 0, false, true));
+            wolf.getWorld().spawnParticle(Particle.DUST,
+                wolf.getLocation().clone().add(0D, 0.8D, 0D),
+                8, 0.3D, 0.3D, 0.3D, 0D, DUST_AMBER);
+        }
+
+        // If no wolves are alive, summon one emergency wolf
+        if (countLivingPackWolves() == 0 && cooldowns.getOrDefault(WerewolfAbility.WOLF_PACK, 0) > 0) {
+            castWolfPack();
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Phase transition: FERAL RAGE — triggers at ≤25% health
+    // -------------------------------------------------------------------------
+
+    private void triggerFeralRagePhase(LivingEntity entity) {
+        Location loc = entity.getLocation();
+        World world = entity.getWorld();
+
+        world.playSound(loc, Sound.ENTITY_WOLF_AMBIENT,       1.4F, 0.28F);
+        world.playSound(loc, Sound.ENTITY_WOLF_GROWL,         1.2F, 0.25F);
+        world.playSound(loc, Sound.ENTITY_WARDEN_SONIC_BOOM,  0.7F, 0.38F);
+        world.spawnParticle(Particle.EXPLOSION, loc.clone().add(0D, 0.5D, 0D),  2, 0.4D, 0.2D, 0.4D, 0D);
+        world.spawnParticle(Particle.DUST, loc.clone().add(0D, 1.0D, 0D), 50, 1.0D, 0.8D, 1.0D, 0D, DUST_RED);
+        world.spawnParticle(Particle.DUST, loc.clone().add(0D, 1.0D, 0D), 20, 0.7D, 0.5D, 0.7D, 0D, DUST_DARK_BLOOD);
+
+        // Speed boost
+        AttributeInstance speed = entity.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED);
+        if (speed != null) {
+            speed.setBaseValue(0.40D);
+        }
+
+        // Claw damage boost — next scratch will deal more
+        entity.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, Integer.MAX_VALUE, 1, false, false));
+        entity.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING,  Integer.MAX_VALUE, 0, false, false));
+
+        // Periodic howl every 30 ticks handled via stateTicks % 30 in tickCombat — just announce once
+        for (Player p : world.getPlayers()) {
+            if (p.getLocation().distanceSquared(loc) <= 900.0D) {
+                p.sendMessage("§4§l☠ The Werewolf enters a primal FERAL RAGE! ☠");
+            }
+        }
+    }
+
+    private void dropLoot(World world, Location location) {
+        // --- Common drops ---
+        if (random.nextDouble() <= 0.70D) world.dropItemNaturally(location, new ItemStack(Material.BONE,    2 + random.nextInt(3)));
+        if (random.nextDouble() <= 0.60D) world.dropItemNaturally(location, new ItemStack(Material.MUTTON,  1 + random.nextInt(3)));
+        if (random.nextDouble() <= 0.55D) world.dropItemNaturally(location, new ItemStack(Material.BEEF,    1 + random.nextInt(2)));
+        if (random.nextDouble() <= 0.50D) world.dropItemNaturally(location, new ItemStack(Material.LEATHER, 2 + random.nextInt(2)));
+
+        // Wolf Fang — custom-named bone
+        if (random.nextDouble() <= 0.35D) {
+            ItemStack fang = new ItemStack(Material.BONE);
+            org.bukkit.inventory.meta.ItemMeta m = fang.getItemMeta();
+            if (m != null) {
+                m.setDisplayName("§fWolf Fang");
+                m.setLore(java.util.List.of("§7A razor-sharp fang, still warm."));
+                fang.setItemMeta(m);
+            }
+            world.dropItemNaturally(location, fang);
+        }
+
+        // Silver Arrow — spectral arrow representing silver ammo
+        if (random.nextDouble() <= 0.30D) world.dropItemNaturally(location, new ItemStack(Material.SPECTRAL_ARROW, 2 + random.nextInt(4)));
+
+        // Moon Shard — quartz fragment
+        if (random.nextDouble() <= 0.25D) {
+            ItemStack shard = new ItemStack(Material.QUARTZ);
+            org.bukkit.inventory.meta.ItemMeta m = shard.getItemMeta();
+            if (m != null) {
+                m.setDisplayName("§7Moon Shard");
+                m.setLore(java.util.List.of("§8Crystallised moonlight, brittle yet cold."));
+                shard.setItemMeta(m);
+            }
+            world.dropItemNaturally(location, shard);
+        }
+
+        if (random.nextDouble() <= 0.20D) world.dropItemNaturally(location, new ItemStack(Material.SPIDER_EYE, 1));
+        if (random.nextDouble() <= 0.18D) world.dropItemNaturally(location, new ItemStack(Material.LEAD,        1 + random.nextInt(2)));
+
+        // Wolf Hide — leather chestplate with custom name
+        if (random.nextDouble() <= 0.08D) {
+            ItemStack hide = new ItemStack(Material.LEATHER_CHESTPLATE);
+            org.bukkit.inventory.meta.ItemMeta m = hide.getItemMeta();
+            if (m != null) {
+                m.setDisplayName("§6Wolf Hide");
+                m.setLore(java.util.List.of("§7Thick pelt, matted with dried blood."));
+                hide.setItemMeta(m);
+            }
+            world.dropItemNaturally(location, hide);
+        }
+
+        if (random.nextDouble() <= 0.06D) world.dropItemNaturally(location, new ItemStack(Material.GOAT_HORN,     1));
+
+        // Pack Howl — paper item with lore
+        if (random.nextDouble() <= 0.08D) {
+            ItemStack scroll = new ItemStack(Material.PAPER);
+            org.bukkit.inventory.meta.ItemMeta m = scroll.getItemMeta();
+            if (m != null) {
+                m.setDisplayName("§bPack Howl");
+                m.setLore(java.util.List.of("§7Echoes of the pack still linger.", "§8(Rare trophy drop)"));
+                scroll.setItemMeta(m);
+            }
+            world.dropItemNaturally(location, scroll);
+        }
+
+        // Rare weapon drop
+        if (random.nextDouble() <= 0.10D) {
+            ItemStack axe = new ItemStack(Material.IRON_AXE);
+            axe.addUnsafeEnchantment(org.bukkit.enchantments.Enchantment.SHARPNESS, 2);
+            world.dropItemNaturally(location, axe);
+        }
+
+        // Very rare drops
+        if (random.nextDouble() <= 0.08D) world.dropItemNaturally(location, new ItemStack(Material.WITHER_SKELETON_SKULL, 1));
+        if (random.nextDouble() <= 0.04D) world.dropItemNaturally(location, new ItemStack(Material.GOLDEN_APPLE, 1));
+
+        // Experience
+        int xp = 40 + random.nextInt(31);
+        ExperienceOrb orb = (ExperienceOrb) world.spawnEntity(location, EntityType.EXPERIENCE_ORB);
+        orb.setExperience(xp);
     }
 
     private static void applyWerewolfBleed(BloodMoonPlugin plugin, Player player, int biteTicks, int scratchTicks) {
@@ -1175,6 +1590,367 @@ public final class WerewolfNPC {
             }
         }
         tasks.clear();
+    }
+
+    // =========================================================================
+    // Prowling intro state — wolf slinks in before combat begins
+    // =========================================================================
+
+    private void tickProwling() {
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) {
+            return;
+        }
+        World    world = entity.getWorld();
+        Location loc   = entity.getLocation();
+
+        // Find target before the first reveal
+        if (stateTicks == 1) {
+            Player nearest = findNearestPlayer(loc, 56.0D);
+            if (nearest != null) {
+                target = nearest;
+            }
+            world.playSound(loc, Sound.ENTITY_WOLF_GROWL,   0.55F, 0.45F + random.nextFloat() * 0.1F);
+            world.playSound(loc, Sound.ENTITY_WOLF_AMBIENT, 0.45F, 0.5F);
+        }
+
+        // Stalking footstep dust trail
+        if (stateTicks % 5 == 0) {
+            world.spawnParticle(Particle.SMOKE, loc.clone().add(0, 0.15D, 0), 2, 0.18D, 0.05D, 0.18D, 0.01D);
+            world.spawnParticle(Particle.DUST,  loc.clone().add(0, 1.1D, 0),  1, 0.12D, 0.12D, 0.12D, 0D, DUST_RED);
+        }
+
+        // Low-growl building sequence
+        if (stateTicks % 12 == 0) {
+            world.playSound(loc, Sound.ENTITY_WOLF_GROWL, 0.4F + (stateTicks / (float) PROWLING_TICKS) * 0.55F, 0.5F);
+        }
+
+        // Chase the target during the prowl
+        if (target != null && target.isOnline() && !target.isDead()) {
+            setNavigationSpeed(0.85F);
+            npc.getNavigator().setTarget(target, true);
+            if (stateTicks % 10 == 0) {
+                lockSentinelChase(target, 54.0D);
+            }
+            npc.faceLocation(target.getEyeLocation());
+        }
+
+        if (stateTicks >= PROWLING_TICKS) {
+            state      = WerewolfState.COMBAT;
+            stateTicks = 0;
+            // Combat reveal — explosive burst
+            world.playSound(loc, Sound.ENTITY_WOLF_AMBIENT, 1.3F, 0.55F);
+            world.playSound(loc, Sound.ENTITY_WOLF_GROWL,   1.1F, 0.6F);
+            world.spawnParticle(Particle.DUST,  loc.clone().add(0, 1.0D, 0), 24, 0.5D, 0.55D, 0.5D, 0D, DUST_RED);
+            world.spawnParticle(Particle.SMOKE, loc.clone().add(0, 0.3D, 0), 12, 0.4D, 0.1D,  0.4D, 0.04D);
+            for (double a = 0; a < Math.PI * 2.0D; a += Math.PI / 8.0D) {
+                Location ring = loc.clone().add(Math.cos(a) * 1.1D, 0.3D, Math.sin(a) * 1.1D);
+                world.spawnParticle(Particle.DUST, ring, 1, 0.03D, 0.08D, 0.03D, 0D, DUST_RED);
+            }
+        }
+    }
+
+    // =========================================================================
+    // Ambient tell particles — scale with health and lunar surge
+    // =========================================================================
+
+    private void emitWerewolfTellParticles(LivingEntity entity, double healthFraction) {
+        World    world = entity.getWorld();
+        Location loc   = entity.getLocation();
+
+        // Red blood-scent drip — intensity scales with lost health
+        int count = healthFraction < 0.25D ? 4 : (healthFraction < 0.5D ? 2 : 1);
+        world.spawnParticle(Particle.DUST, loc.clone().add(0, 1.2D, 0), count, 0.2D, 0.3D, 0.2D, 0D, DUST_RED);
+
+        // Dark blood drip at very low health
+        if (healthFraction < 0.3D && stateTicks % 6 == 0) {
+            world.spawnParticle(Particle.DUST, loc.clone().add(0, 0.8D, 0), 2, 0.15D, 0.15D, 0.15D, 0D, DUST_DARK_BLOOD);
+        }
+
+        // Moonlight shimmer during lunar surge
+        if (lunarSurgeTicks > 0 && stateTicks % 4 == 0) {
+            world.spawnParticle(Particle.DUST, loc.clone().add(0, 1.5D, 0), 3, 0.22D, 0.3D, 0.22D, 0D, DUST_MOONLIGHT);
+        }
+
+        // Amber frenzy glow when pack wolves are alive and frenzied
+        if (packFrenzyTicks > 0 && stateTicks % 5 == 0) {
+            world.spawnParticle(Particle.DUST, loc.clone().add(0, 1.3D, 0), 2, 0.18D, 0.22D, 0.18D, 0D, DUST_AMBER);
+        }
+    }
+
+    // =========================================================================
+    // Casting particle system
+    // =========================================================================
+
+    private void runCastingParticles() {
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) {
+            return;
+        }
+        Location base  = entity.getLocation();
+        World    world = base.getWorld();
+        if (world == null) {
+            return;
+        }
+        if (pendingAbility == null) {
+            spawnGenericCastingRing(world, base);
+            return;
+        }
+        switch (pendingAbility) {
+            case BITE            -> spawnBiteCastingParticles(world, base);
+            case FURIOUS_CLAWS   -> spawnFuriousClawsCastingParticles(world, base);
+            case FAR_JUMP        -> spawnFarJumpCastingParticles(world, base);
+            case WOLF_PACK       -> spawnWolfPackCastingParticles(world, base);
+            case DEVOUR          -> spawnDevourCastingParticles(world, base);
+            case TERRITORIAL_SNARL -> spawnSnarlCastingParticles(world, base);
+            case PACK_FRENZY     -> spawnPackFrenzyCastingParticles(world, base);
+            case BONE_SLAM       -> spawnBoneSlamCastingParticles(world, base);
+        }
+    }
+
+    private void spawnGenericCastingRing(World world, Location base) {
+        double angle = stateTicks * 0.44D;
+        for (int step = 0; step < 4; step++) {
+            double offset = angle + (step * (Math.PI / 2.0D));
+            Location point = base.clone().add(
+                Math.cos(offset) * 0.8D,
+                0.4D + (stateTicks % 18) * 0.04D,
+                Math.sin(offset) * 0.8D);
+            world.spawnParticle(Particle.DUST, point, 1, 0.02D, 0.02D, 0.02D, 0D, DUST_RED);
+        }
+    }
+
+    private void spawnBiteCastingParticles(World world, Location base) {
+        spawnGenericCastingRing(world, base);
+        Location focus = base.clone().add(0D, 1.0D, 0D);
+        world.spawnParticle(Particle.DUST, focus, 5, 0.2D, 0.25D, 0.2D, 0D, DUST_RED);
+        world.spawnParticle(Particle.DUST, focus, 3, 0.15D, 0.2D, 0.15D, 0D, DUST_DARK_BLOOD);
+        if (stateTicks % 5 == 0) {
+            world.playSound(base, Sound.ENTITY_WOLF_GROWL, 0.3F, 0.55F + random.nextFloat() * 0.1F);
+        }
+        if (target != null && target.isOnline() && !target.isDead()) {
+            Location eye  = base.clone().add(0D, 1.4D, 0D);
+            Location dest = target.getEyeLocation();
+            for (int s = 0; s < 3; s++) {
+                double progress = ((stateTicks * 0.18D) + (s * 0.28D)) % 1.0D;
+                Location point  = eye.clone().add(dest.clone().subtract(eye).toVector().multiply(progress));
+                world.spawnParticle(Particle.DUST, point, 1, 0.03D, 0.03D, 0.03D, 0D, DUST_RED);
+            }
+        }
+    }
+
+    private void spawnFuriousClawsCastingParticles(World world, Location base) {
+        double angle = stateTicks * 0.55D;
+        for (int i = 0; i < 5; i++) {
+            double offset = angle + (i * (Math.PI * 2.0D / 5.0D));
+            double radius = 0.55D + Math.sin(stateTicks * 0.28D + i) * 0.15D;
+            double height = 0.4D + (i % 2) * 0.5D;
+            Location point = base.clone().add(Math.cos(offset) * radius, height, Math.sin(offset) * radius);
+            world.spawnParticle(Particle.DUST, point, 2, 0.04D, 0.05D, 0.04D, 0D, DUST_PURPLE);
+            if (i % 2 == 0) {
+                world.spawnParticle(Particle.CRIT, point, 1, 0.04D, 0.05D, 0.04D, 0.01D);
+            }
+        }
+        if (stateTicks % 5 == 0) {
+            world.playSound(base, Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.25F, 0.65F + random.nextFloat() * 0.2F);
+        }
+    }
+
+    private void spawnFarJumpCastingParticles(World world, Location base) {
+        spawnGenericCastingRing(world, base);
+        Location focus = base.clone().add(0D, 1.0D, 0D);
+        world.spawnParticle(Particle.DUST,  focus, 6, 0.22D, 0.28D, 0.22D, 0D, DUST_SILVER);
+        world.spawnParticle(Particle.SMOKE, base.clone().add(0D, 0.3D, 0D), 2, 0.2D, 0.05D, 0.2D, 0.02D);
+        if (stateTicks % 6 == 0) {
+            world.playSound(base, Sound.ENTITY_WOLF_GROWL, 0.25F, 0.4F + random.nextFloat() * 0.1F);
+        }
+    }
+
+    private void spawnWolfPackCastingParticles(World world, Location base) {
+        double angle = stateTicks * 0.5D;
+        for (int i = 0; i < 4; i++) {
+            double offset = angle + (i * (Math.PI / 2.0D));
+            double radius = 0.7D + Math.sin(stateTicks * 0.22D + i) * 0.1D;
+            Location point = base.clone().add(Math.cos(offset) * radius, 0.6D + (i % 2) * 0.35D, Math.sin(offset) * radius);
+            world.spawnParticle(Particle.DUST, point, 2, 0.04D, 0.05D, 0.04D, 0D, DUST_AMBER);
+            if (i % 2 == 0) {
+                world.spawnParticle(Particle.DUST, point, 1, 0.03D, 0.04D, 0.03D, 0D, DUST_SILVER);
+            }
+        }
+        if (stateTicks % 7 == 0) {
+            world.playSound(base, Sound.ENTITY_WOLF_AMBIENT, 0.25F, 0.68F + random.nextFloat() * 0.15F);
+        }
+    }
+
+    private void spawnDevourCastingParticles(World world, Location base) {
+        spawnGenericCastingRing(world, base);
+        Location focus = base.clone().add(0D, 1.0D, 0D);
+        world.spawnParticle(Particle.DUST, focus, 6, 0.22D, 0.28D, 0.22D, 0D, DUST_DARK_BLOOD);
+        world.spawnParticle(Particle.DUST, focus, 3, 0.15D, 0.2D,  0.15D, 0D, DUST_RED);
+        if (stateTicks % 6 == 0) {
+            world.playSound(base, Sound.ENTITY_GENERIC_EAT, 0.2F, 0.5F + random.nextFloat() * 0.1F);
+        }
+    }
+
+    private void spawnSnarlCastingParticles(World world, Location base) {
+        spawnGenericCastingRing(world, base);
+        Location focus = base.clone().add(0D, 1.0D, 0D);
+        world.spawnParticle(Particle.DUST, focus, 5, 0.2D, 0.25D, 0.2D, 0D, DUST_PURPLE);
+        world.spawnParticle(Particle.BLOCK, base.clone().add(0D, 0.2D, 0D), 3, 0.3D, 0.1D, 0.3D, Material.DIRT.createBlockData());
+        if (stateTicks % 7 == 0) {
+            world.playSound(base, Sound.ENTITY_WOLF_GROWL, 0.3F, 0.5F + random.nextFloat() * 0.1F);
+        }
+    }
+
+    private void spawnPackFrenzyCastingParticles(World world, Location base) {
+        double angle = stateTicks * 0.58D;
+        for (int i = 0; i < 4; i++) {
+            double offset = angle + (i * (Math.PI / 2.0D));
+            double radius = 0.6D + Math.sin(stateTicks * 0.3D + i) * 0.15D;
+            Location point = base.clone().add(Math.cos(offset) * radius, 0.5D + (i % 2) * 0.45D, Math.sin(offset) * radius);
+            world.spawnParticle(Particle.DUST, point, 2, 0.04D, 0.05D, 0.04D, 0D, DUST_SILVER);
+            if (i % 2 == 0) {
+                world.spawnParticle(Particle.DUST, point, 1, 0.03D, 0.04D, 0.03D, 0D, DUST_RED);
+            }
+        }
+        if (stateTicks % 5 == 0) {
+            world.playSound(base, Sound.ENTITY_WOLF_AMBIENT, 0.3F, 1.1F + random.nextFloat() * 0.1F);
+        }
+    }
+
+    private void spawnBoneSlamCastingParticles(World world, Location base) {
+        spawnGenericCastingRing(world, base);
+        Location focus = base.clone().add(0D, 1.0D, 0D);
+        world.spawnParticle(Particle.DUST,  focus, 6, 0.25D, 0.3D, 0.25D, 0D, DUST_PURPLE);
+        world.spawnParticle(Particle.BLOCK, base.clone().add(0D, 0.2D, 0D), 3, 0.3D, 0.1D, 0.3D, Material.STONE.createBlockData());
+        if (stateTicks % 6 == 0) {
+            world.playSound(base, Sound.ENTITY_PLAYER_ATTACK_KNOCKBACK, 0.25F, 0.5F + random.nextFloat() * 0.1F);
+        }
+    }
+
+    // =========================================================================
+    // Casting animation system  (Citizens PlayerAnimation via reflection)
+    // =========================================================================
+
+    private void updateCastingAnimation() {
+        LivingEntity entity = getLivingEntity();
+        if (!(entity instanceof Player npcPlayer)) {
+            return;
+        }
+        if (target != null && target.isOnline() && !target.isDead()) {
+            npc.faceLocation(target.getEyeLocation());
+        }
+        if (pendingAbility == null) {
+            return;
+        }
+        switch (pendingAbility) {
+            case BITE            -> animateBite(npcPlayer);
+            case FURIOUS_CLAWS   -> animateFuriousClaws(npcPlayer);
+            case FAR_JUMP        -> animateFarJump(npcPlayer);
+            case WOLF_PACK       -> animateWolfPack(npcPlayer);
+            case DEVOUR          -> animateDevour(npcPlayer);
+            case TERRITORIAL_SNARL -> animateSnarl(npcPlayer);
+            case PACK_FRENZY     -> animatePackFrenzy(npcPlayer);
+            case BONE_SLAM       -> animateBoneSlam(npcPlayer);
+        }
+    }
+
+    /** Bite: snap-lunge forward arm swing building up. */
+    private void animateBite(Player p) {
+        if (stateTicks % 5 == 0) {
+            playCitizensPlayerAnimation(p, "ARM_SWING");
+        }
+        if (stateTicks == castTicks - 2) {
+            p.swingMainHand();
+            playCitizensPlayerAnimation(p, "START_USE_MAINHAND_ITEM");
+        }
+    }
+
+    /** Furious Claws: rapid bilateral sweep arms. */
+    private void animateFuriousClaws(Player p) {
+        if (stateTicks % 4 == 0) {
+            playCitizensPlayerAnimation(p, "ARM_SWING");
+        }
+        if (stateTicks % 6 == 0) {
+            playCitizensPlayerAnimation(p, "ARM_SWING_OFFHAND");
+        }
+    }
+
+    /** Far Jump: coiling crouch before the leap. */
+    private void animateFarJump(Player p) {
+        if (stateTicks % 6 == 0) {
+            playCitizensPlayerAnimation(p, "START_USE_MAINHAND_ITEM");
+        }
+        if (stateTicks == castTicks - 1) {
+            p.swingMainHand();
+            playCitizensPlayerAnimation(p, "ARM_SWING");
+        }
+    }
+
+    /** Wolf Pack: raised summon arms. */
+    private void animateWolfPack(Player p) {
+        if (stateTicks % 6 == 0) {
+            playCitizensPlayerAnimation(p, "START_USE_MAINHAND_ITEM");
+            playCitizensPlayerAnimation(p, "START_USE_OFFHAND_ITEM");
+        }
+    }
+
+    /** Devour: reach-out lunge toward prey. */
+    private void animateDevour(Player p) {
+        if (stateTicks % 5 == 0) {
+            p.swingMainHand();
+            playCitizensPlayerAnimation(p, "ARM_SWING");
+        }
+    }
+
+    /** Territorial Snarl: stomp-stamp on the ground. */
+    private void animateSnarl(Player p) {
+        if (stateTicks % 7 == 0) {
+            playCitizensPlayerAnimation(p, "ARM_SWING");
+            playCitizensPlayerAnimation(p, "ARM_SWING_OFFHAND");
+        }
+    }
+
+    /** Pack Frenzy: frenzied double-arm signal. */
+    private void animatePackFrenzy(Player p) {
+        if (stateTicks % 4 == 0) {
+            playCitizensPlayerAnimation(p, "ARM_SWING");
+        }
+        if (stateTicks % 5 == 0) {
+            playCitizensPlayerAnimation(p, "ARM_SWING_OFFHAND");
+        }
+    }
+
+    /** Bone Slam: giant overhead two-handed slam. */
+    private void animateBoneSlam(Player p) {
+        if (stateTicks % 5 == 0) {
+            playCitizensPlayerAnimation(p, "START_USE_MAINHAND_ITEM");
+        }
+        if (stateTicks == castTicks - 2) {
+            p.swingMainHand();
+            p.swingOffHand();
+            playCitizensPlayerAnimation(p, "ARM_SWING");
+            playCitizensPlayerAnimation(p, "ARM_SWING_OFFHAND");
+        }
+    }
+
+    private void resetCastingAnimation() {
+        LivingEntity entity = getLivingEntity();
+        if (entity instanceof Player p) {
+            playCitizensPlayerAnimation(p, "STOP_USE_ITEM");
+        }
+    }
+
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    private void playCitizensPlayerAnimation(Player player, String animationName) {
+        try {
+            Class<? extends Enum> animationClass =
+                Class.forName("net.citizensnpcs.util.PlayerAnimation").asSubclass(Enum.class);
+            Enum animation = Enum.valueOf(animationClass, animationName);
+            Method playMethod = animationClass.getMethod("play", Player.class);
+            playMethod.invoke(animation, player);
+        } catch (ReflectiveOperationException ignored) {
+        }
     }
 }
 

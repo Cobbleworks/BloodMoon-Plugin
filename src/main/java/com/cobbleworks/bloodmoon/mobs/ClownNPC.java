@@ -26,6 +26,7 @@ import org.bukkit.entity.Firework;
 import org.bukkit.entity.FishHook;
 import org.bukkit.entity.FallingBlock;
 import org.bukkit.entity.Chicken;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Parrot;
@@ -48,6 +49,9 @@ import org.mcmonkey.sentinel.events.SentinelAttackEvent;
 import org.mcmonkey.sentinel.targeting.SentinelTargetList;
 
 public final class ClownNPC {
+
+    public static final String CLOWN_ANVIL_METADATA = "bloodmoon-clown-anvil";
+    public static final String CLOWN_OWNED_METADATA = "bloodmoon-clown-owned";
 
     public enum ClownState { WANDERING, COMBAT, CASTING, TAUNTING, MANIC, DEAD }
 
@@ -218,6 +222,7 @@ public final class ClownNPC {
     }
 
     public void handleSentinelAttack(SentinelAttackEvent event) {
+        event.setCancelled(true);
         if (!(event.getTarget() instanceof Player player)) return;
         if (state == ClownState.WANDERING || state == ClownState.CASTING || state == ClownState.TAUNTING || state == ClownState.DEAD) { event.setCancelled(true); return; }
         target = player;
@@ -248,6 +253,11 @@ public final class ClownNPC {
         cleanedUp = true;
         cancelControllerOnly(); cancelOwnedTasks(); bunnySwarm.cleanup();
         burnPatches.clear();
+        cleanupOwnedArtifacts();
+        LivingEntity clownEntity = getLivingEntity();
+        if (clownEntity != null) {
+            plugin.getOverheadHealthBarManager().removeBar(clownEntity.getUniqueId());
+        }
         if (npc.isSpawned()) npc.despawn();
         try { npc.destroy(); } catch (Exception ignored) {}
         plugin.getNPCManager().unregisterClown(npc.getId());
@@ -307,11 +317,9 @@ public final class ClownNPC {
         s.setInvincible(false);
         s.setHealth(plugin.getConfigManager().getClownHealth());
         s.health = plugin.getConfigManager().getClownHealth();
-        s.damage = 5.0D; s.respawnTime = -1; s.chaseRange = 30.0D; s.armor = 0.0D;
+        s.damage = 0.0D; s.respawnTime = -1; s.chaseRange = 26.0D; s.armor = 0.0D;
         s.protectFromIgnores = false;
         s.allTargets = new SentinelTargetList(); s.addTarget("players");
-        s.addTarget("mobs");
-        s.addTarget("monsters");
         s.allIgnores = new SentinelTargetList();
         s.addIgnore("npcs");
         npc.setProtected(false);
@@ -402,10 +410,8 @@ public final class ClownNPC {
         combatInitialized = true; setNavigationSpeed(1.3F);
         SentinelTrait s = npc.getOrAddTrait(SentinelTrait.class);
         s.allTargets = new SentinelTargetList(); s.addTarget("players");
-        s.addTarget("mobs");
-        s.addTarget("monsters");
         s.allIgnores = new SentinelTargetList();
-        s.addIgnore("npcs"); s.chaseRange = 30.0D; s.respawnTime = -1;
+        s.addIgnore("npcs"); s.chaseRange = 26.0D; s.respawnTime = -1; s.damage = 0.0D;
     }
 
     private void tickCombat() {
@@ -429,7 +435,26 @@ public final class ClownNPC {
 
     private void chaseCombatTarget(Player player) {
         if (!npc.isSpawned()) return;
-        setNavigationSpeed(1.3F); npc.getNavigator().setTarget(player, true); npc.faceLocation(player.getEyeLocation());
+        Location self = getCurrentLocation();
+        double distSq = self.distanceSquared(player.getLocation());
+        double preferred = 5.5D;
+
+        if (distSq < 9.0D) {
+            Vector away = self.toVector().subtract(player.getLocation().toVector()).setY(0.0D);
+            if (away.lengthSquared() < 0.001D) {
+                away = new Vector(randomDouble(-1.0D, 1.0D), 0.0D, randomDouble(-1.0D, 1.0D));
+            }
+            Location fallback = findSafeGroundLocation(self.clone().add(away.normalize().multiply(3.5D)));
+            setNavigationSpeed(1.35F);
+            npc.getNavigator().setTarget(fallback);
+        } else {
+            double angle = randomDouble(0.0D, Math.PI * 2.0D);
+            Location orbit = player.getLocation().clone().add(Math.cos(angle) * preferred, 0.0D, Math.sin(angle) * preferred);
+            orbit.setY(player.getLocation().getY());
+            setNavigationSpeed(1.2F);
+            npc.getNavigator().setTarget(orbit);
+        }
+        npc.faceLocation(player.getEyeLocation());
     }
 
     private void checkManicTransition() {
@@ -784,6 +809,7 @@ public final class ClownNPC {
         if (dir.lengthSquared() < 0.0001) dir = new Vector(0,1,0);
         dir.normalize().add(new Vector((spreadIndex-1)*0.12+randomDouble(-0.06,0.06), randomDouble(-0.04,0.04), (spreadIndex-1)*0.05+randomDouble(-0.04,0.04))).normalize().multiply(1.4);
         Firework fw = world.spawn(from, Firework.class);
+        markAsOwned(fw);
         FireworkMeta meta = fw.getFireworkMeta(); meta.setPower(0);
         Color[] palette = {
             Color.fromRGB(255, 80, 160), Color.fromRGB(0, 210, 255),   Color.fromRGB(255, 210, 0),
@@ -838,6 +864,7 @@ public final class ClownNPC {
         for (int i = 0; i < BUNNY_SWARM_COUNT; i++) {
             Location spawn = loc.clone().add(randomDouble(-0.8, 0.8), 0.4D, randomDouble(-0.8, 0.8));
             org.bukkit.entity.Rabbit rabbit = world.spawn(spawn, org.bukkit.entity.Rabbit.class);
+            markAsOwned(rabbit);
             rabbit.setAI(false);
             rabbit.setInvulnerable(true);
             rabbit.setCollidable(false);
@@ -961,6 +988,7 @@ public final class ClownNPC {
         List<org.bukkit.entity.Fireball> balls = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
             org.bukkit.entity.Fireball ball = world.spawn(caster.getEyeLocation().add(0, 0.6D, 0), org.bukkit.entity.Fireball.class);
+            markAsOwned(ball);
             ball.setYield(0.0F);
             ball.setIsIncendiary(false);
             ball.setGravity(false);
@@ -1032,7 +1060,7 @@ public final class ClownNPC {
         baseDir.normalize();
         for (int i = 0; i < WIND_CHARGE_COUNT; i++) {
             Vector dir = baseDir.clone().add(new Vector(randomDouble(-0.3,0.3), randomDouble(-0.1,0.25), randomDouble(-0.3,0.3))).normalize().multiply(1.3+randomDouble(-0.2,0.2));
-            try { WindCharge wc = world.spawn(from.clone().add(randomDouble(-0.3,0.3), 0, randomDouble(-0.3,0.3)), WindCharge.class); wc.setVelocity(dir); }
+            try { WindCharge wc = world.spawn(from.clone().add(randomDouble(-0.3,0.3), 0, randomDouble(-0.3,0.3)), WindCharge.class); markAsOwned(wc); wc.setVelocity(dir); }
             catch (Exception ex) { plugin.getLogger().fine("WindCharge skipped: "+ex.getMessage()); }
         }
 
@@ -1118,6 +1146,7 @@ public final class ClownNPC {
         // Single parrot summoned
         Location spawn = origin.clone().add(randomDouble(-1.2, 1.2), 1.2 + randomDouble(0.3, 0.8), randomDouble(-1.2, 1.2));
         Parrot parrot = world.spawn(spawn, Parrot.class);
+        markAsOwned(parrot);
         parrot.setSilent(true);
         parrot.setInvulnerable(true);
         parrot.setCollidable(false);
@@ -1174,6 +1203,7 @@ public final class ClownNPC {
         World world = spawn.getWorld();
         if (world == null) { returnToCombat(); return; }
         Chicken duck = world.spawn(spawn, Chicken.class);
+        markAsOwned(duck);
         duck.setCustomName(null);
         duck.setCustomNameVisible(false);
         duck.setSilent(true);
@@ -1317,6 +1347,7 @@ public final class ClownNPC {
 
         Location balloonSpawn = start.clone().add(randomDouble(-0.4D, 0.4D), 2.1D, randomDouble(-0.4D, 0.4D));
         Parrot balloon = world.spawn(balloonSpawn, Parrot.class);
+        markAsOwned(balloon);
         balloon.setSilent(true);
         balloon.setInvulnerable(true);
         balloon.setCollidable(false);
@@ -1426,6 +1457,8 @@ public final class ClownNPC {
 
         world.spawnParticle(Particle.BLOCK, placedSource, 14, 0.18, 0.04, 0.18, Material.ANVIL.createBlockData());
         FallingBlock anvil = world.spawnFallingBlock(spawn, Material.ANVIL.createBlockData());
+        markAsOwned(anvil);
+        anvil.setMetadata(CLOWN_ANVIL_METADATA, new FixedMetadataValue(plugin, npc.getId()));
         anvil.setDropItem(false);
         anvil.setHurtEntities(true);
         anvil.setGravity(true);
@@ -1441,18 +1474,29 @@ public final class ClownNPC {
                 if (!anvil.isValid() || anvil.isDead() || age > 60 || anvil.isOnGround()) {
                     Location impact = anvil.getLocation();
                     if (anvil.isValid()) anvil.remove();
-                    org.bukkit.block.Block landed = world.getBlockAt(impact);
-                    if (landed.getType().isAir() || landed.isPassable()) {
-                        landed.setType(Material.ANVIL, false);
-                    }
+                    final Location cleanupCenter = impact.getBlock().getLocation().clone();
                     world.spawnParticle(Particle.BLOCK, impact, 20, 0.35, 0.2, 0.35, Material.ANVIL.createBlockData());
                     world.playSound(impact, Sound.BLOCK_ANVIL_LAND, 0.9F, 1.0F);
                     BukkitRunnable cleanup = new BukkitRunnable() {
                         @Override
                         public void run() {
-                            if (landed.getType() == Material.ANVIL) {
-                                landed.setType(Material.AIR, false);
-                                world.spawnParticle(Particle.BLOCK, landed.getLocation().clone().add(0.5D, 0.5D, 0.5D), 10, 0.2, 0.2, 0.2, Material.ANVIL.createBlockData());
+                            for (int dx = -1; dx <= 1; dx++) {
+                                for (int dy = -1; dy <= 1; dy++) {
+                                    for (int dz = -1; dz <= 1; dz++) {
+                                        org.bukkit.block.Block block = cleanupCenter.getWorld().getBlockAt(
+                                            cleanupCenter.getBlockX() + dx,
+                                            cleanupCenter.getBlockY() + dy,
+                                            cleanupCenter.getBlockZ() + dz);
+                                        Material type = block.getType();
+                                        if (type == Material.ANVIL || type == Material.CHIPPED_ANVIL || type == Material.DAMAGED_ANVIL) {
+                                            block.setType(Material.AIR, false);
+                                            world.spawnParticle(Particle.BLOCK,
+                                                block.getLocation().clone().add(0.5D, 0.5D, 0.5D),
+                                                10, 0.2, 0.2, 0.2,
+                                                Material.ANVIL.createBlockData());
+                                        }
+                                    }
+                                }
                             }
                         }
                     };
@@ -1472,30 +1516,26 @@ public final class ClownNPC {
         if (world == null) return;
         world.playSound(at, Sound.BLOCK_NOTE_BLOCK_BELL, 0.35F, 0.7F + random.nextFloat() * 1.3F);
         world.playSound(at, Sound.BLOCK_NOTE_BLOCK_BIT,  0.3F,  0.7F + random.nextFloat() * 1.3F);
-        for (int attempts = 0; attempts < 6; attempts++) {
-            int prank = prankRotationIndex++ % 6;
+        for (int attempts = 0; attempts < 5; attempts++) {
+            int prank = prankRotationIndex++ % 5;
             switch (prank) {
                 case 0 -> {
-                    castAnvilPrank();
-                    return;
-                }
-                case 1 -> {
                     castInventoryShufflePrank();
                     return;
                 }
-                case 2 -> {
+                case 1 -> {
                     castFakeDeathPrank();
                     return;
                 }
-                case 3 -> {
+                case 2 -> {
                     castBigRevealPrank();
                     return;
                 }
-                case 4 -> {
+                case 3 -> {
                     castFreezeAudiencePrank();
                     return;
                 }
-                case 5 -> {
+                case 4 -> {
                     if (baitTrapCooldown <= 0) {
                         castBaitTrap();
                         baitTrapCooldown = BAIT_TRAP_COOLDOWN_MAX;
@@ -1952,7 +1992,32 @@ public final class ClownNPC {
         if (random.nextDouble() <= 0.07D) world.dropItemNaturally(location, new ItemStack(Material.BOW, 1));
         if (random.nextDouble() <= 0.06D) world.dropItemNaturally(location, new ItemStack(Material.ENCHANTED_BOOK, 1));
         ExperienceOrb orb = world.spawn(location, ExperienceOrb.class);
+        markAsOwned(orb);
         orb.setExperience(random.nextInt(21) + 25);
+    }
+
+    private void markAsOwned(Entity entity) {
+        if (entity == null) {
+            return;
+        }
+        entity.setMetadata(CLOWN_OWNED_METADATA, new FixedMetadataValue(plugin, npc.getId()));
+    }
+
+    private void cleanupOwnedArtifacts() {
+        Location center = getCurrentLocation();
+        if (center == null || center.getWorld() == null) {
+            return;
+        }
+        World world = center.getWorld();
+        for (Entity entity : world.getEntities()) {
+            if (!entity.hasMetadata(CLOWN_OWNED_METADATA) || entity.getMetadata(CLOWN_OWNED_METADATA).isEmpty()) {
+                continue;
+            }
+            int ownerId = entity.getMetadata(CLOWN_OWNED_METADATA).get(0).asInt();
+            if (ownerId == npc.getId() && entity.isValid()) {
+                entity.remove();
+            }
+        }
     }
 
     private record AbilityWeight(ClownAbility ability, int weight) {}

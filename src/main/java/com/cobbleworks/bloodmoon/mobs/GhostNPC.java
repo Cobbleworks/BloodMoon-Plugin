@@ -2,6 +2,7 @@ package com.cobbleworks.bloodmoon.mobs;
 
 import com.cobbleworks.bloodmoon.BloodMoonPlugin;
 import com.cobbleworks.bloodmoon.traits.GhostTrait;
+import java.lang.reflect.Method;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -47,18 +48,39 @@ import org.mcmonkey.sentinel.targeting.SentinelTargetList;
 
 public final class GhostNPC {
 
-    private static final Particle.DustOptions DUST_WHITE = new Particle.DustOptions(Color.fromRGB(230, 230, 255), 1.2F);
-    private static final Particle.DustOptions DUST_ICE = new Particle.DustOptions(Color.fromRGB(100, 180, 255), 1.0F);
-    private static final Particle.DustOptions DUST_CYAN = new Particle.DustOptions(Color.fromRGB(0, 200, 200), 1.1F);
-    private static final Particle.DustOptions DUST_REDSTONE = new Particle.DustOptions(Color.fromRGB(220, 30, 30), 0.9F);
+    private static final Particle.DustOptions DUST_WHITE   = new Particle.DustOptions(Color.fromRGB(230, 230, 255), 1.2F);
+    private static final Particle.DustOptions DUST_ICE     = new Particle.DustOptions(Color.fromRGB(100, 180, 255), 1.0F);
+    private static final Particle.DustOptions DUST_CYAN    = new Particle.DustOptions(Color.fromRGB(  0, 200, 200), 1.1F);
+    private static final Particle.DustOptions DUST_SOUL    = new Particle.DustOptions(Color.fromRGB( 90, 215, 195), 1.05F);
+    private static final Particle.DustOptions DUST_PALE    = new Particle.DustOptions(Color.fromRGB(210, 220, 255), 0.85F);
+    private static final Particle.DustOptions DUST_REDSTONE = new Particle.DustOptions(Color.fromRGB(220,  30,  30), 0.9F);
 
-    private enum GhostState { STALKING, RUSHING, DEAD }
-    private enum GhostAbility { MIND_CONTROL, PARANORMAL_ACTIVITY, ECHO, POLTERGEIST_THROW }
+    private enum GhostState { HAUNTING, STALKING, RUSHING, CASTING, DEAD }
 
-    private static final Map<UUID, GhostNPC> POSSESSIONS = new HashMap<>();
+    private enum GhostAbility {
+        SPECTRAL_SURGE(22),
+        WAILING_SHRIEK(18),
+        POLTERGEIST_THROW(20),
+        ECHO(14),
+        PARANORMAL_ACTIVITY(12);
+
+        private final int weight;
+
+        GhostAbility(int weight) {
+            this.weight = weight;
+        }
+
+        public int getWeight() {
+            return weight;
+        }
+    }
+
+    private record AbilityWeight(GhostAbility ability, int weight) {}
+
     private static final int ITEM_SNATCH_COOLDOWN_TICKS = 180;
-    private static final int ITEM_SNATCH_THROW_DELAY_TICKS = 42;
-    private static final int COUNTERPLAY_WINDOW_TICKS = 60;
+    private static final int COUNTERPLAY_WINDOW_TICKS   = 80;
+    private static final int HAUNTING_TICKS             = 25;
+    private static final int PERIODIC_REVEAL_INTERVAL   = 220;
 
     private final BloodMoonPlugin plugin;
     private final NPC npc;
@@ -72,10 +94,12 @@ public final class GhostNPC {
     private final Map<String, BlockRevert> paranormalReverts = new HashMap<>();
     private final Deque<Location> trackedPath = new ArrayDeque<>();
 
-    private GhostState state = GhostState.STALKING;
+    private GhostState state = GhostState.HAUNTING;
     private BukkitRunnable controllerTask;
     private Player target;
-    private Player possessedPlayer;
+    private GhostAbility pendingAbility;
+    private GhostState  stateBeforeCasting;
+    private int castingTicks;
     private NPC controlledHost;
     private Location lastKnownLocation;
     private double lastPlayerDistSquared = Double.MAX_VALUE;
@@ -85,7 +109,9 @@ public final class GhostNPC {
     private int itemSnatchCooldown;
     private int recentDamageTicks;
     private int stalkPauseTicks;
+    private int stalkingStage;
     private int vulnerableTicks;
+    private int periodicRevealCounter;
     private boolean cleaned;
     private boolean deathStarted;
     private boolean untargetable;
@@ -145,6 +171,7 @@ public final class GhostNPC {
     }
 
     public void handleSentinelAttack(SentinelAttackEvent event) {
+        event.setCancelled(true);
         if (!(event.getTarget() instanceof Player player) || state == GhostState.DEAD) {
             return;
         }
@@ -165,54 +192,6 @@ public final class GhostNPC {
         vulnerableTicks = Math.max(vulnerableTicks, COUNTERPLAY_WINDOW_TICKS);
         if (damage >= 1.0D) {
             phaseWalkTicks = 0;
-        }
-    }
-
-    public static GhostNPC getPossessingGhost(Player player) {
-        return player == null ? null : POSSESSIONS.get(player.getUniqueId());
-    }
-
-    public void handlePossessedMove(Player player, org.bukkit.event.player.PlayerMoveEvent event) {
-        if (possessedPlayer == null || !possessedPlayer.getUniqueId().equals(player.getUniqueId()) || event.getTo() == null) {
-            return;
-        }
-        Vector delta = event.getTo().toVector().subtract(event.getFrom().toVector());
-        Vector horizontal = new Vector(delta.getX(), 0.0D, delta.getZ());
-
-        if (horizontal.lengthSquared() < 0.0004D) {
-            Location look = event.getTo().clone();
-            look.setYaw(event.getTo().getYaw() + (float) ((Math.sin(stateTicks * 0.45D) * 22.0D)));
-            event.setTo(look);
-            return;
-        }
-
-        double cos = Math.cos(Math.PI * 0.65D);
-        double sin = Math.sin(Math.PI * 0.65D);
-        Vector rotated = new Vector(
-            horizontal.getX() * cos - horizontal.getZ() * sin,
-            0.0D,
-            horizontal.getX() * sin + horizontal.getZ() * cos
-        );
-
-        double speed = Math.min(0.38D, horizontal.length());
-        Location drifted = event.getFrom().clone().add(rotated.normalize().multiply(speed));
-        drifted.setY(event.getTo().getY());
-        drifted.setYaw(event.getTo().getYaw() + (float) ((Math.cos(stateTicks * 0.4D) * 16.0D)));
-        drifted.setPitch(event.getTo().getPitch());
-
-        if (!drifted.getBlock().isPassable() || !drifted.clone().add(0, 1, 0).getBlock().isPassable()) {
-            event.setTo(event.getTo().clone());
-            return;
-        }
-        event.setTo(drifted);
-    }
-
-    public void handlePossessedVictimDamaged(double finalDamage) {
-        if (possessedPlayer == null) {
-            return;
-        }
-        if (finalDamage >= 4.0D) {
-            ejectPossession(false);
         }
     }
 
@@ -260,8 +239,11 @@ public final class GhostNPC {
         cancelTasks();
         revertParanormalBlocks();
         endHostControl();
-        ejectPossession(true);
         destroyEchoes();
+        LivingEntity ghostEntity = getLivingEntity();
+        if (ghostEntity != null) {
+            plugin.getOverheadHealthBarManager().removeBar(ghostEntity.getUniqueId());
+        }
         if (npc.isSpawned()) {
             npc.despawn();
         }
@@ -314,27 +296,64 @@ public final class GhostNPC {
     }
 
     private void dropLoot(World world, Location location) {
-        if (random.nextDouble() <= 0.62D) world.dropItemNaturally(location, new ItemStack(Material.PAPER, 1 + random.nextInt(3)));
-        if (random.nextDouble() <= 0.44D) world.dropItemNaturally(location, new ItemStack(Material.STRING, 1 + random.nextInt(2)));
-        if (random.nextDouble() <= 0.32D) world.dropItemNaturally(location, new ItemStack(Material.WHITE_WOOL, 1));
-        if (random.nextDouble() <= 0.38D) world.dropItemNaturally(location, new ItemStack(Material.GLASS_BOTTLE, 1 + random.nextInt(2)));
-        if (random.nextDouble() <= 0.40D) world.dropItemNaturally(location, new ItemStack(Material.BONE, 1 + random.nextInt(2)));
+        if (random.nextDouble() <= 0.65D) world.dropItemNaturally(location, new ItemStack(Material.PAPER,    1 + random.nextInt(2)));
+        if (random.nextDouble() <= 0.60D) world.dropItemNaturally(location, new ItemStack(Material.STRING,   1 + random.nextInt(3)));
+        if (random.nextDouble() <= 0.55D) world.dropItemNaturally(location, new ItemStack(Material.WHITE_WOOL, 1 + random.nextInt(2)));
+        if (random.nextDouble() <= 0.50D) world.dropItemNaturally(location, new ItemStack(Material.GLASS_BOTTLE, 1 + random.nextInt(2)));
+        if (random.nextDouble() <= 0.45D) world.dropItemNaturally(location, new ItemStack(Material.BONE,     1 + random.nextInt(2)));
         if (random.nextDouble() <= 0.40D) world.dropItemNaturally(location, new ItemStack(Material.SNOWBALL, 2 + random.nextInt(3)));
-        if (random.nextDouble() <= 0.20D) world.dropItemNaturally(location, new ItemStack(Material.PHANTOM_MEMBRANE, 1));
-        if (random.nextDouble() <= 0.24D) world.dropItemNaturally(location, new ItemStack(Material.SOUL_SAND, 1));
-        if (random.nextDouble() <= 0.18D) world.dropItemNaturally(location, new ItemStack(Material.BLUE_ICE, 1));
-        if (random.nextDouble() <= 0.28D) world.dropItemNaturally(location, new ItemStack(Material.QUARTZ, 1 + random.nextInt(2)));
+        if (random.nextDouble() <= 0.35D) world.dropItemNaturally(location, new ItemStack(Material.SOUL_SAND, 1 + random.nextInt(2)));
+        if (random.nextDouble() <= 0.25D) world.dropItemNaturally(location, new ItemStack(Material.PHANTOM_MEMBRANE, 1 + random.nextInt(2)));
+        if (random.nextDouble() <= 0.20D) world.dropItemNaturally(location, new ItemStack(Material.BLUE_ICE, 1));
+        if (random.nextDouble() <= 0.15D) world.dropItemNaturally(location, new ItemStack(Material.ENDER_PEARL, 1));
 
-        if (random.nextDouble() <= 0.08D) world.dropItemNaturally(location, new ItemStack(Material.GHAST_TEAR, 1));
-        if (random.nextDouble() <= 0.09D) world.dropItemNaturally(location, new ItemStack(Material.ENDER_PEARL, 1));
-        if (random.nextDouble() <= 0.08D) world.dropItemNaturally(location, new ItemStack(Material.CLOCK, 1));
-        if (random.nextDouble() <= 0.08D) world.dropItemNaturally(location, new ItemStack(Material.COMPASS, 1));
+        // Haunted Clock — custom name
+        if (random.nextDouble() <= 0.08D) {
+            ItemStack clock = new ItemStack(Material.CLOCK);
+            org.bukkit.inventory.meta.ItemMeta m = clock.getItemMeta();
+            if (m != null) {
+                m.setDisplayName("§7Haunted Clock");
+                m.setLore(java.util.List.of("§8Still ticking... backward."));
+                clock.setItemMeta(m);
+            }
+            world.dropItemNaturally(location, clock);
+        }
+
+        // Haunted Compass — custom name
+        if (random.nextDouble() <= 0.08D) {
+            ItemStack compass = new ItemStack(Material.COMPASS);
+            org.bukkit.inventory.meta.ItemMeta m = compass.getItemMeta();
+            if (m != null) {
+                m.setDisplayName("§7Haunted Compass");
+                m.setLore(java.util.List.of("§8Points somewhere it shouldn't."));
+                compass.setItemMeta(m);
+            }
+            world.dropItemNaturally(location, compass);
+        }
+
+        // Spirit Lamp — soul lantern
+        if (random.nextDouble() <= 0.10D) {
+            ItemStack lamp = new ItemStack(Material.SOUL_LANTERN);
+            org.bukkit.inventory.meta.ItemMeta m = lamp.getItemMeta();
+            if (m != null) {
+                m.setDisplayName("§bSpirit Lamp");
+                m.setLore(java.util.List.of("§7The flame within never truly dies."));
+                lamp.setItemMeta(m);
+            }
+            world.dropItemNaturally(location, lamp);
+        }
+
+        if (random.nextDouble() <= 0.10D) world.dropItemNaturally(location, new ItemStack(Material.SPECTRAL_ARROW,   2 + random.nextInt(3)));
+        if (random.nextDouble() <= 0.08D) world.dropItemNaturally(location, new ItemStack(Material.GHAST_TEAR,       1));
         if (random.nextDouble() <= 0.10D) world.dropItemNaturally(location, new ItemStack(Material.EXPERIENCE_BOTTLE, 1 + random.nextInt(2)));
-        if (random.nextDouble() <= 0.07D) world.dropItemNaturally(location, new ItemStack(Material.SPECTRAL_ARROW, 2 + random.nextInt(3)));
-        if (random.nextDouble() <= 0.05D) world.dropItemNaturally(location, new ItemStack(Material.MUSIC_DISC_13, 1));
-        if (random.nextDouble() <= 0.07D) world.dropItemNaturally(location, new ItemStack(Material.NAUTILUS_SHELL, 1));
-        if (random.nextDouble() <= 0.05D) world.dropItemNaturally(location, new ItemStack(Material.CRYING_OBSIDIAN, 1));
-        if (random.nextDouble() <= 0.07D) world.dropItemNaturally(location, new ItemStack(Material.ENCHANTED_BOOK, 1));
+        if (random.nextDouble() <= 0.07D) world.dropItemNaturally(location, new ItemStack(Material.NAUTILUS_SHELL,   1));
+        if (random.nextDouble() <= 0.05D) world.dropItemNaturally(location, new ItemStack(Material.CRYING_OBSIDIAN,  1));
+        if (random.nextDouble() <= 0.07D) world.dropItemNaturally(location, new ItemStack(Material.ENCHANTED_BOOK,   1));
+        if (random.nextDouble() <= 0.05D) world.dropItemNaturally(location, new ItemStack(Material.MUSIC_DISC_13,    1));
+
+        // Experience
+        ExperienceOrb orb = world.spawn(location.clone().add(0D, 0.25D, 0D), ExperienceOrb.class);
+        orb.setExperience(25 + random.nextInt(21));
     }
 
     private void configureSentinel() {
@@ -342,15 +361,13 @@ public final class GhostNPC {
         sentinel.setInvincible(false);
         sentinel.setHealth(plugin.getConfigManager().getGhostHealth());
         sentinel.health = plugin.getConfigManager().getGhostHealth();
-        sentinel.damage = 1.25D;
+        sentinel.damage = 0.0D;
         sentinel.respawnTime = -1;
         sentinel.chaseRange = 0.0D;
-        sentinel.armor = 0.05D;
+        sentinel.armor = 0.0D;
         sentinel.protectFromIgnores = false;
         sentinel.allTargets = new SentinelTargetList();
         sentinel.addTarget("players");
-        sentinel.addTarget("mobs");
-        sentinel.addTarget("monsters");
         sentinel.allIgnores = new SentinelTargetList();
         sentinel.addIgnore("npcs");
     }
@@ -412,6 +429,19 @@ public final class GhostNPC {
             breakVanishing();
             setUntargetable(false);
         }
+
+        // Periodic forced reveal — creates clear damage windows every ~11 seconds
+        periodicRevealCounter++;
+        if (periodicRevealCounter >= PERIODIC_REVEAL_INTERVAL && vulnerableTicks <= 0 && !forcedVisibleByLight
+                && state != GhostState.RUSHING && state != GhostState.HAUNTING) {
+            periodicRevealCounter = 0;
+            vulnerableTicks = COUNTERPLAY_WINDOW_TICKS;
+            breakVanishing();
+            setUntargetable(false);
+            announceVulnerabilityWindow();
+        } else if (vulnerableTicks <= 0) {
+            periodicRevealCounter = Math.min(periodicRevealCounter, PERIODIC_REVEAL_INTERVAL);
+        }
         onTraitTick();
         updateLightRevealState();
         emitGhostTellParticles();
@@ -419,6 +449,16 @@ public final class GhostNPC {
         tickVanishing();
 
         if (state == GhostState.DEAD || state == GhostState.RUSHING) {
+            return;
+        }
+
+        if (state == GhostState.HAUNTING) {
+            tickHaunting();
+            return;
+        }
+
+        if (state == GhostState.CASTING) {
+            tickCasting();
             return;
         }
 
@@ -457,7 +497,7 @@ public final class GhostNPC {
         if (state == GhostState.STALKING && vulnerableTicks <= 0 && vanishingTicks <= 0 && stateTicks % abilityInterval == 0 && distanceSquared < 2000.0D) {
             GhostAbility ability = chooseAbility();
             if (ability != null) {
-                executeAbility(ability, player);
+                startCasting(ability);
             }
         }
 
@@ -491,10 +531,16 @@ public final class GhostNPC {
             return;
         }
 
-        if (stateTicks % 30 == 0 && currentDistance > 8.0D) {
+        if (stateTicks % 28 == 0 && currentDistance > 8.0D) {
             teleportCloser(player, currentDistance);
+            stalkingStage = Math.min(2, stalkingStage + 1);
             stalkPauseTicks = 16 + random.nextInt(8);
-            if (vulnerableTicks <= 0 && random.nextDouble() <= 0.20D) {
+            if (stalkingStage >= 2 && itemSnatchCooldown <= 0 && recentDamageTicks <= 0) {
+                startRush(player);
+                stalkingStage = 0;
+                return;
+            }
+            if (vulnerableTicks <= 0 && random.nextDouble() <= 0.15D) {
                 startVanishing(10 + random.nextInt(8));
             }
             return;
@@ -518,6 +564,10 @@ public final class GhostNPC {
         }
         if (stateTicks % 100 == 0 && currentDistance > 14.0D) {
             teleportCloser(player, currentDistance);
+        }
+
+        if (currentDistance > 14.0D && stateTicks % 60 == 0) {
+            stalkingStage = 0;
         }
     }
 
@@ -576,7 +626,7 @@ public final class GhostNPC {
         if (state == GhostState.RUSHING) {
             return;
         }
-        breakVanishing();
+        startVanishing(42);
         state = GhostState.RUSHING;
 
         LivingEntity caster = getLivingEntity();
@@ -586,21 +636,13 @@ public final class GhostNPC {
         }
 
         World world = caster.getWorld();
-        Location from = caster.getLocation().clone();
         if (player.getWorld() != world) {
             state = GhostState.STALKING;
             return;
         }
-        Vector dir = player.getLocation().toVector().subtract(from.toVector());
-        if (dir.lengthSquared() < 0.0001D) {
-            state = GhostState.STALKING;
-            return;
-        }
-        dir.normalize();
-
-        world.playSound(from, Sound.ENTITY_WITHER_AMBIENT, 0.9F, 1.9F);
-        world.spawnParticle(Particle.DUST, from.clone().add(0, 1, 0), 16, 0.2, 0.3, 0.2, 0, DUST_WHITE);
-        caster.setVelocity(dir.multiply(1.6D).setY(0.15D));
+        setUntargetable(true);
+        world.playSound(caster.getLocation(), Sound.ENTITY_WITHER_AMBIENT, 0.85F, 1.75F);
+        world.spawnParticle(Particle.DUST, caster.getLocation().clone().add(0, 1, 0), 16, 0.2, 0.3, 0.2, 0, DUST_WHITE);
 
         BukkitRunnable rush = new BukkitRunnable() {
             private boolean stolen;
@@ -609,10 +651,11 @@ public final class GhostNPC {
             @Override
             public void run() {
                 ticks++;
-                if (ticks > 45 || isDead()) {
+                if (ticks > 58 || isDead()) {
                     if (player.isOnline() && !isDead()) {
                         teleportAway(player);
                     }
+                    setUntargetable(false);
                     vulnerableTicks = Math.max(vulnerableTicks, COUNTERPLAY_WINDOW_TICKS);
                     state = GhostState.STALKING;
                     lastPlayerDistSquared = Double.MAX_VALUE;
@@ -623,12 +666,27 @@ public final class GhostNPC {
                 Location current = getCurrentLocation();
                 World currentWorld = current.getWorld();
                 if (currentWorld != null) {
-                    currentWorld.spawnParticle(Particle.DUST, current.clone().add(0, 1, 0), 4, 0.3, 0.4, 0.3, 0, DUST_ICE);
+                    currentWorld.spawnParticle(Particle.DUST, current.clone().add(0, 1, 0), 5, 0.26, 0.34, 0.26, 0, DUST_ICE);
                     currentWorld.spawnParticle(Particle.SNOWFLAKE, current.clone().add(0, 1, 0), 2, 0.2, 0.2, 0.2, 0.05);
                 }
 
-                if (!stolen && player.isOnline() && !player.isDead() && player.getWorld() == current.getWorld() && current.distanceSquared(player.getLocation()) < 9.0D) {
+                if (ticks == 10 && player.isOnline() && !player.isDead()) {
+                    teleportBehindPlayer(player);
+                    startVanishing(32);
+                    if (currentWorld != null) {
+                        currentWorld.playSound(getCurrentLocation(), Sound.ENTITY_ALLAY_AMBIENT_WITHOUT_ITEM, 0.9F, 0.45F);
+                    }
+                }
+
+                if (ticks >= 24 && ticks % 3 == 0 && currentWorld != null) {
+                    Location back = getCurrentLocation().clone().add(0, 1.1, 0);
+                    currentWorld.spawnParticle(Particle.DUST, back, 4, 0.2, 0.25, 0.2, 0.0, DUST_CYAN);
+                    currentWorld.playSound(back, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.15F, 0.6F + random.nextFloat() * 0.25F);
+                }
+
+                if (!stolen && ticks >= 38 && player.isOnline() && !player.isDead() && player.getWorld() == current.getWorld()) {
                     stolen = trySnatchAndThrow(player, caster);
+                    setUntargetable(false);
                 }
             }
         };
@@ -637,146 +695,61 @@ public final class GhostNPC {
     }
 
     private GhostAbility chooseAbility() {
-        if (target != null && target.isOnline() && !target.isDead()
-            && cooldowns.getOrDefault(GhostAbility.MIND_CONTROL, 0) <= 0
-            && hasPossessionOpportunity(target)) {
-            return GhostAbility.MIND_CONTROL;
+        if (target == null || !target.isOnline() || target.isDead()) {
+            return null;
         }
-
-        List<GhostAbility> available = new ArrayList<>();
+        List<AbilityWeight> available = new ArrayList<>();
         for (GhostAbility ability : GhostAbility.values()) {
             if (cooldowns.getOrDefault(ability, 0) <= 0) {
-                available.add(ability);
+                available.add(new AbilityWeight(ability, ability.getWeight()));
             }
         }
         if (available.isEmpty()) {
             return null;
         }
-
-        int minUses = available.stream().mapToInt(a -> abilityUseCounts.getOrDefault(a, 0)).min().orElse(0);
-        List<GhostAbility> underused = available.stream().filter(a -> abilityUseCounts.getOrDefault(a, 0) == minUses).toList();
-        if (!underused.isEmpty() && random.nextDouble() <= 0.58D) {
-            return underused.get(random.nextInt(underused.size()));
+        // Prefer underused abilities to keep the fight varied
+        int minUses = available.stream()
+            .mapToInt(aw -> abilityUseCounts.getOrDefault(aw.ability(), 0))
+            .min().orElse(0);
+        List<AbilityWeight> underused = available.stream()
+            .filter(aw -> abilityUseCounts.getOrDefault(aw.ability(), 0) == minUses)
+            .toList();
+        if (!underused.isEmpty() && random.nextDouble() <= 0.55D) {
+            return underused.get(random.nextInt(underused.size())).ability();
         }
-
-        List<GhostAbility> pool = new ArrayList<>();
-        for (GhostAbility ability : available) {
-                int weight = switch (ability) {
-                    case MIND_CONTROL -> 1;
-                    case PARANORMAL_ACTIVITY -> 2;
-                    case ECHO -> 2;
-                    case POLTERGEIST_THROW -> 3;
-                };
-                for (int index = 0; index < weight; index++) {
-                    pool.add(ability);
-                }
+        // Weighted random selection
+        int totalWeight = available.stream().mapToInt(AbilityWeight::weight).sum();
+        int roll = random.nextInt(totalWeight);
+        int cursor = 0;
+        for (AbilityWeight aw : available) {
+            cursor += aw.weight();
+            if (roll < cursor) {
+                return aw.ability();
+            }
         }
-        return pool.isEmpty() ? null : pool.get(random.nextInt(pool.size()));
+        return available.get(available.size() - 1).ability();
     }
 
-    private void executeAbility(GhostAbility ability, Player player) {
+    private void executeAbility(GhostAbility ability) {
+        if (target == null || !target.isOnline() || target.isDead()) {
+            return;
+        }
+        Player player = target;
         abilityUseCounts.merge(ability, 1, Integer::sum);
-        breakVanishing();
         switch (ability) {
-            case MIND_CONTROL -> castMindControl(player);
+            case SPECTRAL_SURGE      -> castSpectralSurge(player);
+            case WAILING_SHRIEK      -> castWailingScream(player);
             case PARANORMAL_ACTIVITY -> castParanormalActivity(player);
-            case ECHO -> castEcho(player);
-            case POLTERGEIST_THROW -> castPoltergeistThrow(player);
+            case ECHO                -> castEcho(player);
+            case POLTERGEIST_THROW   -> castPoltergeistThrow(player);
         }
         cooldowns.put(ability, switch (ability) {
-            case MIND_CONTROL -> 600;
+            case SPECTRAL_SURGE      -> 200;
+            case WAILING_SHRIEK      -> 300;
             case PARANORMAL_ACTIVITY -> 320;
-            case ECHO -> 220;
-            case POLTERGEIST_THROW -> 180;
+            case ECHO                -> 220;
+            case POLTERGEIST_THROW   -> 180;
         });
-    }
-
-    private void castMindControl(Player player) {
-        if (!CitizensAPI.hasImplementation()) {
-            return;
-        }
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
-        if (registry == null) {
-            return;
-        }
-
-        NPC victim = null;
-        double bestDistance = Double.MAX_VALUE;
-        for (NPC candidate : registry) {
-            if (!candidate.isSpawned() || candidate.getEntity() == null) {
-                continue;
-            }
-            if (candidate.getId() == npc.getId()) {
-                continue;
-            }
-            if (plugin.getNPCManager().isBloodMoonNpc(candidate.getEntity())) {
-                continue;
-            }
-            if (candidate.getEntity().getWorld() != getCurrentLocation().getWorld()) {
-                continue;
-            }
-            if (target == null || !target.isOnline() || target.isDead()) {
-                continue;
-            }
-            double distGhost = candidate.getEntity().getLocation().distanceSquared(getCurrentLocation());
-            double distPlayer = candidate.getEntity().getLocation().distanceSquared(target.getLocation());
-            if (distGhost < 324.0D && distPlayer <= 36.0D && distGhost < bestDistance) {
-                double distance = distGhost;
-                bestDistance = distance;
-                victim = candidate;
-            }
-        }
-        if (victim == null) {
-            return;
-        }
-
-        NPC controlled = victim;
-    controlledHost = controlled;
-    setUntargetable(true);
-        World world = player.getWorld();
-        Location victimLoc = controlled.getEntity().getLocation().clone();
-        world.playSound(victimLoc, Sound.ENTITY_WITHER_AMBIENT, 0.6F, 1.5F);
-        world.spawnParticle(Particle.DUST, victimLoc.clone().add(0, 1, 0), 20, 0.4, 0.5, 0.4, 0, DUST_CYAN);
-    npc.teleport(victimLoc, PlayerTeleportEvent.TeleportCause.PLUGIN);
-
-        boolean hasSentinel = controlled.hasTrait(SentinelTrait.class);
-        if (hasSentinel) {
-            try {
-                SentinelTrait sentinel = controlled.getOrAddTrait(SentinelTrait.class);
-                sentinel.addTarget("player:" + player.getName());
-            } catch (Exception ignored) {
-            }
-        } else {
-            controlled.getNavigator().setTarget(player, true);
-        }
-
-        BukkitRunnable controlTask = new BukkitRunnable() {
-            private int ticks;
-
-            @Override
-            public void run() {
-                ticks++;
-                if (ticks > 140 || isDead() || !controlled.isSpawned()) {
-                    endHostControl();
-                    cancel();
-                    return;
-                }
-                if (!controlled.isSpawned() || controlled.getEntity() == null) {
-                    handleControlledHostDeath(player);
-                    cancel();
-                    return;
-                }
-                Location controlledLoc = controlled.getEntity().getLocation().add(0, 1, 0);
-                npc.teleport(controlledLoc, PlayerTeleportEvent.TeleportCause.PLUGIN);
-                double angle = (ticks * 14.0D) * Math.PI / 180.0D;
-                double rx = Math.cos(angle) * 0.7D;
-                double rz = Math.sin(angle) * 0.7D;
-                world.spawnParticle(Particle.DUST, controlledLoc.clone().add(rx, 0.4, rz), 2, 0.05, 0.05, 0.05, 0, DUST_CYAN);
-                world.spawnParticle(Particle.DUST, controlledLoc.clone().add(-rx, 0.1, -rz), 2, 0.05, 0.05, 0.05, 0, DUST_CYAN);
-            }
-        };
-        tasks.add(controlTask);
-        controlTask.runTaskTimer(plugin, 0L, 1L);
     }
 
     private void castEcho(Player player) {
@@ -834,10 +807,6 @@ public final class GhostNPC {
         };
         tasks.add(echoTask);
         echoTask.runTaskTimer(plugin, 0L, 2L);
-    }
-
-    private void castPossession(Player player) {
-        // Player possession is intentionally disabled for this Ghost design.
     }
 
     private void castPoltergeistThrow(Player player) {
@@ -1096,6 +1065,34 @@ public final class GhostNPC {
         vanishingTicks = 0;
     }
 
+    /**
+     * Emits a dramatic visual burst and sound when the ghost becomes vulnerable,
+     * clearly telegraphing the damage window to nearby players.
+     */
+    private void announceVulnerabilityWindow() {
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) {
+            return;
+        }
+        Location loc   = entity.getLocation();
+        World    world = loc.getWorld();
+        if (world == null) {
+            return;
+        }
+        world.playSound(loc, Sound.ENTITY_WITHER_AMBIENT,          0.8F, 1.7F);
+        world.playSound(loc, Sound.BLOCK_AMETHYST_BLOCK_CHIME,     0.6F, 0.5F);
+        world.spawnParticle(Particle.DUST,      loc.clone().add(0D, 1.0D, 0D), 30, 0.6D, 0.7D, 0.6D, 0D, DUST_WHITE);
+        world.spawnParticle(Particle.SNOWFLAKE, loc.clone().add(0D, 1.2D, 0D), 18, 0.4D, 0.5D, 0.4D, 0.06D);
+        world.spawnParticle(Particle.END_ROD,   loc.clone().add(0D, 0.5D, 0D), 12, 0.5D, 0.3D, 0.5D, 0.04D);
+        // Ring burst outward
+        for (int i = 0; i < 20; i++) {
+            double angle  = (Math.PI * 2.0D / 20.0D) * i;
+            double rx     = Math.cos(angle) * 1.2D;
+            double rz     = Math.sin(angle) * 1.2D;
+            world.spawnParticle(Particle.DUST, loc.clone().add(rx, 1.0D, rz), 1, 0.02D, 0.02D, 0.02D, 0D, DUST_ICE);
+        }
+    }
+
     private void startPhaseWalk() {
         if (forcedVisibleByLight) {
             return;
@@ -1125,16 +1122,29 @@ public final class GhostNPC {
     }
 
     private void emitGhostTellParticles() {
-        Location loc = getCurrentLocation().add(0, 1, 0);
-        World world = loc.getWorld();
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) {
+            return;
+        }
+        Location loc   = entity.getLocation();
+        World    world = loc.getWorld();
         if (world == null) {
             return;
         }
+        // Soft aura around body — always visible at close range
         if (stateTicks % 3 == 0) {
-            world.spawnParticle(Particle.DUST, loc, 1, 0.18, 0.24, 0.18, 0, DUST_WHITE);
+            world.spawnParticle(Particle.DUST, loc.clone().add(0, 1.0D, 0), 1, 0.18D, 0.24D, 0.18D, 0D, DUST_WHITE);
         }
         if (stateTicks % 7 == 0) {
-            world.spawnParticle(Particle.DUST, loc, 1, 0.14, 0.18, 0.14, 0, DUST_ICE);
+            world.spawnParticle(Particle.DUST, loc.clone().add(0, 1.2D, 0), 1, 0.14D, 0.18D, 0.14D, 0D, DUST_ICE);
+        }
+        // Drifting ethereal glow
+        if (stateTicks % 12 == 0) {
+            world.spawnParticle(Particle.END_ROD, loc.clone().add(0, 0.5D, 0), 1, 0.25D, 0.1D, 0.25D, 0.01D);
+        }
+        // Snowflake drift when fully visible (not vanishing)
+        if (vanishingTicks <= 0 && stateTicks % 8 == 0) {
+            world.spawnParticle(Particle.SNOWFLAKE, loc.clone().add(0, 1.5D, 0), 1, 0.25D, 0.25D, 0.25D, 0.02D);
         }
     }
 
@@ -1169,24 +1179,37 @@ public final class GhostNPC {
         int ox = origin.getBlockX();
         int oy = origin.getBlockY();
         int oz = origin.getBlockZ();
-        int radius = 8;
 
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dy = -4; dy <= 4; dy++) {
-                for (int dz = -radius; dz <= radius; dz++) {
+        // Soul Lantern has a dedicated 10-block range — they specifically ward against ghosts
+        int soulRadius = 10;
+        for (int dx = -soulRadius; dx <= soulRadius; dx++) {
+            for (int dy = -5; dy <= 5; dy++) {
+                for (int dz = -soulRadius; dz <= soulRadius; dz++) {
                     Block block = world.getBlockAt(ox + dx, oy + dy, oz + dz);
                     Material type = block.getType();
-                    if (type != Material.TORCH
-                        && type != Material.WALL_TORCH
-                        && type != Material.SOUL_TORCH
-                        && type != Material.SOUL_WALL_TORCH
-                        && type != Material.LANTERN
-                        && type != Material.SOUL_LANTERN) {
+                    if (type != Material.SOUL_LANTERN && type != Material.SOUL_TORCH && type != Material.SOUL_WALL_TORCH) {
                         continue;
                     }
-
                     double distanceSquared = block.getLocation().add(0.5D, 0.5D, 0.5D).distanceSquared(origin);
-                    if (distanceSquared <= 64.0D) {
+                    if (distanceSquared <= 100.0D) { // 10 block radius
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // Regular torches and lanterns also reveal the ghost at 8 blocks
+        int torchRadius = 8;
+        for (int dx = -torchRadius; dx <= torchRadius; dx++) {
+            for (int dy = -4; dy <= 4; dy++) {
+                for (int dz = -torchRadius; dz <= torchRadius; dz++) {
+                    Block block = world.getBlockAt(ox + dx, oy + dy, oz + dz);
+                    Material type = block.getType();
+                    if (type != Material.TORCH && type != Material.WALL_TORCH && type != Material.LANTERN) {
+                        continue;
+                    }
+                    double distanceSquared = block.getLocation().add(0.5D, 0.5D, 0.5D).distanceSquared(origin);
+                    if (distanceSquared <= 64.0D) { // 8 block radius
                         return true;
                     }
                 }
@@ -1199,7 +1222,6 @@ public final class GhostNPC {
         if (itemSnatchCooldown > 0) {
             return false;
         }
-        teleportBehindPlayer(player);
         if (recentDamageTicks > 0) {
             return false;
         }
@@ -1261,55 +1283,13 @@ public final class GhostNPC {
                 world.playSound(player.getLocation(), Sound.ENTITY_ALLAY_ITEM_GIVEN, 0.6F, 0.6F);
                 world.spawnParticle(Particle.DUST, player.getLocation().add(0, 1, 0), 8, 0.22, 0.32, 0.22, 0, DUST_WHITE);
 
-                BukkitRunnable delayedThrow = new BukkitRunnable() {
-                    @Override
-                    public void run() {
-                        if (isDead() || !player.isOnline() || player.isDead() || recentDamageTicks > 0) {
-                            return;
-                        }
-                        Location origin = getCurrentLocation().clone().add(0, 1.2, 0);
-                        World throwWorld = origin.getWorld();
-                        if (throwWorld == null || throwWorld != player.getWorld()) {
-                            return;
-                        }
-                        org.bukkit.entity.Item projectile = throwWorld.dropItem(origin, stolen);
-                        projectile.setPickupDelay(Integer.MAX_VALUE);
-                        Vector velocity = player.getEyeLocation().toVector().subtract(origin.toVector());
-                        if (velocity.lengthSquared() > 0.0001D) {
-                            projectile.setVelocity(velocity.normalize().multiply(0.82D));
-                        }
-
-                        player.damage(2.5D, caster);
-                        player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 35, 1, false, true, true));
-
-                        BukkitRunnable tracker = new BukkitRunnable() {
-                            int ticks;
-
-                            @Override
-                            public void run() {
-                                ticks++;
-                                if (!projectile.isValid() || ticks > 35 || isDead()) {
-                                    if (projectile.isValid()) {
-                                        projectile.setPickupDelay(20);
-                                    }
-                                    cancel();
-                                    return;
-                                }
-                                if (player.isOnline() && !player.isDead() && player.getWorld() == projectile.getWorld()
-                                    && projectile.getLocation().distanceSquared(player.getLocation().add(0, 1, 0)) <= 2.25D) {
-                                    player.damage(3.5D, caster);
-                                    player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 25, 1, false, true, true));
-                                    projectile.remove();
-                                    cancel();
-                                }
-                            }
-                        };
-                        tasks.add(tracker);
-                        tracker.runTaskTimer(plugin, 1L, 1L);
-                    }
-                };
-                tasks.add(delayedThrow);
-                delayedThrow.runTaskLater(plugin, ITEM_SNATCH_THROW_DELAY_TICKS);
+                stolenItems.add(stolen);
+                player.damage(4.0D, caster);
+                player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 45, 1, false, true, true));
+                player.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 55, 0, false, true, true));
+                world.playSound(player.getLocation(), Sound.ENTITY_ALLAY_ITEM_TAKEN, 0.75F, 0.5F);
+                world.playSound(player.getLocation(), Sound.BLOCK_RESPAWN_ANCHOR_DEPLETE, 0.45F, 1.8F);
+                world.spawnParticle(Particle.DUST, player.getLocation().add(0, 1, 0), 14, 0.24, 0.34, 0.24, 0, DUST_CYAN);
                 cancel();
             }
         };
@@ -1339,65 +1319,15 @@ public final class GhostNPC {
         }
     }
 
-    private boolean hasPossessionOpportunity(Player player) {
-        if (!CitizensAPI.hasImplementation()) {
-            return false;
-        }
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
-        if (registry == null) {
-            return false;
-        }
-        Location ghost = getCurrentLocation();
-        for (NPC candidate : registry) {
-            if (!candidate.isSpawned() || candidate.getEntity() == null) {
-                continue;
-            }
-            if (candidate.getId() == npc.getId() || plugin.getNPCManager().isBloodMoonNpc(candidate.getEntity())) {
-                continue;
-            }
-            if (candidate.getEntity().getWorld() != player.getWorld() || candidate.getEntity().getWorld() != ghost.getWorld()) {
-                continue;
-            }
-            if (candidate.getEntity().getLocation().distanceSquared(player.getLocation()) <= 36.0D
-                && candidate.getEntity().getLocation().distanceSquared(ghost) <= 324.0D) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void handleControlledHostDeath(Player player) {
-        endHostControl();
-        setUntargetable(true);
-        startVanishing(36);
-        if (player != null && player.isOnline() && !player.isDead()) {
-            teleportAway(player);
-        }
-        BukkitRunnable vulnerableAgain = new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (!isDead() && controlledHost == null && possessedPlayer == null) {
-                    setUntargetable(false);
-                }
-            }
-        };
-        tasks.add(vulnerableAgain);
-        vulnerableAgain.runTaskLater(plugin, 36L);
-    }
-
     private int findSnatchSlot(PlayerInventory inventory) {
-        int held = inventory.getHeldItemSlot();
-        ItemStack heldItem = inventory.getItem(held);
-        if (heldItem != null && !heldItem.getType().isAir()) {
-            return held;
-        }
-        for (int i = 0; i < 9; i++) {
+        List<Integer> filledSlots = new ArrayList<>();
+        for (int i = 0; i < 36; i++) {
             ItemStack item = inventory.getItem(i);
             if (item != null && !item.getType().isAir()) {
-                return i;
+                filledSlots.add(i);
             }
         }
-        return -1;
+        return filledSlots.isEmpty() ? -1 : filledSlots.get(random.nextInt(filledSlots.size()));
     }
 
     private void setUntargetable(boolean untargetable) {
@@ -1430,36 +1360,7 @@ public final class GhostNPC {
             end.getWorld().spawnParticle(Particle.SMOKE, end.clone().add(0, 1, 0), 12, 0.3, 0.4, 0.3, 0.02);
         }
         controlledHost = null;
-        if (possessedPlayer == null) {
-            setUntargetable(false);
-        }
-    }
-
-    private void ejectPossession(boolean silent) {
-        if (possessedPlayer == null) {
-            if (controlledHost == null) {
-                setUntargetable(false);
-            }
-            return;
-        }
-        Player player = possessedPlayer;
-        POSSESSIONS.remove(player.getUniqueId());
-        possessedPlayer = null;
-        if (!silent && player.isOnline()) {
-            player.getWorld().playSound(player.getLocation(), Sound.ENTITY_WITHER_SHOOT, 0.7F, 1.8F);
-            player.getWorld().spawnParticle(Particle.DUST, player.getLocation().add(0, 1, 0), 14, 0.4, 0.5, 0.4, 0, DUST_CYAN);
-        }
-        if (controlledHost == null) {
-            setUntargetable(false);
-        }
-    }
-
-    private void scrambleHotbar(PlayerInventory inventory) {
-        int a = random.nextInt(9);
-        int b = random.nextInt(9);
-        ItemStack first = inventory.getItem(a);
-        inventory.setItem(a, inventory.getItem(b));
-        inventory.setItem(b, first);
+        setUntargetable(false);
     }
 
     private void destroyEcho(NPC echo) {
@@ -1535,6 +1436,468 @@ public final class GhostNPC {
             }
         }
         tasks.clear();
+    }
+
+    // =========================================================================
+    // Haunting intro state — ghost materialises from nothing
+    // =========================================================================
+
+    private void tickHaunting() {
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) {
+            return;
+        }
+        World world = entity.getWorld();
+        Location loc  = entity.getLocation();
+
+        if (stateTicks == 1) {
+            world.playSound(loc, Sound.ENTITY_PHANTOM_AMBIENT, 0.7F, 1.4F);
+            world.playSound(loc, Sound.AMBIENT_CAVE,           0.5F, 1.7F);
+            startVanishing(15);
+            setUntargetable(true);
+        }
+
+        // Materialisation spiral — converging inward as progress advances
+        if (stateTicks % 3 == 0) {
+            double progress = (double) stateTicks / HAUNTING_TICKS;
+            double angle    = stateTicks * 0.55D;
+            for (int i = 0; i < 4; i++) {
+                double offset = angle + (i * (Math.PI / 2.0D));
+                double radius = 1.2D - progress * 0.8D;
+                Location ring = loc.clone().add(
+                    Math.cos(offset) * radius, 0.8D + progress * 0.6D, Math.sin(offset) * radius);
+                world.spawnParticle(Particle.DUST,     ring, 1, 0.03D, 0.03D, 0.03D, 0D, DUST_WHITE);
+                world.spawnParticle(Particle.SNOWFLAKE, ring, 1, 0.05D, 0.05D, 0.05D, 0.01D);
+            }
+        }
+
+        if (stateTicks >= HAUNTING_TICKS) {
+            state = GhostState.STALKING;
+            stateTicks = 0;
+            breakVanishing();
+            setUntargetable(false);
+            // Materialisation reveal
+            world.playSound(loc, Sound.ENTITY_ALLAY_AMBIENT_WITHOUT_ITEM, 0.8F, 0.45F);
+            world.spawnParticle(Particle.DUST,      loc.clone().add(0D, 1.0D, 0D), 20, 0.5D, 0.6D, 0.5D, 0D, DUST_WHITE);
+            world.spawnParticle(Particle.SNOWFLAKE, loc.clone().add(0D, 1.0D, 0D), 12, 0.4D, 0.5D, 0.4D, 0.04D);
+        }
+    }
+
+    // =========================================================================
+    // Casting state  (telltale → wind-up → execution)
+    // =========================================================================
+
+    private void startCasting(GhostAbility ability) {
+        if (state == GhostState.CASTING || state == GhostState.DEAD) {
+            return;
+        }
+        pendingAbility    = ability;
+        stateBeforeCasting = state;
+        state             = GhostState.CASTING;
+        stateTicks        = 0;
+        castingTicks = switch (ability) {
+            case SPECTRAL_SURGE      -> 12;
+            case WAILING_SHRIEK      -> 14;
+            case PARANORMAL_ACTIVITY -> 16;
+            case ECHO                -> 10;
+            case POLTERGEIST_THROW   ->  8;
+        };
+        npc.getNavigator().cancelNavigation();
+
+        Location loc   = getCurrentLocation();
+        World    world = loc.getWorld();
+        if (world == null) {
+            return;
+        }
+        switch (ability) {
+            case SPECTRAL_SURGE -> {
+                world.playSound(loc, Sound.ENTITY_ENDERMAN_TELEPORT, 0.6F, 1.9F);
+                world.playSound(loc, Sound.ENTITY_PHANTOM_AMBIENT,   0.65F, 1.6F);
+                world.spawnParticle(Particle.DUST,
+                    loc.clone().add(0D, 1.0D, 0D), 14, 0.4D, 0.5D, 0.4D, 0D, DUST_ICE);
+            }
+            case WAILING_SHRIEK -> {
+                world.playSound(loc, Sound.ENTITY_PHANTOM_HURT,   0.8F, 0.55F);
+                world.playSound(loc, Sound.ENTITY_WITHER_AMBIENT, 0.45F, 1.85F);
+                world.spawnParticle(Particle.DUST,
+                    loc.clone().add(0D, 1.1D, 0D), 18, 0.55D, 0.4D, 0.55D, 0D, DUST_WHITE);
+                world.spawnParticle(Particle.SNOWFLAKE,
+                    loc.clone().add(0D, 1.0D, 0D), 6, 0.3D, 0.2D, 0.3D, 0.04D);
+            }
+            case PARANORMAL_ACTIVITY -> {
+                world.playSound(loc, Sound.AMBIENT_CAVE,       0.7F, 0.6F + random.nextFloat() * 0.2F);
+                world.playSound(loc, Sound.BLOCK_LEVER_CLICK,  0.55F, 0.75F);
+                world.spawnParticle(Particle.DUST,
+                    loc.clone().add(0D, 1.0D, 0D), 12, 0.35D, 0.35D, 0.35D, 0D, DUST_REDSTONE);
+            }
+            case ECHO -> {
+                world.playSound(loc, Sound.ENTITY_ALLAY_AMBIENT_WITHOUT_ITEM, 0.65F, 0.5F);
+                world.playSound(loc, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.5F, 0.6F + random.nextFloat() * 0.2F);
+                world.spawnParticle(Particle.DUST,
+                    loc.clone().add(0D, 1.0D, 0D), 10, 0.3D, 0.4D, 0.3D, 0D, DUST_PALE);
+            }
+            case POLTERGEIST_THROW -> {
+                world.playSound(loc, Sound.ENTITY_BREEZE_SHOOT, 0.75F, 0.8F);
+                world.playSound(loc, Sound.ENTITY_PHANTOM_AMBIENT, 0.5F, 1.5F);
+                world.spawnParticle(Particle.DUST,
+                    loc.clone().add(0D, 1.0D, 0D), 10, 0.3D, 0.4D, 0.3D, 0D, DUST_CYAN);
+            }
+        }
+    }
+
+    private void tickCasting() {
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) {
+            return;
+        }
+        if (target != null && target.isOnline() && !target.isDead()) {
+            npc.faceLocation(target.getEyeLocation());
+        }
+        runCastingParticles();
+        updateCastingAnimation();
+        if (stateTicks < castingTicks) {
+            return;
+        }
+        GhostAbility ability = pendingAbility;
+        pendingAbility     = null;
+        resetCastingAnimation();
+        state      = stateBeforeCasting;
+        stateTicks = 0;
+        castingTicks = 0;
+        if (ability != null) {
+            executeAbility(ability);
+        }
+    }
+
+    // =========================================================================
+    // Casting particle system
+    // =========================================================================
+
+    private void runCastingParticles() {
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) {
+            return;
+        }
+        Location base  = entity.getLocation();
+        World    world = base.getWorld();
+        if (world == null) {
+            return;
+        }
+        if (pendingAbility == null) {
+            spawnGenericCastingRing(world, base);
+            return;
+        }
+        switch (pendingAbility) {
+            case SPECTRAL_SURGE      -> spawnSpectralSurgeCastingParticles(world, base);
+            case WAILING_SHRIEK      -> spawnWailCastingParticles(world, base);
+            case PARANORMAL_ACTIVITY -> spawnParanormalCastingParticles(world, base);
+            case ECHO                -> spawnEchoCastingParticles(world, base);
+            case POLTERGEIST_THROW   -> spawnPoltergeistCastingParticles(world, base);
+        }
+    }
+
+    private void spawnGenericCastingRing(World world, Location base) {
+        double angle = stateTicks * 0.42D;
+        for (int step = 0; step < 4; step++) {
+            double offset = angle + (step * (Math.PI / 2.0D));
+            Location point = base.clone().add(
+                Math.cos(offset) * 0.8D,
+                0.5D + (stateTicks % 16) * 0.04D,
+                Math.sin(offset) * 0.8D);
+            world.spawnParticle(Particle.DUST, point, 1, 0.02D, 0.02D, 0.02D, 0D, DUST_WHITE);
+        }
+    }
+
+    private void spawnSpectralSurgeCastingParticles(World world, Location base) {
+        spawnGenericCastingRing(world, base);
+        Location focus = base.clone().add(0D, 1.0D, 0D);
+        world.spawnParticle(Particle.DUST,      focus, 6, 0.2D, 0.25D, 0.2D, 0D, DUST_ICE);
+        world.spawnParticle(Particle.SNOWFLAKE, focus, 2, 0.2D, 0.2D,  0.2D, 0.03D);
+        if (target != null && target.isOnline() && !target.isDead()) {
+            Location eye  = base.clone().add(0D, 1.3D, 0D);
+            Location dest = target.getEyeLocation();
+            for (int s = 0; s < 3; s++) {
+                double progress = ((stateTicks * 0.15D) + (s * 0.25D)) % 1.0D;
+                Location point  = eye.clone().add(
+                    dest.clone().subtract(eye).toVector().multiply(progress));
+                world.spawnParticle(Particle.DUST, point, 1, 0.04D, 0.04D, 0.04D, 0D, DUST_ICE);
+            }
+        }
+        if (stateTicks % 10 == 0) {
+            world.playSound(base, Sound.ENTITY_ENDERMAN_TELEPORT,
+                0.2F, 1.9F + random.nextFloat() * 0.1F);
+        }
+    }
+
+    private void spawnWailCastingParticles(World world, Location base) {
+        double angle = stateTicks * 0.62D;
+        for (int i = 0; i < 6; i++) {
+            double offset = angle + (i * (Math.PI / 3.0D));
+            double radius = 0.6D + Math.sin(stateTicks * 0.22D + i) * 0.2D;
+            double height = 0.5D + (i % 2) * 0.4D;
+            Location point = base.clone().add(Math.cos(offset) * radius, height, Math.sin(offset) * radius);
+            world.spawnParticle(Particle.DUST,      point, 2, 0.04D, 0.05D, 0.04D, 0D, DUST_WHITE);
+            if (i % 3 == 0) {
+                world.spawnParticle(Particle.SNOWFLAKE, point, 1, 0.02D, 0.03D, 0.02D, 0.01D);
+            }
+        }
+        if (stateTicks % 6 == 0) {
+            world.playSound(base, Sound.ENTITY_PHANTOM_HURT,
+                0.25F, 0.55F + random.nextFloat() * 0.15F);
+        }
+    }
+
+    private void spawnParanormalCastingParticles(World world, Location base) {
+        spawnGenericCastingRing(world, base);
+        Location focus = base.clone().add(0D, 1.1D, 0D);
+        world.spawnParticle(Particle.DUST,           focus, 5, 0.2D, 0.18D, 0.2D, 0D, DUST_REDSTONE);
+        world.spawnParticle(Particle.ELECTRIC_SPARK, focus, 2, 0.15D, 0.1D, 0.15D, 0.01D);
+        if (stateTicks % 8 == 0) {
+            world.playSound(base, Sound.BLOCK_LEVER_CLICK, 0.3F, 0.8F + random.nextFloat() * 0.4F);
+        }
+    }
+
+    private void spawnEchoCastingParticles(World world, Location base) {
+        Location focus = base.clone().add(0D, 1.0D, 0D);
+        world.spawnParticle(Particle.DUST, focus, 5, 0.2D, 0.25D, 0.2D, 0D, DUST_PALE);
+        if (stateTicks % 5 == 0) {
+            world.spawnParticle(Particle.END_ROD, focus, 2, 0.3D, 0.4D, 0.3D, 0.01D);
+        }
+        if (stateTicks % 8 == 0) {
+            world.playSound(base, Sound.BLOCK_AMETHYST_BLOCK_CHIME,
+                0.25F, 0.65F + random.nextFloat() * 0.2F);
+        }
+    }
+
+    private void spawnPoltergeistCastingParticles(World world, Location base) {
+        spawnGenericCastingRing(world, base);
+        Location focus = base.clone().add(0D, 1.0D, 0D);
+        world.spawnParticle(Particle.DUST, focus, 5, 0.2D, 0.25D, 0.2D, 0D, DUST_CYAN);
+        if (stateTicks % 6 == 0) {
+            world.playSound(base, Sound.ENTITY_BREEZE_SHOOT, 0.2F, 0.85F + random.nextFloat() * 0.3F);
+        }
+    }
+
+    // =========================================================================
+    // Casting animation system  (Citizens PlayerAnimation via reflection)
+    // =========================================================================
+
+    private void updateCastingAnimation() {
+        LivingEntity entity = getLivingEntity();
+        if (!(entity instanceof Player npcPlayer)) {
+            return;
+        }
+        if (target != null && target.isOnline() && !target.isDead()) {
+            npc.faceLocation(target.getEyeLocation());
+        }
+        if (pendingAbility == null) {
+            return;
+        }
+        switch (pendingAbility) {
+            case SPECTRAL_SURGE      -> animateSpectralSurge(npcPlayer);
+            case WAILING_SHRIEK      -> animateWailingScream(npcPlayer);
+            case PARANORMAL_ACTIVITY -> animateParanormal(npcPlayer);
+            case ECHO                -> animateEcho(npcPlayer);
+            case POLTERGEIST_THROW   -> animatePoltergeist(npcPlayer);
+        }
+    }
+
+    /** Spectral Surge: rapid bilateral arm-swings building to the teleport. */
+    private void animateSpectralSurge(Player p) {
+        if (stateTicks % 5 == 0) {
+            playCitizensPlayerAnimation(p, "ARM_SWING");
+            playCitizensPlayerAnimation(p, "ARM_SWING_OFFHAND");
+        }
+    }
+
+    /** Wailing Scream: open-armed sweep with a two-handed hold before the release. */
+    private void animateWailingScream(Player p) {
+        if (stateTicks % 4 == 0) {
+            playCitizensPlayerAnimation(p, "ARM_SWING");
+        }
+        if (stateTicks % 7 == 0) {
+            playCitizensPlayerAnimation(p, "ARM_SWING_OFFHAND");
+        }
+        if (stateTicks == castingTicks - 2) {
+            playCitizensPlayerAnimation(p, "START_USE_MAINHAND_ITEM");
+            playCitizensPlayerAnimation(p, "START_USE_OFFHAND_ITEM");
+        }
+    }
+
+    /** Paranormal Activity: slow deliberate main-hand hold, channelling energy. */
+    private void animateParanormal(Player p) {
+        if (stateTicks % 5 == 0) {
+            playCitizensPlayerAnimation(p, "START_USE_MAINHAND_ITEM");
+        }
+        if (stateTicks % 9 == 0) {
+            p.swingMainHand();
+            playCitizensPlayerAnimation(p, "ARM_SWING");
+        }
+    }
+
+    /** Echo: single-handed raised-arm summon. */
+    private void animateEcho(Player p) {
+        if (stateTicks % 6 == 0) {
+            playCitizensPlayerAnimation(p, "START_USE_MAINHAND_ITEM");
+        }
+    }
+
+    /** Poltergeist Throw: punching arm-swings as items are hurled. */
+    private void animatePoltergeist(Player p) {
+        if (stateTicks % 4 == 0) {
+            p.swingMainHand();
+            playCitizensPlayerAnimation(p, "ARM_SWING");
+        }
+        if (stateTicks == castingTicks - 1) {
+            p.swingOffHand();
+            playCitizensPlayerAnimation(p, "ARM_SWING_OFFHAND");
+        }
+    }
+
+    private void resetCastingAnimation() {
+        LivingEntity entity = getLivingEntity();
+        if (entity instanceof Player p) {
+            playCitizensPlayerAnimation(p, "STOP_USE_ITEM");
+        }
+    }
+
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    private void playCitizensPlayerAnimation(Player player, String animationName) {
+        try {
+            Class<? extends Enum> animationClass =
+                Class.forName("net.citizensnpcs.util.PlayerAnimation").asSubclass(Enum.class);
+            Enum animation = Enum.valueOf(animationClass, animationName);
+            Method playMethod = animationClass.getMethod("play", Player.class);
+            playMethod.invoke(animation, player);
+        } catch (ReflectiveOperationException ignored) {
+            // Citizens implementation classes are not on the compile classpath; hand animation falls back to Bukkit swings.
+        }
+    }
+
+    // =========================================================================
+    // New abilities
+    // =========================================================================
+
+    /**
+     * SPECTRAL SURGE — Ghost vanishes from its current position, phases behind
+     * the target, reappears with a surge of icy particles, and deals damage
+     * with a brief Levitation effect.
+     */
+    private void castSpectralSurge(Player player) {
+        LivingEntity entity = getLivingEntity();
+        if (entity == null || player == null || !player.isOnline() || player.isDead()) {
+            return;
+        }
+        World    world  = entity.getWorld();
+        Location before = entity.getLocation().clone();
+
+        // Calculate landing spot behind the player
+        Vector backwards = player.getLocation().getDirection().setY(0).normalize().multiply(-1.8D);
+        if (backwards.lengthSquared() < 0.001D) {
+            backwards = new Vector(0, 0, -1.8D);
+        }
+        Location behind = player.getLocation().clone().add(backwards);
+        behind.setY(Math.max(behind.getY(), world.getHighestBlockYAt(behind) + 1.0D));
+
+        // Vanish from current spot
+        setUntargetable(true);
+        startVanishing(8);
+        world.spawnParticle(Particle.DUST,      before.clone().add(0, 1, 0), 16, 0.3D, 0.4D, 0.3D, 0D, DUST_WHITE);
+        world.spawnParticle(Particle.SNOWFLAKE, before.clone().add(0, 1, 0),  8, 0.3D, 0.3D, 0.3D, 0.04D);
+        world.playSound(before, Sound.ENTITY_ENDERMAN_TELEPORT, 0.6F, 1.85F);
+
+        BukkitRunnable surgeTask = new BukkitRunnable() {
+            @Override
+            public void run() {
+                npc.teleport(behind, PlayerTeleportEvent.TeleportCause.PLUGIN);
+                World w = behind.getWorld();
+                if (w != null) {
+                    w.spawnParticle(Particle.DUST,      behind.clone().add(0, 1, 0), 16, 0.3D, 0.4D, 0.3D, 0D, DUST_ICE);
+                    w.spawnParticle(Particle.SNOWFLAKE, behind.clone().add(0, 1, 0), 10, 0.2D, 0.3D, 0.2D, 0.05D);
+                    w.playSound(behind, Sound.ENTITY_PHANTOM_AMBIENT, 0.8F, 1.6F);
+                }
+                breakVanishing();
+                setUntargetable(false);
+                // Phase-through damage with brief Levitation
+                if (player.isOnline() && !player.isDead()
+                        && behind.distanceSquared(player.getLocation()) <= 16.0D) {
+                    player.damage(5.0D, entity);
+                    player.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION, 30, 0, false, true, true));
+                    player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS,   50, 1, false, true, true));
+                    if (w != null) {
+                        w.playSound(player.getLocation(), Sound.ENTITY_PHANTOM_HURT, 0.7F, 1.2F);
+                    }
+                }
+                vulnerableTicks = Math.max(vulnerableTicks, COUNTERPLAY_WINDOW_TICKS);
+            }
+        };
+        tasks.add(surgeTask);
+        surgeTask.runTaskLater(plugin, 4L);
+    }
+
+    /**
+     * WAILING SHRIEK — Releases a piercing wail that blinds, nauseates, and
+     * slows all players within an 18-block radius.  An expanding ring of
+     * particles radiates outward so players can visually read the cast.
+     */
+    private void castWailingScream(Player player) {
+        LivingEntity entity = getLivingEntity();
+        if (entity == null) {
+            return;
+        }
+        Location loc   = entity.getLocation();
+        World    world = entity.getWorld();
+
+        world.playSound(loc, Sound.ENTITY_PHANTOM_HURT,               1.0F, 0.42F);
+        world.playSound(loc, Sound.ENTITY_WITHER_AMBIENT,             0.65F, 1.8F);
+        world.playSound(loc, Sound.ENTITY_ALLAY_AMBIENT_WITHOUT_ITEM, 0.8F, 0.40F);
+
+        // Expanding shockwave ring
+        BukkitRunnable wailTask = new BukkitRunnable() {
+            private int ticks;
+
+            @Override
+            public void run() {
+                ticks++;
+                double radius = ticks * 1.4D;
+                if (radius > 20.0D || isDead()) {
+                    cancel();
+                    return;
+                }
+                int points = Math.max(6, (int) (radius * 2.5D));
+                for (int i = 0; i < points; i++) {
+                    double offset = (i / (double) points) * Math.PI * 2.0D;
+                    Location ring = loc.clone().add(
+                        Math.cos(offset) * radius, 1.0D, Math.sin(offset) * radius);
+                    world.spawnParticle(Particle.DUST, ring, 1, 0.04D, 0.1D, 0.04D, 0D, DUST_WHITE);
+                    if (ticks % 2 == 0) {
+                        world.spawnParticle(Particle.SNOWFLAKE, ring, 1, 0.03D, 0.1D, 0.03D, 0.01D);
+                    }
+                }
+            }
+        };
+        tasks.add(wailTask);
+        wailTask.runTaskTimer(plugin, 0L, 1L);
+
+        // Apply effects to all players inside the shriek radius
+        for (Player nearby : world.getPlayers()) {
+            if (nearby.isDead()) {
+                continue;
+            }
+            double dist = nearby.getLocation().distance(loc);
+            if (dist > 18.0D) {
+                continue;
+            }
+            int blindTicks = dist <= 6.0D ? 80 : (dist <= 12.0D ? 50 : 30);
+            nearby.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, blindTicks, 0, false, true, true));
+            nearby.addPotionEffect(new PotionEffect(PotionEffectType.NAUSEA,    blindTicks, 0, false, true, true));
+            nearby.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS,  40,         0, false, true, true));
+            if (dist <= 10.0D) {
+                nearby.damage(3.0D, entity);
+            }
+            world.playSound(nearby.getLocation(), Sound.ENTITY_PHANTOM_HURT, 0.6F, 0.45F);
+        }
+        vulnerableTicks = Math.max(vulnerableTicks, COUNTERPLAY_WINDOW_TICKS + 20);
     }
 }
 

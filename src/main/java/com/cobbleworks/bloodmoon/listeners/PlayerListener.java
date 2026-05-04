@@ -1,7 +1,7 @@
 package com.cobbleworks.bloodmoon.listeners;
 
 import com.cobbleworks.bloodmoon.BloodMoonPlugin;
-import com.cobbleworks.bloodmoon.mobs.GhostNPC;
+import com.cobbleworks.bloodmoon.mobs.ScarecrowNPC;
 import com.cobbleworks.bloodmoon.mobs.VampireNPC;
 import com.cobbleworks.bloodmoon.mobs.WerewolfNPC;
 import com.cobbleworks.bloodmoon.mobs.WitchNPC;
@@ -112,6 +112,21 @@ public final class PlayerListener implements Listener {
             // First hit should force the jester into snapped combat mode.
             plugin.getNPCManager().getClown(event.getEntity()).triggerSnapFromDamage();
         }
+
+        ZombieNPC hitZombie = plugin.getNPCManager().getZombie(event.getEntity());
+        if (hitZombie != null) {
+            hitZombie.triggerSnapFromDamage();
+        }
+
+        WerewolfNPC hitWerewolf = plugin.getNPCManager().getWerewolf(event.getEntity());
+        if (hitWerewolf != null) {
+            hitWerewolf.triggerSnapFromDamage();
+        }
+
+        ScarecrowNPC hitScarecrow = plugin.getNPCManager().getScarecrow(event.getEntity());
+        if (hitScarecrow != null) {
+            hitScarecrow.triggerSnapFromDamage();
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -124,13 +139,6 @@ public final class PlayerListener implements Listener {
                 event.setDamage(event.getDamage() * 1.35D);
             } else {
                 player.removeMetadata("bloodmoon-werewolf-shattered-armor", plugin);
-            }
-        }
-
-        if (entity instanceof Player player) {
-            GhostNPC possessingGhost = GhostNPC.getPossessingGhost(player);
-            if (possessingGhost != null) {
-                possessingGhost.handlePossessedVictimDamaged(event.getFinalDamage());
             }
         }
 
@@ -189,23 +197,34 @@ public final class PlayerListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onProjectileHit(ProjectileHitEvent event) {
         Projectile projectile = event.getEntity();
-        if (!projectile.hasMetadata("bloodmoon-zombie-acid-spit")) {
-            return;
-        }
 
-        int npcId = projectile.getMetadata("bloodmoon-zombie-acid-spit").isEmpty()
-            ? -1
-            : projectile.getMetadata("bloodmoon-zombie-acid-spit").get(0).asInt();
-        ZombieNPC zombie = plugin.getNPCManager().getZombie(npcId);
-        if (zombie == null) {
+        if (projectile.hasMetadata("bloodmoon-zombie-acid-spit")) {
+            int npcId = projectile.getMetadata("bloodmoon-zombie-acid-spit").isEmpty()
+                ? -1
+                : projectile.getMetadata("bloodmoon-zombie-acid-spit").get(0).asInt();
+            ZombieNPC zombie = plugin.getNPCManager().getZombie(npcId);
             projectile.remove();
+            if (zombie != null) {
+                Player hitPlayer = event.getHitEntity() instanceof Player p ? p : null;
+                if (hitPlayer != null) {
+                    zombie.handleAcidSpit(hitPlayer);
+                }
+            }
             return;
         }
 
-        projectile.remove();
-        Player hitPlayer = event.getHitEntity() instanceof Player p ? p : null;
-        if (hitPlayer != null) {
-            zombie.handleAcidSpit(hitPlayer);
+        if (projectile.hasMetadata("bloodmoon-zombie-skull")) {
+            int npcId = projectile.getMetadata("bloodmoon-zombie-skull").isEmpty()
+                ? -1
+                : projectile.getMetadata("bloodmoon-zombie-skull").get(0).asInt();
+            ZombieNPC zombie = plugin.getNPCManager().getZombie(npcId);
+            projectile.remove();
+            if (zombie != null) {
+                Player hitPlayer = event.getHitEntity() instanceof Player p ? p : null;
+                if (hitPlayer != null) {
+                    zombie.handleSkullHit(hitPlayer);
+                }
+            }
         }
     }
 
@@ -245,11 +264,6 @@ public final class PlayerListener implements Listener {
         }
 
         WerewolfNPC.handleInfectedMove(event.getPlayer(), event, plugin);
-
-        GhostNPC possessingGhost = GhostNPC.getPossessingGhost(event.getPlayer());
-        if (possessingGhost != null) {
-            possessingGhost.handlePossessedMove(event.getPlayer(), event);
-        }
 
         if (event.getFrom().getBlockX() == event.getTo().getBlockX()
             && event.getFrom().getBlockY() == event.getTo().getBlockY()

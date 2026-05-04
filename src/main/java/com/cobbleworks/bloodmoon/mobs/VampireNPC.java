@@ -305,18 +305,17 @@ public final class VampireNPC {
      * @param event attack event
      */
     public void handleSentinelAttack(SentinelAttackEvent event) {
+        event.setCancelled(true);
         if (!(event.getTarget() instanceof Player player)) {
             return;
         }
         if (state == VampireState.DISGUISED_BAT || state == VampireState.STALKING || state == VampireState.CASTING || state == VampireState.BAT_FORM_ESCAPE || state == VampireState.DEAD) {
-            event.setCancelled(true);
             if (state == VampireState.STALKING) {
                 maintainStalkingTarget(player);
             }
             return;
         }
         target = player;
-        tryApplyBleed(player);
         if (random.nextDouble() < 0.12D) {
             VampireAbility ability = chooseAbility();
             if (ability != null && canUseAbility(ability)) {
@@ -396,6 +395,10 @@ public final class VampireNPC {
         removeDisguiseBat();
         removeEscapeBat();
         batSwarm.cleanup();
+        LivingEntity carrier = getHealthBarCarrier();
+        if (carrier != null) {
+            plugin.getOverheadHealthBarManager().removeBar(carrier.getUniqueId());
+        }
         if (npc.isSpawned()) {
             npc.despawn();
         }
@@ -506,15 +509,13 @@ public final class VampireNPC {
         sentinel.setInvincible(false);
         sentinel.setHealth(plugin.getConfigManager().getVampireHealth());
         sentinel.health = plugin.getConfigManager().getVampireHealth();
-        sentinel.damage = 6.0D;
+        sentinel.damage = 0.0D;
         sentinel.respawnTime = -1;
         sentinel.chaseRange = 30.0D;
         sentinel.armor = 0.2D;
         sentinel.protectFromIgnores = false;
         sentinel.allTargets = new SentinelTargetList();
         sentinel.addTarget("players");
-        sentinel.addTarget("mobs");
-        sentinel.addTarget("monsters");
         sentinel.allIgnores = new SentinelTargetList();
         sentinel.addIgnore("npcs");
         npc.setProtected(false);
@@ -716,7 +717,6 @@ public final class VampireNPC {
 
         if (player != null) {
             maintainStalkingTarget(player);
-            applyStalkingGlow(player);
         }
 
         if (stateTicks % STALK_SOUND_INTERVAL == 0) {
@@ -746,20 +746,6 @@ public final class VampireNPC {
         navigator.setTarget(player, false);
     }
 
-    private void applyStalkingGlow(Player player) {
-        Location center = getCurrentLocation();
-        World world = center.getWorld();
-        if (world == null) {
-            return;
-        }
-        for (Player nearby : world.getPlayers()) {
-            if (nearby.getLocation().distanceSquared(center) <= 14.0D * 14.0D) {
-                nearby.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 30, 0, true, false, true));
-            }
-        }
-        player.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 30, 0, true, false, true));
-    }
-
     private void spawnStalkingParticles() {
         Location location = getCurrentLocation().add(randomDouble(-0.25D, 0.25D), randomDouble(0.4D, 1.7D), randomDouble(-0.25D, 0.25D));
         World world = location.getWorld();
@@ -786,8 +772,6 @@ public final class VampireNPC {
         SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
         sentinel.allTargets = new SentinelTargetList();
         sentinel.addTarget("players");
-        sentinel.addTarget("mobs");
-        sentinel.addTarget("monsters");
         sentinel.allIgnores = new SentinelTargetList();
         sentinel.addIgnore("npcs");
         sentinel.chaseRange = 30.0D;
