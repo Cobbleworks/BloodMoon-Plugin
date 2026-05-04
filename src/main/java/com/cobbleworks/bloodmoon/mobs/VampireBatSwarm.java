@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
@@ -55,6 +57,15 @@ public final class VampireBatSwarm {
             bat.setCustomNameVisible(false);
             bat.setRemoveWhenFarAway(false);
             bat.setAwake(true);
+            // Disable native AI and gravity — our velocity controller handles all movement
+            bat.setAI(false);
+            bat.setGravity(false);
+            // Reduce HP so bats die in 1-2 hits
+            AttributeInstance maxHp = bat.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+            if (maxHp != null) {
+                maxHp.setBaseValue(2.0D);
+                bat.setHealth(2.0D);
+            }
             bats.add(bat);
             plugin.getNPCManager().registerBat(bat);
 
