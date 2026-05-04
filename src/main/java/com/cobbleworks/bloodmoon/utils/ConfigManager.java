@@ -252,17 +252,17 @@ public final class ConfigManager {
     }
 
     public String getGhostSkinName() {
-        return getConfig().getString("ghost.skin-name", "bloodmoon_ghost_Nghia_m500");
+        return getConfig().getString("ghost.skin-name", "bloodmoon_ghost_bugs_bunny__");
     }
 
     public String getGhostSkinTexture() {
         return getConfig().getString("ghost.skin-texture",
-            "ewogICJ0aW1lc3RhbXAiIDogMTc3NzU3NjQxMDg1OCwKICAicHJvZmlsZUlkIiA6ICJhNjkyZTQ0NjRlMTQ0MTc2YmQwNjk1NjgwMTEwMTVlMSIsCiAgInByb2ZpbGVOYW1lIiA6ICJOZ2hpYV9tNTAwIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzVmMDk0ZmZjMTJiZjkxY2M2MjUwM2QzOTdhZjc4Nzc3NzRmNzAyZmMwYzZlMTY4ZTAzNGEyMjZhYTUxZmIzZGEiCiAgICB9LAogICAgIkNBUEUiIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzI4ZGU0YTgxNjg4YWQxOGI0OWU3MzVhMjczZTA4NmMxOGYxZTM5NjY5NTYxMjNjY2I1NzQwMzRjMDZmNWQzMzYiCiAgICB9CiAgfQp9");
+            "ewogICJ0aW1lc3RhbXAiIDogMTc3NzkxNTU0NDgxMywKICAicHJvZmlsZUlkIiA6ICI2ZDQxYTgyZTk1Y2I0ZjYyODlmYWYwMjU1MzAxMzI0YiIsCiAgInByb2ZpbGVOYW1lIiA6ICJidWdzX2J1bm55X18iLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYTkxNjdmOGQyNTAwZDZiNDUwN2E3NTI5MmEzMWY4MzQ5YzNkYTI2ZjBiMzRmODQ2YmY4NTBiOGNkYjQxNjI2MCIsCiAgICAgICJtZXRhZGF0YSIgOiB7CiAgICAgICAgIm1vZGVsIiA6ICJzbGltIgogICAgICB9CiAgICB9CiAgfQp9");
     }
 
     public String getGhostSkinSignature() {
         return getConfig().getString("ghost.skin-signature",
-            "wN2NyYD161pzwI+4BOI4UoiaFVQHqBiG4hrKEHJG0q2dn0I3WdDtcWDB8Md1DsYhULZ6G+VQGXaoS/L3h2kjmdhFdmQIUiGVgE+FWCKczQjncjXk4hLpkt2z/1wm3aLQLzEwJScQkRKTQ33O5DlIVVOd0BoohARfEg9XvBSN/JJwaDrdbe/gJFWL3uF5aeVNumBo27sp2kS+ICLm+PQ6v9SN4BEhih78eL5HcbtEtSMclEMF1AAyt7KW2NpEj4ks0AAsU1k7zvTqQECxHozkIOKXE77KBGBm6hhXNYaKGOr7I0bYWU9/Sg87InqyTqeNUjSQ0ko6SSgfTt21q1xIJZKZEcaL8tgSRiYzCqHtj+PndFPG6pDTpHe29yMoex5+3iObWFLhMuJ/+u1PQ11UnLxQZ1Onw8Sk/BAmmaXEqDapOj1daqeeXK0rB0avqsSPU6x93evX1dC3RIxis+/sjIQHJYkf1aCi5zLpkYbV8lkY4/Z59X3tQ9hhZq4iGVe2J1pGbRdM3+lHl+VH5okSYeBERGntZr0sWtwJrbDxFNtsX5RYepJTGeIwWbJZmwyersNnGf/6uS3KsVwaM4jmrO4VTJXq+tyxZD7Zv6bg+IJ4en5upyk/WUiJoPCrG7q59XMZzMd6Dz31cdK7k661GwnNTXzpALqkrcxWs5gA7xc=");
+            "Iz3H9evufle1BWDJFWY7tq59essNjvYkszHpO59iEKTjXyJ7nqf5BXnBq17ZjMvZnqA05Tz4nl8NZEf7spsH97+Wb9AUBBeOWdYut4xhbkLgdGrWsihagm22m/WtlM4B/LA4Iuvt6ic1T4hteWoLI5/kEqaGjWlWgOQKENBIPF5QUv3YI0AJ0r71nlPv0ueI1NSmD0J31kVYV/Bw1+Av+AXIOun+tWPheWizCOdrNLnVCJEeBJdDU8wwWTxTRiP2fXK/m+K+sOPR8r68L87uq4ymYqBvqA+n3PxVwRPvI/wuavoWV4e3om4aqo8jZ48xm0G/3/aFcf2LOK8inO8MJsBJcD1U8jbzQ6hdiP1x6x/PCe5wsMzsiUvQBo0TmF1o0Pngqc6dRht4TbzCQHU4Ydd68Zf2JMPc9svctXC242Vyb6MhJxxmxKQRkNFHfimIVI8Qg/6c3ZDxyOLFqY7xGpobh3lNITZN7AeHLk6vaI9knFpH5tGYgZ6pkL2Z6JEoTLoZDqz8d7D3dHIis6w9Wtt8NlZCa4xGukl90tp24pCqURcfp24Jqdb8SaBox13VBZ7zOe7h/Y3aopWBCX3Y+Iq+Do8X9DbO03zXCVbkkVy29/82b161o2/dW1NlLfJFnAhVZbSB479wWbpZTqdGGFedSH9T33nGGUdJH3TAVso=");
     }
 
     public double getWerewolfHealth() {
@@ -378,11 +378,11 @@ public final class ConfigManager {
         config.addDefault("ghost.health", 22.0D);
         config.addDefault("ghost.max-per-player", 1);
         config.addDefault("ghost.spawn-radius", 52);
-        config.addDefault("ghost.skin-name", "bloodmoon_ghost_Nghia_m500");
+        config.addDefault("ghost.skin-name", "bloodmoon_ghost_bugs_bunny__");
         config.addDefault("ghost.skin-texture",
-            "ewogICJ0aW1lc3RhbXAiIDogMTc3NzU3NjQxMDg1OCwKICAicHJvZmlsZUlkIiA6ICJhNjkyZTQ0NjRlMTQ0MTc2YmQwNjk1NjgwMTEwMTVlMSIsCiAgInByb2ZpbGVOYW1lIiA6ICJOZ2hpYV9tNTAwIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzVmMDk0ZmZjMTJiZjkxY2M2MjUwM2QzOTdhZjc4Nzc3NzRmNzAyZmMwYzZlMTY4ZTAzNGEyMjZhYTUxZmIzZGEiCiAgICB9LAogICAgIkNBUEUiIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzI4ZGU0YTgxNjg4YWQxOGI0OWU3MzVhMjczZTA4NmMxOGYxZTM5NjY5NTYxMjNjY2I1NzQwMzRjMDZmNWQzMzYiCiAgICB9CiAgfQp9");
+            "ewogICJ0aW1lc3RhbXAiIDogMTc3NzkxNTU0NDgxMywKICAicHJvZmlsZUlkIiA6ICI2ZDQxYTgyZTk1Y2I0ZjYyODlmYWYwMjU1MzAxMzI0YiIsCiAgInByb2ZpbGVOYW1lIiA6ICJidWdzX2J1bm55X18iLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYTkxNjdmOGQyNTAwZDZiNDUwN2E3NTI5MmEzMWY4MzQ5YzNkYTI2ZjBiMzRmODQ2YmY4NTBiOGNkYjQxNjI2MCIsCiAgICAgICJtZXRhZGF0YSIgOiB7CiAgICAgICAgIm1vZGVsIiA6ICJzbGltIgogICAgICB9CiAgICB9CiAgfQp9");
         config.addDefault("ghost.skin-signature",
-            "wN2NyYD161pzwI+4BOI4UoiaFVQHqBiG4hrKEHJG0q2dn0I3WdDtcWDB8Md1DsYhULZ6G+VQGXaoS/L3h2kjmdhFdmQIUiGVgE+FWCKczQjncjXk4hLpkt2z/1wm3aLQLzEwJScQkRKTQ33O5DlIVVOd0BoohARfEg9XvBSN/JJwaDrdbe/gJFWL3uF5aeVNumBo27sp2kS+ICLm+PQ6v9SN4BEhih78eL5HcbtEtSMclEMF1AAyt7KW2NpEj4ks0AAsU1k7zvTqQECxHozkIOKXE77KBGBm6hhXNYaKGOr7I0bYWU9/Sg87InqyTqeNUjSQ0ko6SSgfTt21q1xIJZKZEcaL8tgSRiYzCqHtj+PndFPG6pDTpHe29yMoex5+3iObWFLhMuJ/+u1PQ11UnLxQZ1Onw8Sk/BAmmaXEqDapOj1daqeeXK0rB0avqsSPU6x93evX1dC3RIxis+/sjIQHJYkf1aCi5zLpkYbV8lkY4/Z59X3tQ9hhZq4iGVe2J1pGbRdM3+lHl+VH5okSYeBERGntZr0sWtwJrbDxFNtsX5RYepJTGeIwWbJZmwyersNnGf/6uS3KsVwaM4jmrO4VTJXq+tyxZD7Zv6bg+IJ4en5upyk/WUiJoPCrG7q59XMZzMd6Dz31cdK7k661GwnNTXzpALqkrcxWs5gA7xc=");
+            "Iz3H9evufle1BWDJFWY7tq59essNjvYkszHpO59iEKTjXyJ7nqf5BXnBq17ZjMvZnqA05Tz4nl8NZEf7spsH97+Wb9AUBBeOWdYut4xhbkLgdGrWsihagm22m/WtlM4B/LA4Iuvt6ic1T4hteWoLI5/kEqaGjWlWgOQKENBIPF5QUv3YI0AJ0r71nlPv0ueI1NSmD0J31kVYV/Bw1+Av+AXIOun+tWPheWizCOdrNLnVCJEeBJdDU8wwWTxTRiP2fXK/m+K+sOPR8r68L87uq4ymYqBvqA+n3PxVwRPvI/wuavoWV4e3om4aqo8jZ48xm0G/3/aFcf2LOK8inO8MJsBJcD1U8jbzQ6hdiP1x6x/PCe5wsMzsiUvQBo0TmF1o0Pngqc6dRht4TbzCQHU4Ydd68Zf2JMPc9svctXC242Vyb6MhJxxmxKQRkNFHfimIVI8Qg/6c3ZDxyOLFqY7xGpobh3lNITZN7AeHLk6vaI9knFpH5tGYgZ6pkL2Z6JEoTLoZDqz8d7D3dHIis6w9Wtt8NlZCa4xGukl90tp24pCqURcfp24Jqdb8SaBox13VBZ7zOe7h/Y3aopWBCX3Y+Iq+Do8X9DbO03zXCVbkkVy29/82b161o2/dW1NlLfJFnAhVZbSB479wWbpZTqdGGFedSH9T33nGGUdJH3TAVso=");
         config.addDefault("werewolf.health", 58.0D);
         config.addDefault("werewolf.max-per-player", 1);
         config.addDefault("werewolf.spawn-radius", 52);
