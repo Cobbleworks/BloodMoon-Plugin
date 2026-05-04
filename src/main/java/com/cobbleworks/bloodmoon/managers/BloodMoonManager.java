@@ -10,15 +10,11 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
-import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
-import org.bukkit.boss.BarColor;
-import org.bukkit.boss.BarStyle;
-import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -92,7 +88,6 @@ public final class BloodMoonManager {
     private BukkitRunnable timeCheckTask;
     private BukkitRunnable vampireSpawnTask;
     private BukkitRunnable ambientParticleTask;
-    private final Map<UUID, BossBar> worldBossBars = new HashMap<>();
     private Integer chanceOverride;
     private DifficultyProfile difficultyProfile = DifficultyProfile.MEDIUM;
 
@@ -184,15 +179,6 @@ public final class BloodMoonManager {
         activeWorldIds.add(world.getUID());
         lastBloodMoonNight.put(world.getUID(), getNightIndex(world));
         forceStorm(world);
-
-        BossBar bar = Bukkit.createBossBar("§4§l☭ Blood Moon ☭", BarColor.RED, BarStyle.SOLID);
-        bar.setProgress(1.0);
-        bar.setVisible(true);
-        worldBossBars.put(world.getUID(), bar);
-        for (Player p : world.getPlayers()) {
-            bar.addPlayer(p);
-        }
-
         broadcastStart(world);
         startAmbientParticles();
         return true;
@@ -211,10 +197,6 @@ public final class BloodMoonManager {
         }
 
         activeWorldIds.remove(world.getUID());
-        BossBar endBar = worldBossBars.remove(world.getUID());
-        if (endBar != null) {
-            endBar.removeAll();
-        }
         plugin.getNPCManager().cleanupWorld(world);
         stopStorm(world);
         broadcastEnd(world);
@@ -233,8 +215,6 @@ public final class BloodMoonManager {
         for (World world : new ArrayList<>(getActiveWorlds())) {
             endBloodMoon(world, true);
         }
-        worldBossBars.values().forEach(BossBar::removeAll);
-        worldBossBars.clear();
         activeWorldIds.clear();
         stopVampireSpawnTask();
         stopAmbientParticles();
@@ -420,18 +400,12 @@ public final class BloodMoonManager {
 
     private void tickAmbientParticles() {
         for (World world : getActiveWorlds()) {
-            BossBar bar = worldBossBars.get(world.getUID());
             for (Player player : world.getPlayers()) {
-                // Ensure late-joining players receive the boss bar
-                if (bar != null && !bar.getPlayers().contains(player)) {
-                    bar.addPlayer(player);
-                }
-
                 Location origin = player.getLocation();
-                for (int i = 0; i < 14; i++) {
-                    double ox = (random.nextDouble() * 2.0 - 1.0) * 14.0;
-                    double oy = random.nextDouble() * 6.0;
-                    double oz = (random.nextDouble() * 2.0 - 1.0) * 14.0;
+                for (int i = 0; i < 18; i++) {
+                    double ox = (random.nextDouble() * 2.0 - 1.0) * 22.0;
+                    double oy = random.nextDouble() * 8.0;
+                    double oz = (random.nextDouble() * 2.0 - 1.0) * 22.0;
                     Location loc = origin.clone().add(ox, oy, oz);
                     world.spawnParticle(Particle.ASH, loc, 3, 0.16D, 0.22D, 0.16D, 0.0D);
                     if (random.nextDouble() < 0.65D) {
@@ -444,8 +418,8 @@ public final class BloodMoonManager {
 
                 // Ground-level soul flame wisps near the player
                 if (random.nextDouble() < 0.35D) {
-                    double gx = (random.nextDouble() * 2.0 - 1.0) * 8.0;
-                    double gz = (random.nextDouble() * 2.0 - 1.0) * 8.0;
+                    double gx = (random.nextDouble() * 2.0 - 1.0) * 14.0;
+                    double gz = (random.nextDouble() * 2.0 - 1.0) * 14.0;
                     Location ground = origin.clone().add(gx, 0.1D, gz);
                     world.spawnParticle(Particle.SOUL_FIRE_FLAME, ground, 2, 0.2D, 0.15D, 0.2D, 0.01D);
                 }
@@ -463,7 +437,7 @@ public final class BloodMoonManager {
                     world.playSound(origin, Sound.WEATHER_RAIN_ABOVE, 0.45F, 0.6F + random.nextFloat() * 0.2F);
                 }
                 if (random.nextDouble() < 0.025D) {
-                    Location strike = origin.clone().add((random.nextDouble() * 2.0D - 1.0D) * 22.0D, 0.0D, (random.nextDouble() * 2.0D - 1.0D) * 22.0D);
+                    Location strike = origin.clone().add((random.nextDouble() * 2.0D - 1.0D) * 30.0D, 0.0D, (random.nextDouble() * 2.0D - 1.0D) * 30.0D);
                     strike.setY(world.getHighestBlockYAt(strike) + 1.0D);
                     world.strikeLightningEffect(strike);
                 }
