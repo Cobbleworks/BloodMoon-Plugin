@@ -1282,10 +1282,10 @@ public final class ZombieNPC {
 
                 if (tick > TOTAL_TICKS || isDead()) {
                     leaping = false;
-                    // Ground-snap to prevent the zombie floating after landing
+                    // Snap zombie to the actual ground — fixes both floating and sinking into terrain
                     Location snap = entity.getLocation().clone();
                     double groundY = snap.getWorld().getHighestBlockYAt(snap.getBlockX(), snap.getBlockZ()) + 0.1D;
-                    if (snap.getY() > groundY + 0.8D) {
+                    if (Math.abs(snap.getY() - groundY) > 0.5D) {
                         snap.setY(groundY);
                         entity.teleport(snap);
                     }
@@ -1301,7 +1301,8 @@ public final class ZombieNPC {
                 double surfaceY = start.getWorld().getHighestBlockYAt(next.getBlockX(), next.getBlockZ()) + 0.5D;
                 next.setY(Math.max(next.getY(), surfaceY));
                 if (tick >= TOTAL_TICKS) {
-                    next.setY(end.getBlockY() + 0.5D);
+                    // Use actual surface Y at landing — not the captured player Y which may be stale
+                    next.setY(start.getWorld().getHighestBlockYAt(next.getBlockX(), next.getBlockZ()) + 0.5D);
                 }
                 next.setYaw(entity.getLocation().getYaw());
                 next.setPitch(-25F);
