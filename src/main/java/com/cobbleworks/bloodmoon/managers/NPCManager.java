@@ -40,6 +40,7 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Zombie;
+import org.bukkit.util.RayTraceResult;
 import org.mcmonkey.sentinel.SentinelIntegration;
 import org.mcmonkey.sentinel.SentinelPlugin;
 import org.mcmonkey.sentinel.SentinelTrait;
@@ -943,8 +944,27 @@ public final class NPCManager {
 
     private Location findSpawnLocationNear(Player player, int radius) {
         World world = player.getWorld();
-        double minDistanceSquared = 24.0D * 24.0D;
         Location playerLocation = player.getLocation();
+
+        // 1. Prefer the surface at the player's crosshair
+        RayTraceResult ray = player.rayTraceBlocks(Math.max(radius, 48.0D));
+        if (ray != null && ray.getHitBlock() != null) {
+            Block hit = ray.getHitBlock();
+            int x = hit.getX();
+            int z = hit.getZ();
+            Chunk chunk = world.getChunkAt(x >> 4, z >> 4);
+            if (chunk.isLoaded()) {
+                Block ground = world.getHighestBlockAt(x, z);
+                Location candidate = ground.getLocation().add(0.5D, 1.0D, 0.5D);
+                // Ensure the candidate is at least 5 blocks away to avoid spawning on the player
+                if (candidate.distanceSquared(playerLocation) >= 25.0D && isValidSpawnLocation(candidate)) {
+                    return candidate;
+                }
+            }
+        }
+
+        // 2. Fallback: random position within radius, at least 24 blocks away
+        double minDistanceSquared = 24.0D * 24.0D;
         for (int attempt = 0; attempt < 64; attempt++) {
             int dx = random.nextInt(radius * 2 + 1) - radius;
             int dz = random.nextInt(radius * 2 + 1) - radius;
