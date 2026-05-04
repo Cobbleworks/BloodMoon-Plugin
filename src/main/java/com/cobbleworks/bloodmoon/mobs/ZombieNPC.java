@@ -1284,7 +1284,7 @@ public final class ZombieNPC {
                     leaping = false;
                     // Ground-snap to prevent the zombie floating after landing
                     Location snap = entity.getLocation().clone();
-                    double groundY = world.getHighestBlockYAt(snap.getBlockX(), snap.getBlockZ()) + 0.1D;
+                    double groundY = snap.getWorld().getHighestBlockYAt(snap.getBlockX(), snap.getBlockZ()) + 0.1D;
                     if (snap.getY() > groundY + 0.8D) {
                         snap.setY(groundY);
                         entity.teleport(snap);
