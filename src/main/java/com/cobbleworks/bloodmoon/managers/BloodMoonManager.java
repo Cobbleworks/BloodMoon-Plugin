@@ -416,14 +416,6 @@ public final class BloodMoonManager {
                     }
                 }
 
-                // Ground-level soul flame wisps near the player
-                if (random.nextDouble() < 0.35D) {
-                    double gx = (random.nextDouble() * 2.0 - 1.0) * 14.0;
-                    double gz = (random.nextDouble() * 2.0 - 1.0) * 14.0;
-                    Location ground = origin.clone().add(gx, 0.1D, gz);
-                    world.spawnParticle(Particle.SOUL_FIRE_FLAME, ground, 2, 0.2D, 0.15D, 0.2D, 0.01D);
-                }
-
                 if (random.nextDouble() < 0.18D) {
                     world.playSound(origin, Sound.AMBIENT_CRIMSON_FOREST_MOOD, 0.35F, 0.55F + random.nextFloat() * 0.2F);
                 }
