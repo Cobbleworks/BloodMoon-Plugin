@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import org.bukkit.GameRule;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
@@ -85,6 +86,7 @@ public final class BloodMoonManager {
     private final Map<UUID, Long> lastBloodMoonNight = new HashMap<>();
     private final Map<UUID, Long> lastNightRoll = new HashMap<>();
     private final Random random = new Random();
+    private final Map<UUID, Boolean> savedFireTick = new HashMap<>();
     private BukkitRunnable timeCheckTask;
     private BukkitRunnable vampireSpawnTask;
     private BukkitRunnable ambientParticleTask;
@@ -451,6 +453,10 @@ public final class BloodMoonManager {
         world.setThundering(true);
         world.setWeatherDuration(24000);
         world.setThunderDuration(24000);
+        // Disable fire spread during Blood Moon to prevent runaway fires
+        Boolean current = world.getGameRuleValue(GameRule.DO_FIRE_TICK);
+        savedFireTick.put(world.getUID(), current != null ? current : Boolean.TRUE);
+        world.setGameRule(GameRule.DO_FIRE_TICK, false);
     }
 
     private void stopStorm(World world) {
@@ -458,6 +464,9 @@ public final class BloodMoonManager {
         world.setThundering(false);
         world.setWeatherDuration(12000);
         world.setThunderDuration(12000);
+        // Restore fire spread to whatever the world had before the Blood Moon
+        Boolean saved = savedFireTick.remove(world.getUID());
+        world.setGameRule(GameRule.DO_FIRE_TICK, saved != null ? saved : Boolean.TRUE);
     }
 
     private void broadcastStart(World world) {

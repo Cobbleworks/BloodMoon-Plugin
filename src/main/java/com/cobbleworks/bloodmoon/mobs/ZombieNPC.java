@@ -1607,9 +1607,6 @@ public final class ZombieNPC {
         }
         setNavigationSpeed(1.28F);
 
-        // Glowing red visual for nearby players
-        entity.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, Integer.MAX_VALUE, 0, false, false));
-
         // Announce to nearby players
         for (Player p : world.getPlayers()) {
             if (p.getLocation().distanceSquared(loc) <= 900.0D && plugin.hasBossMessages(p.getUniqueId())) { // 30 block range

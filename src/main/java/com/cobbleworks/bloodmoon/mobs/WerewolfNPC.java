@@ -494,9 +494,9 @@ public final class WerewolfNPC {
 
     private void tickCasting() {
         LivingEntity entity = getLivingEntity();
+        // Stand still during the cast — navigator drift during casting causes floating
+        npc.getNavigator().cancelNavigation();
         if (entity != null && target != null && target.isOnline() && !target.isDead()) {
-            setNavigationSpeed(0.80F);
-            npc.getNavigator().setTarget(target, true);
             if (stateTicks % 10 == 0) {
                 lockSentinelChase(target, 54.0D);
             }
