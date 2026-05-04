@@ -110,7 +110,7 @@ public final class VampireNPC {
     private static final int SUMMON_BATS_COOLDOWN = 180;
     private static final int EXECUTION_DASH_COOLDOWN = 260;
     private static final int DEATH_REMOVE_DELAY = 60;
-    private static final int MAX_SUMMONED_BATS = 6;
+    private static final int MAX_SUMMONED_BATS = 3;
     private static final int DRAIN_LIFE_DURATION_TICKS = 8;
     private static final int HEMOPLAGUE_MARK_TICKS = 140;
     private static final double MELEE_BLEED_GRACE_TICKS = 10.0D;
@@ -1781,11 +1781,11 @@ public final class VampireNPC {
     }
 
     private void castSummonBats() {
-        if (batSwarm.size() >= MAX_SUMMONED_BATS) {
+        int toSpawn = Math.min(3, MAX_SUMMONED_BATS - batSwarm.size());
+        if (toSpawn <= 0) {
             state = VampireState.COMBAT;
             return;
         }
-
         setCooldown(VampireAbility.SUMMON_BATS, SUMMON_BATS_COOLDOWN);
         Location location = getCurrentLocation();
         World world = location.getWorld();
@@ -1798,7 +1798,7 @@ public final class VampireNPC {
             world.playSound(location, Sound.ENTITY_BAT_LOOP, 0.8F, 1.1F);
             world.playSound(location, Sound.ENTITY_PHANTOM_FLAP, 0.45F, 1.2F);
         }
-        batSwarm.spawn(location, 3);
+        batSwarm.spawn(location, toSpawn);
         state = VampireState.COMBAT;
         stateTicks = 0;
     }

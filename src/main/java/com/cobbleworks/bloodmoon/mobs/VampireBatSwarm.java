@@ -159,9 +159,10 @@ public final class VampireBatSwarm {
         if (direction.lengthSquared() < 0.01D) {
             return;
         }
-        direction.normalize().multiply(0.42D);
-        direction.setY(Math.max(-0.25D, Math.min(0.35D, direction.getY())));
-        bat.setVelocity(direction);
+        // Use teleport instead of velocity — entities with setAI(false) ignore velocity updates
+        double speed = Math.min(0.38D, direction.length() * 0.5D);
+        direction.normalize().multiply(speed);
+        bat.teleport(bat.getLocation().add(direction));
         bat.getWorld().spawnParticle(Particle.PORTAL, bat.getLocation(), 2, 0.08D, 0.08D, 0.08D, 0.01D);
     }
 
@@ -172,8 +173,8 @@ public final class VampireBatSwarm {
         }
         Vector direction = ownerLocation.clone().add(0.0D, 2.0D, 0.0D).toVector().subtract(bat.getLocation().toVector());
         if (direction.lengthSquared() > 1.0D) {
-            direction.normalize().multiply(0.25D);
-            bat.setVelocity(direction);
+            direction.normalize().multiply(0.2D);
+            bat.teleport(bat.getLocation().add(direction));
         }
     }
 
