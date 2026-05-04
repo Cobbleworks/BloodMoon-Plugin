@@ -185,10 +185,8 @@ public final class ClownNPC {
     public void onTakeDamage() {
         if (state == ClownState.DEAD || state == ClownState.WANDERING || state == ClownState.TAUNTING) return;
         if (damageTeleportCooldown > 0) return;
-        if (random.nextDouble() < 0.28D) {
-            teleportEscape();
-            damageTeleportCooldown = 80;
-        }
+        teleportEscape();
+        damageTeleportCooldown = 8;
     }
 
     private void teleportEscape() {

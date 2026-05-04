@@ -1574,14 +1574,27 @@ public final class ZombieNPC {
             }
         }
 
-        // Linger cloud
-        AreaEffectCloud cloud = world.spawn(loc.clone().add(0D, 0.3D, 0D), AreaEffectCloud.class);
-        cloud.setRadius(4.0F);
-        cloud.setDuration(140);
-        cloud.setReapplicationDelay(30);
-        cloud.addCustomEffect(new PotionEffect(PotionEffectType.POISON, 60, 1, false, false), true);
-        cloud.setParticle(Particle.SNEEZE);
-        cloud.setMetadata("bloodmoon-zombie-toxic", new FixedMetadataValue(plugin, true));
+        // Lingering poison cloud — manual runnable instead of AreaEffectCloud to avoid poisoning this NPC
+        final Location cloudLoc = loc.clone().add(0D, 0.3D, 0D);
+        final double cloudRadiusSq = 16.0D;
+        new BukkitRunnable() {
+            int elapsed = 0;
+            @Override
+            public void run() {
+                if (elapsed >= 150 || isDead()) {
+                    cancel();
+                    return;
+                }
+                world.spawnParticle(Particle.SNEEZE, cloudLoc, 6, 1.5D, 0.3D, 1.5D, 0.02D);
+                world.spawnParticle(Particle.DUST,   cloudLoc, 4, 1.5D, 0.3D, 1.5D, 0D, TOXIC_DUST);
+                for (Player p : world.getPlayers()) {
+                    if (!p.isDead() && p.getLocation().distanceSquared(cloudLoc) <= cloudRadiusSq) {
+                        p.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 60, 1, false, false));
+                    }
+                }
+                elapsed += 30;
+            }
+        }.runTaskTimer(plugin, 1L, 30L);
     }
 
     // -------------------------------------------------------------------------
