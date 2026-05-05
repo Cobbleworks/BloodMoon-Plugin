@@ -478,3 +478,34 @@ target/BloodMoon-Event-1.0.0-SNAPSHOT.jar
 ## **License**
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+## **Screenshots**
+
+The screenshots below showcase the seven Blood Moon NPC bosses in action — abilities, visual effects, and encounter moments captured during live gameplay.
+
+<table>
+  <tr>
+    <th>BloodMoon - Clown Bunny Bomb</th>
+    <th>BloodMoon - Ghost Freeze Effect</th>
+  </tr>
+  <tr>
+    <td><a href="https://github.com/Cobbleworks/BloodMoon-Plugin/raw/main/images/screenshot-clown-bunny-bomb.png" target="_blank" rel="noopener noreferrer"><img src="https://github.com/Cobbleworks/BloodMoon-Plugin/raw/main/images/screenshot-clown-bunny-bomb.png" alt="Clown Bunny Bomb" width="450"></a></td>
+    <td><a href="https://github.com/Cobbleworks/BloodMoon-Plugin/raw/main/images/screenshot-ghost-freeze.png" target="_blank" rel="noopener noreferrer"><img src="https://github.com/Cobbleworks/BloodMoon-Plugin/raw/main/images/screenshot-ghost-freeze.png" alt="Ghost Freeze Effect" width="450"></a></td>
+  </tr>
+  <tr>
+    <th>BloodMoon - Scarecrow Flame Storm</th>
+    <th>BloodMoon - Vampire Hemoplague</th>
+  </tr>
+  <tr>
+    <td><a href="https://github.com/Cobbleworks/BloodMoon-Plugin/raw/main/images/screenshot-scarecrow-flame-storm.png" target="_blank" rel="noopener noreferrer"><img src="https://github.com/Cobbleworks/BloodMoon-Plugin/raw/main/images/screenshot-scarecrow-flame-storm.png" alt="Scarecrow Flame Storm" width="450"></a></td>
+    <td><a href="https://github.com/Cobbleworks/BloodMoon-Plugin/raw/main/images/screenshot-vampire-hemoplague.png" target="_blank" rel="noopener noreferrer"><img src="https://github.com/Cobbleworks/BloodMoon-Plugin/raw/main/images/screenshot-vampire-hemoplague.png" alt="Vampire Hemoplague" width="450"></a></td>
+  </tr>
+  <tr>
+    <th>BloodMoon - Witch Cage Magic</th>
+    <th>BloodMoon - Zombie Crop Poison</th>
+  </tr>
+  <tr>
+    <td><a href="https://github.com/Cobbleworks/BloodMoon-Plugin/raw/main/images/screenshot-witch-cage.png" target="_blank" rel="noopener noreferrer"><img src="https://github.com/Cobbleworks/BloodMoon-Plugin/raw/main/images/screenshot-witch-cage.png" alt="Witch Cage Magic" width="450"></a></td>
+    <td><a href="https://github.com/Cobbleworks/BloodMoon-Plugin/raw/main/images/screenshot-zombie-crop-poison.png" target="_blank" rel="noopener noreferrer"><img src="https://github.com/Cobbleworks/BloodMoon-Plugin/raw/main/images/screenshot-zombie-crop-poison.png" alt="Zombie Crop Poison" width="450"></a></td>
+  </tr>
+</table>

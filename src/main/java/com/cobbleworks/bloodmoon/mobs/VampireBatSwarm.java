@@ -2,6 +2,7 @@ package com.cobbleworks.bloodmoon.mobs;
 
 import com.cobbleworks.bloodmoon.BloodMoonPlugin;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
@@ -12,9 +13,9 @@ import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.entity.Bat;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
@@ -47,18 +48,23 @@ public final class VampireBatSwarm {
         }
 
         for (int index = 0; index < amount; index++) {
+            // Evenly-spaced angles give a clean burst rather than a random clump
+            double angle = (Math.PI * 2.0D * index) / amount;
+            double radius = 1.2D + owner.randomDouble(0.0D, 0.8D);
             Location spawn = center.clone().add(
-                owner.randomDouble(-2.0D, 2.0D),
+                Math.cos(angle) * radius,
                 owner.randomDouble(0.4D, 2.2D),
-                owner.randomDouble(-2.0D, 2.0D)
+                Math.sin(angle) * radius
             );
             Bat bat = (Bat) world.spawnEntity(spawn, EntityType.BAT);
             bat.setCustomName(null);
             bat.setCustomNameVisible(false);
             bat.setRemoveWhenFarAway(false);
             bat.setAwake(true);
-            // Disable native AI and gravity — our velocity controller handles all movement
-            bat.setAI(false);
+            // AI must stay ENABLED — setAI(false) skips aiStep() which means
+            // setVelocity() is never applied to position and bats freeze.
+            // Gravity disabled keeps them airborne; our velocity override each
+            // tick dominates the bat's own wander goal.
             bat.setGravity(false);
             // Reduce HP so bats die in 1-2 hits
             AttributeInstance maxHp = bat.getAttribute(Attribute.GENERIC_MAX_HEALTH);
@@ -66,6 +72,10 @@ public final class VampireBatSwarm {
                 maxHp.setBaseValue(2.0D);
                 bat.setHealth(2.0D);
             }
+            // Immediate outward kick so bats visually burst from the caster on spawn
+            Vector kick = new Vector(Math.cos(angle), owner.randomDouble(0.15D, 0.45D), Math.sin(angle))
+                    .normalize().multiply(0.55D);
+            bat.setVelocity(kick);
             bats.add(bat);
             plugin.getNPCManager().registerBat(bat);
 
@@ -138,7 +148,7 @@ public final class VampireBatSwarm {
                 continue;
             }
 
-            LivingEntity target = findNearestTarget(bat.getLocation(), 32.0D);
+            Player target = findNearestTarget(bat.getLocation(), 32.0D);
             if (target == null) {
                 swirlNearOwner(bat);
                 continue;
@@ -159,10 +169,8 @@ public final class VampireBatSwarm {
         if (direction.lengthSquared() < 0.01D) {
             return;
         }
-        // Use teleport instead of velocity — entities with setAI(false) ignore velocity updates
         double speed = Math.min(0.38D, direction.length() * 0.5D);
-        direction.normalize().multiply(speed);
-        bat.teleport(bat.getLocation().add(direction));
+        bat.setVelocity(direction.normalize().multiply(speed));
         bat.getWorld().spawnParticle(Particle.PORTAL, bat.getLocation(), 2, 0.08D, 0.08D, 0.08D, 0.01D);
     }
 
@@ -171,10 +179,10 @@ public final class VampireBatSwarm {
         if (ownerLocation == null || ownerLocation.getWorld() != bat.getWorld()) {
             return;
         }
-        Vector direction = ownerLocation.clone().add(0.0D, 2.0D, 0.0D).toVector().subtract(bat.getLocation().toVector());
+        Vector direction = ownerLocation.clone().add(0.0D, 2.0D, 0.0D).toVector()
+                .subtract(bat.getLocation().toVector());
         if (direction.lengthSquared() > 1.0D) {
-            direction.normalize().multiply(0.2D);
-            bat.teleport(bat.getLocation().add(direction));
+            bat.setVelocity(direction.normalize().multiply(0.2D));
         }
     }
 
@@ -194,29 +202,32 @@ public final class VampireBatSwarm {
         contactCooldowns.put(uuid, 20);
     }
 
-    private LivingEntity findNearestTarget(Location center, double radius) {
+    /**
+     * Finds the nearest player using a proper sphere check.
+     *
+     * <p>Previously used {@code getNearbyEntities(x, 4.0, z)} which capped the
+     * Y-axis search to only 4 blocks. After the spawn kick sends bats upward,
+     * any player more than 4 blocks below them was never found, so
+     * {@code findNearestTarget} always returned null and bats fell into
+     * {@code swirlNearOwner} until the vampire moved close enough.</p>
+     *
+     * <p>Using {@code getPlayers()} with a {@code distanceSquared} check is a
+     * true sphere — identical to how {@link ClownBunnySwarm} finds targets, and
+     * it has no Y-axis limitation.</p>
+     */
+    private Player findNearestTarget(Location center, double radius) {
         World world = center.getWorld();
         if (world == null) {
             return null;
         }
-
-        LivingEntity nearest = null;
-        double bestDistance = radius * radius;
-        for (Entity entity : world.getNearbyEntities(center, radius, 4.0D, radius)) {
-            if (!(entity instanceof LivingEntity living)
-                || entity.getType() == EntityType.BAT
-                || plugin.getNPCManager().isBloodMoonNpc(entity)
-                || living.isDead()
-                || !living.isValid()) {
-                continue;
-            }
-            double distance = living.getLocation().distanceSquared(center);
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                nearest = living;
-            }
-        }
-        return nearest;
+        double radiusSq = radius * radius;
+        return world.getPlayers().stream()
+                .filter(p -> !p.isDead() && p.isValid())
+                .filter(p -> !plugin.getNPCManager().isBloodMoonNpc(p))
+                .filter(p -> p.getWorld() == world)
+                .filter(p -> p.getLocation().distanceSquared(center) <= radiusSq)
+                .min(Comparator.comparingDouble(p -> p.getLocation().distanceSquared(center)))
+                .orElse(null);
     }
 
     private void decrementCooldowns() {
@@ -245,5 +256,3 @@ public final class VampireBatSwarm {
         }
     }
 }
-
-
