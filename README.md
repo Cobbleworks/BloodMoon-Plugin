@@ -58,6 +58,7 @@ Originally built for custom server gameplay, the plugin integrates directly with
 8. [Performance Notes](#performance-notes)
 9. [Building From Source](#building-from-source)
 10. [License](#license)
+11. [Third-Party Libraries](#third-party-libraries)
 
 ## **Getting Started**
 
@@ -478,6 +479,35 @@ target/BloodMoon-Event-1.0.0-SNAPSHOT.jar
 ## **License**
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+## **Third-Party Libraries**
+
+BloodMoon Event depends on two external Minecraft plugins to manage NPC lifecycle and combat targeting: **Citizens 2** and **Sentinel**. Both are required hard dependencies — the plugin will not load without them.
+
+### Citizens 2
+
+**Citizens 2** is the leading NPC framework for Bukkit-based Minecraft servers. BloodMoon uses Citizens to spawn, despawn, and manage the lifecycle of all seven boss NPCs, apply custom traits (skins, equipment, per-boss controllers), and hook into NPC event callbacks. BloodMoon does not implement its own entity type — all bosses exist as Citizens NPCs backed by vanilla Minecraft entities.
+
+- **Website:** [Citizens2 SpigotMC Resource](https://www.spigotmc.org/resources/citizens.13811/)
+- **GitHub:** [CitizensDev/Citizens2](https://github.com/CitizensDev/Citizens2)
+- **License:** Citizens 2 is licensed under the Apache License 2.0.
+
+### Sentinel
+
+**Sentinel** is a Citizens addon that provides NPC combat AI, targeting rules, and aggression control. BloodMoon uses Sentinel to configure targeting behavior (players only), chase range, and NPC health on a per-boss basis. All actual combat logic — abilities, damage, phase transitions, particle effects — is handled entirely by BloodMoon's own controllers, not by Sentinel's built-in damage system.
+
+- **Website:** [Sentinel SpigotMC Resource](https://www.spigotmc.org/resources/sentinel.23328/)
+- **GitHub:** [mcmonkeyprojects/Sentinel](https://github.com/mcmonkeyprojects/Sentinel)
+- **License:** Sentinel is licensed under the MIT License.
+
+### Additional Information
+
+For more details about Citizens and Sentinel, including setup guides and configuration references, check their official documentation:
+
+- **Citizens Documentation:** [Citizens Wiki](https://wiki.citizensnpcs.co/Citizens_Wiki)
+- **Sentinel Documentation:** [Sentinel GitHub README](https://github.com/mcmonkeyprojects/Sentinel/blob/master/README.md)
+
+If you have questions or issues related to these dependencies, please [open an issue](https://github.com/Cobbleworks/BloodMoon-Plugin/issues) on GitHub.
 
 ## **Screenshots**
 
