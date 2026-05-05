@@ -269,15 +269,15 @@ Every BloodMoon special NPC is implemented as a Citizens 2 NPC with a custom tra
 
 | Ability | Description |
 |---------|-------------|
-| `FEAR` | Applies Nausea and Slowness, forces the target to flee with simulated panic movement |
-| `DRAIN` | Channelled life drain between Scarecrow and multiple nearby targets simultaneously |
-| `BLOOM` | Accelerates nearby crop growth in a burst, spawning particle eruptions |
-| `REAP` | Scythe-swipe AoE that deals damage and strips nearby crops |
-| `FIREBALLS` | Fires a spread of small fire charges toward the target |
-| `PHANTOM` | Teleports to a shadow location, spawning decoy smoke bursts |
-| `CROWSTORM` | Releases a swarm of bats in an arcing crowstorm pattern |
-| `DARK_WIND` | Persistent wind zone that slows and disorients players in range |
-| `HIGH_JUMP` | Leaps high into the air then crashes down with an impact shockwave |
+| `FEAR` | Fires a slow orb; on contact applies Blindness, Darkness, Slowness V, and Mining Fatigue, and forces a carved pumpkin onto the target's head for 4 seconds |
+| `DRAIN` | Roots the Scarecrow in place and channels vine-coloured drain streams to all living entities within 8 blocks, healing the Scarecrow for each point drained |
+| `BLOOM` | Scatters wither roses and fire blocks around the target; roses persist for 7 seconds and damage any entity that contacts them |
+| `REAP` | Half-moon scythe sweep in a 5-block arc in front of the Scarecrow; instantly kills targets below 15% HP, otherwise deals damage and applies Slowness |
+| `FIREBALLS` | Fires 1–4 small fire charges at the target; each hit sets the target alight for 3 seconds |
+| `PHANTOM` | Launches three fiery crow projectiles in sequence that home in and dive-bomb the target |
+| `CROWSTORM` | Creates an orbiting ring of orange flames and ember particles around the Scarecrow; players who step inside take repeated fire damage |
+| `DARK_WIND` | Fires a bouncing cyan/black projectile that re-targets the nearest player on each bounce, up to 5 bounces total |
+| `HIGH_JUMP` | Ignites a compact ring of flames and embers at the target's feet; players inside take repeated fire damage and are set alight |
 
 **Phase transitions:**
 - **HARVESTER** activates at 70% HP — accompanied by dragon growl, wood-break sounds, explosion particle burst, amber ring, and crowd announcement `The Scarecrow enters the HARVESTER phase!`
@@ -331,14 +331,14 @@ Every BloodMoon special NPC is implemented as a Citizens 2 NPC with a custom tra
 
 | Ability | Description |
 |---------|-------------|
-| `BITE` | Close-range bite that applies bleeding and a short Weakness debuff |
-| `FURIOUS_CLAWS` | Rapid multi-hit claw flurry that pushes the target backward |
-| `FAR_JUMP` | Long-distance horizontal leap to close gaps instantly |
+| `BITE` | Leaps at the target and bites on contact, applying bleeding and a 3-second decaying Slowness |
+| `FURIOUS_CLAWS` | Sweeps two arcing claw slashes simultaneously; each slash applies bleeding on hit |
+| `FAR_JUMP` | Leaps horizontally toward the target; on landing, deals AoE damage and knockback to all players within 4 blocks |
 | `WOLF_PACK` | Summons 1–2 wolf companions that assist in combat |
-| `DEVOUR` | High-damage bite that heals the Werewolf proportionally |
-| `TERRITORIAL_SNARL` | Roar burst that knocks back nearby players and debuffs their movement |
+| `DEVOUR` | Rushes to and devours a nearby sheep, instantly healing for 40% of maximum health |
+| `TERRITORIAL_SNARL` | Marks the current position as territory with a 10-block particle ring; outgoing damage is increased while the Werewolf remains within the zone |
 | `PACK_FRENZY` | Buffs all active pack wolves with increased speed and damage |
-| `BONE_SLAM` | Crashes into the ground creating a shockwave that launches players upward |
+| `BONE_SLAM` | Forward cone ground strike that deals heavy damage and temporarily breaks the armor of all players in the arc |
 | `MOON_HOWL` | 10-block AoE howl applying Nausea, Blindness, and Slowness II; silver moonlight particle ring |
 | `SAVAGE_CHARGE` | 22-step sprint dash at full speed — players caught in the path take heavy knockback and damage |
 | `ALPHA_CALL` | Self-heals 3 HP, buffs pack wolves (Speed + Strength), summons emergency wolf if pack is empty |
