@@ -40,10 +40,13 @@ Originally built for custom server gameplay, the plugin integrates directly with
     - [Prerequisites](#prerequisites)
     - [Installation Steps](#installation-steps)
     - [Verifying Installation](#verifying-installation)
-2. [How The Event Works](#how-the-event-works)
+2. [Third-Party Libraries](#third-party-libraries)
+    - [Citizens 2](#citizens-2)
+    - [Sentinel](#sentinel)
+3. [How The Event Works](#how-the-event-works)
     - [Lifecycle](#lifecycle)
     - [Spawn Philosophy](#spawn-philosophy)
-3. [Special NPC Documentation](#special-npc-documentation)
+4. [Special NPC Documentation](#special-npc-documentation)
     - [Vampire](#vampire)
     - [Clown](#clown)
     - [Zombie](#zombie)
@@ -51,14 +54,14 @@ Originally built for custom server gameplay, the plugin integrates directly with
     - [Scarecrow](#scarecrow)
     - [Ghost](#ghost)
     - [Werewolf](#werewolf)
-4. [Health Bar System](#health-bar-system)
-5. [Configuration Reference](#configuration-reference)
-6. [Commands](#commands)
-7. [Permissions](#permissions)
-8. [Performance Notes](#performance-notes)
-9. [Building From Source](#building-from-source)
-10. [License](#license)
-11. [Third-Party Libraries](#third-party-libraries)
+5. [Health Bar System](#health-bar-system)
+6. [Configuration Reference](#configuration-reference)
+7. [Commands](#commands)
+8. [Permissions](#permissions)
+9. [Performance Notes](#performance-notes)
+10. [Building From Source](#building-from-source)
+11. [License](#license)
+12. [Screenshots](#screenshots)
 
 ## **Getting Started**
 
@@ -91,6 +94,35 @@ Both Citizens and Sentinel must be present and loading correctly before BloodMoo
 - Run `/bloodmoon spawn vampire <yourname>` to test that a Vampire spawns near you immediately
 
 If the plugin is yellow in `/plugins`, check that Citizens and Sentinel are loaded first.
+
+## **Third-Party Libraries**
+
+BloodMoon Event depends on two external Minecraft plugins to manage NPC lifecycle and combat targeting: **Citizens 2** and **Sentinel**. Both are required hard dependencies — the plugin will not load without them.
+
+### Citizens 2
+
+**Citizens 2** is the leading NPC framework for Bukkit-based Minecraft servers. BloodMoon uses Citizens to spawn, despawn, and manage the lifecycle of all seven boss NPCs, apply custom traits (skins, equipment, per-boss controllers), and hook into NPC event callbacks. BloodMoon does not implement its own entity type — all bosses exist as Citizens NPCs backed by vanilla Minecraft entities.
+
+- **Website:** [Citizens2 SpigotMC Resource](https://www.spigotmc.org/resources/citizens.13811/)
+- **GitHub:** [CitizensDev/Citizens2](https://github.com/CitizensDev/Citizens2)
+- **License:** Citizens 2 is licensed under the Apache License 2.0.
+
+### Sentinel
+
+**Sentinel** is a Citizens addon that provides NPC combat AI, targeting rules, and aggression control. BloodMoon uses Sentinel to configure targeting behavior (players only), chase range, and NPC health on a per-boss basis. All actual combat logic — abilities, damage, phase transitions, particle effects — is handled entirely by BloodMoon's own controllers, not by Sentinel's built-in damage system.
+
+- **Website:** [Sentinel SpigotMC Resource](https://www.spigotmc.org/resources/sentinel.23328/)
+- **GitHub:** [mcmonkeyprojects/Sentinel](https://github.com/mcmonkeyprojects/Sentinel)
+- **License:** Sentinel is licensed under the MIT License.
+
+### Additional Information
+
+For more details about Citizens and Sentinel, including setup guides and configuration references, check their official documentation:
+
+- **Citizens Documentation:** [Citizens Wiki](https://wiki.citizensnpcs.co/Citizens_Wiki)
+- **Sentinel Documentation:** [Sentinel GitHub README](https://github.com/mcmonkeyprojects/Sentinel/blob/master/README.md)
+
+If you have questions or issues related to these dependencies, please [open an issue](https://github.com/Cobbleworks/BloodMoon-Plugin/issues) on GitHub.
 
 ## **How The Event Works**
 
@@ -479,35 +511,6 @@ target/BloodMoon-Event-1.0.0-SNAPSHOT.jar
 ## **License**
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
-## **Third-Party Libraries**
-
-BloodMoon Event depends on two external Minecraft plugins to manage NPC lifecycle and combat targeting: **Citizens 2** and **Sentinel**. Both are required hard dependencies — the plugin will not load without them.
-
-### Citizens 2
-
-**Citizens 2** is the leading NPC framework for Bukkit-based Minecraft servers. BloodMoon uses Citizens to spawn, despawn, and manage the lifecycle of all seven boss NPCs, apply custom traits (skins, equipment, per-boss controllers), and hook into NPC event callbacks. BloodMoon does not implement its own entity type — all bosses exist as Citizens NPCs backed by vanilla Minecraft entities.
-
-- **Website:** [Citizens2 SpigotMC Resource](https://www.spigotmc.org/resources/citizens.13811/)
-- **GitHub:** [CitizensDev/Citizens2](https://github.com/CitizensDev/Citizens2)
-- **License:** Citizens 2 is licensed under the Apache License 2.0.
-
-### Sentinel
-
-**Sentinel** is a Citizens addon that provides NPC combat AI, targeting rules, and aggression control. BloodMoon uses Sentinel to configure targeting behavior (players only), chase range, and NPC health on a per-boss basis. All actual combat logic — abilities, damage, phase transitions, particle effects — is handled entirely by BloodMoon's own controllers, not by Sentinel's built-in damage system.
-
-- **Website:** [Sentinel SpigotMC Resource](https://www.spigotmc.org/resources/sentinel.23328/)
-- **GitHub:** [mcmonkeyprojects/Sentinel](https://github.com/mcmonkeyprojects/Sentinel)
-- **License:** Sentinel is licensed under the MIT License.
-
-### Additional Information
-
-For more details about Citizens and Sentinel, including setup guides and configuration references, check their official documentation:
-
-- **Citizens Documentation:** [Citizens Wiki](https://wiki.citizensnpcs.co/Citizens_Wiki)
-- **Sentinel Documentation:** [Sentinel GitHub README](https://github.com/mcmonkeyprojects/Sentinel/blob/master/README.md)
-
-If you have questions or issues related to these dependencies, please [open an issue](https://github.com/Cobbleworks/BloodMoon-Plugin/issues) on GitHub.
 
 ## **Screenshots**
 
