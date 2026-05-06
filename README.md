@@ -7,7 +7,7 @@
   <b>Seven unique special mobs, configurable event flow, deep admin tooling, and Citizens/Sentinel integration.</b>
 </p>
 <p align="center">
-  <a href="https://github.com/Cobbleworks/BloodMoon-Plugin/releases"><img src="https://img.shields.io/github/v/release/Cobbleworks/BloodMoon-Plugin?include_prereleases&style=flat-square&color=4CAF50" alt="Latest Release"></a>&nbsp;&nbsp;<a href="https://github.com/Cobbleworks/BloodMoon-Plugin/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="License"></a>&nbsp;&nbsp;<img src="https://img.shields.io/badge/Java-17+-orange?style=flat-square" alt="Java Version">&nbsp;&nbsp;<img src="https://img.shields.io/badge/Minecraft-1.20+-green?style=flat-square" alt="Minecraft Version">&nbsp;&nbsp;<img src="https://img.shields.io/badge/Platform-Spigot%2FPaper-yellow?style=flat-square" alt="Platform">&nbsp;&nbsp;<img src="https://img.shields.io/badge/Dependencies-Citizens%20%7C%20Sentinel-red?style=flat-square" alt="Dependencies">&nbsp;&nbsp;<img src="https://img.shields.io/badge/Status-Active-brightgreen?style=flat-square" alt="Status">
+  <a href="https://github.com/Cobbleworks/BloodMoon-Plugin/releases"><img src="https://img.shields.io/github/v/release/Cobbleworks/BloodMoon-Plugin?include_prereleases&style=flat-square&color=4CAF50" alt="Latest Release"></a>&nbsp;&nbsp;<a href="https://github.com/Cobbleworks/BloodMoon-Plugin/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="License"></a>&nbsp;&nbsp;<img src="https://img.shields.io/badge/Java-17+-orange?style=flat-square" alt="Java Version">&nbsp;&nbsp;<img src="https://img.shields.io/badge/Minecraft-1.20+-green?style=flat-square" alt="Minecraft Version">&nbsp;&nbsp;<img src="https://img.shields.io/badge/Platform-Spigot%2FPaper-yellow?style=flat-square" alt="Platform">&nbsp;&nbsp;<img src="https://img.shields.io/badge/Status-Active-brightgreen?style=flat-square" alt="Status">
 </p>
 
 BloodMoon Event is an open-source Minecraft plugin that transforms night time into a high-pressure survival event. When a Blood Moon rises, seven custom NPC bosses spawn across the configured world — each with a full ability kit, multi-phase state machine, thematic loot pool, visual effects, and unique encounter identity. The event runs on per-player spawn pressure, keeping encounters personal and consistent regardless of server population. Every mob, every parameter, and every threshold is tunable through a single configuration file.
@@ -43,6 +43,7 @@ Originally built for custom server gameplay, the plugin integrates directly with
 2. [Third-Party Libraries](#third-party-libraries)
     - [Citizens 2](#citizens-2)
     - [Sentinel](#sentinel)
+    - [Additional Information](#additional-information)
 3. [How The Event Works](#how-the-event-works)
     - [Lifecycle](#lifecycle)
     - [Spawn Philosophy](#spawn-philosophy)
@@ -56,6 +57,10 @@ Originally built for custom server gameplay, the plugin integrates directly with
     - [Werewolf](#werewolf)
 5. [Health Bar System](#health-bar-system)
 6. [Configuration Reference](#configuration-reference)
+    - [Global Keys](#global-keys)
+    - [Bleed System Keys](#bleed-system-keys)
+    - [Per-Mob Keys](#per-mob-keys)
+    - [Difficulty Profiles](#difficulty-profiles)
 7. [Commands](#commands)
 8. [Permissions](#permissions)
 9. [Performance Notes](#performance-notes)
