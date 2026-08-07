@@ -464,6 +464,8 @@ All commands require `bloodmoon.admin` permission unless noted.
 | `/bloodmoon spawn <type> <player>` | Spawn one Blood Moon NPC of the given type near the target player |
 | `/bloodmoon clear [world]` | Force-clear all active BloodMoon special NPCs in the target world |
 | `/bloodmoon reload` | Reload `config.yml` without restarting the server |
+| `/bloodmoon enable <world>` | Enable natural Blood Moon rolls in a loaded world and save it to config |
+| `/bloodmoon disable <world>` | Disable natural rolls in a loaded world, save it, and stop any active event there |
 | `/bloodmoon chance <1-100>` | Override Blood Moon chance temporarily for the current session |
 | `/bloodmoon difficulty <easy\|medium\|hard\|nightmare>` | Switch the active difficulty profile live |
 | `/bloodmoon healthbar` | Show overhead health-bar system status and active bar count |

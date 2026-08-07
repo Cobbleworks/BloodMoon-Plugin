@@ -52,6 +52,8 @@ public final class BloodMoonCommand implements CommandExecutor {
             case "spawn" -> handleSpawn(sender, args);
             case "clear" -> handleClear(sender, args);
             case "reload" -> handleReload(sender);
+            case "enable" -> handleEnable(sender, args);
+            case "disable" -> handleDisable(sender, args);
             case "chance" -> handleChance(sender, args);
             case "difficulty" -> handleDifficulty(sender, args);
             default -> sendUsage(sender);
@@ -248,6 +250,44 @@ public final class BloodMoonCommand implements CommandExecutor {
         MessageUtils.send(sender, "§aBloodMoon config reloaded.");
     }
 
+    private void handleEnable(CommandSender sender, String[] args) {
+        World world = requireLoadedWorld(sender, args, "enable");
+        if (world == null) {
+            return;
+        }
+        if (!plugin.getConfigManager().enableWorld(world.getName())) {
+            MessageUtils.send(sender, "§eBlood Moons are already enabled in §6" + world.getName() + "§e.");
+            return;
+        }
+        MessageUtils.send(sender, "§aEnabled natural Blood Moons in §e" + world.getName() + "§a. The change was saved.");
+    }
+
+    private void handleDisable(CommandSender sender, String[] args) {
+        World world = requireLoadedWorld(sender, args, "disable");
+        if (world == null) {
+            return;
+        }
+        if (!plugin.getConfigManager().disableWorld(world.getName())) {
+            MessageUtils.send(sender, "§eBlood Moons are already disabled in §6" + world.getName() + "§e.");
+            return;
+        }
+        boolean ended = plugin.getBloodMoonManager().endBloodMoon(world, true);
+        MessageUtils.send(sender, "§aDisabled natural Blood Moons in §e" + world.getName() + "§a. The change was saved."
+            + (ended ? " §7(The active event was stopped.)" : ""));
+    }
+
+    private World requireLoadedWorld(CommandSender sender, String[] args, String subcommand) {
+        if (args.length < 2) {
+            MessageUtils.send(sender, "§cUsage: /bloodmoon " + subcommand + " <world>");
+            return null;
+        }
+        World world = Bukkit.getWorld(args[1]);
+        if (world == null) {
+            MessageUtils.send(sender, "§cWorld not found or not loaded: §e" + args[1]);
+        }
+        return world;
+    }
+
     private void handleChance(CommandSender sender, String[] args) {
         if (args.length < 2) {
             MessageUtils.send(sender, "§cUsage: /bloodmoon chance <1-100>");
@@ -336,6 +376,8 @@ public final class BloodMoonCommand implements CommandExecutor {
         MessageUtils.send(sender, "§7/bloodmoon spawn <vampire|clown|zombie|witch|scarecrow|ghost|werewolf> <player>");
         MessageUtils.send(sender, "§7/bloodmoon clear [world]");
         MessageUtils.send(sender, "§7/bloodmoon reload");
+        MessageUtils.send(sender, "§7/bloodmoon enable <world>");
+        MessageUtils.send(sender, "§7/bloodmoon disable <world>");
         MessageUtils.send(sender, "§7/bloodmoon chance <1-100>");
         MessageUtils.send(sender, "§7/bloodmoon difficulty <easy|medium|hard|nightmare>");
     }
@@ -344,5 +386,4 @@ public final class BloodMoonCommand implements CommandExecutor {
         return String.format(java.util.Locale.ROOT, "%.2f", value);
     }
 }
-
 

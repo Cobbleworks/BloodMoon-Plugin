@@ -15,7 +15,7 @@ import org.bukkit.entity.Player;
  */
 public final class BloodMoonTabCompleter implements TabCompleter {
 
-    private static final List<String> ROOT = List.of("start", "stop", "status", "spawn", "clear", "reload", "chance", "difficulty");
+    private static final List<String> ROOT = List.of("start", "stop", "status", "spawn", "clear", "reload", "enable", "disable", "chance", "difficulty");
     private static final List<String> PLAYER_ROOT = List.of("healthbar", "messages");
     private static final List<String> DIFFICULTY_ORDER = List.of("easy", "medium", "hard", "nightmare");
 
@@ -45,6 +45,9 @@ public final class BloodMoonTabCompleter implements TabCompleter {
         if (args.length == 2 && ("stop".equals(sub) || "clear".equals(sub))) {
             return filter(Bukkit.getWorlds().stream().map(World::getName).toList(), args[1]);
         }
+        if (args.length == 2 && ("enable".equals(sub) || "disable".equals(sub))) {
+            return filter(Bukkit.getWorlds().stream().map(World::getName).toList(), args[1]);
+        }
         if (args.length == 2 && "spawn".equals(sub)) {
             return filter(List.of("vampire", "clown", "zombie", "witch", "scarecrow", "ghost", "werewolf"), args[1]);
         }
@@ -72,5 +75,4 @@ public final class BloodMoonTabCompleter implements TabCompleter {
         return result;
     }
 }
-
 

@@ -1,6 +1,7 @@
 package com.cobbleworks.bloodmoon.utils;
 
 import com.cobbleworks.bloodmoon.BloodMoonPlugin;
+import java.util.ArrayList;
 import java.util.List;
 import org.bukkit.configuration.file.FileConfiguration;
 
@@ -43,6 +44,39 @@ public final class ConfigManager {
 
     public List<String> getEnabledWorlds() {
         return getConfig().getStringList("bloodmoon.worlds");
+    }
+
+    /**
+     * Enables natural Blood Moon rolls in a world and persists the change.
+     *
+     * @param worldName exact loaded-world name
+     * @return true when the world was newly enabled
+     */
+    public boolean enableWorld(String worldName) {
+        List<String> worlds = new ArrayList<>(getEnabledWorlds());
+        if (worlds.stream().anyMatch(name -> name.equalsIgnoreCase(worldName))) {
+            return false;
+        }
+        worlds.add(worldName);
+        getConfig().set("bloodmoon.worlds", worlds);
+        plugin.saveConfig();
+        return true;
+    }
+
+    /**
+     * Disables natural Blood Moon rolls in a world and persists the change.
+     *
+     * @param worldName world name
+     * @return true when an enabled entry was removed
+     */
+    public boolean disableWorld(String worldName) {
+        List<String> worlds = new ArrayList<>(getEnabledWorlds());
+        boolean removed = worlds.removeIf(name -> name.equalsIgnoreCase(worldName));
+        if (removed) {
+            getConfig().set("bloodmoon.worlds", worlds);
+            plugin.saveConfig();
+        }
+        return removed;
     }
 
     public double getVampireHealth() {
@@ -407,5 +441,4 @@ public final class ConfigManager {
         return plugin.getBloodMoonManager().getNonVampireHealthMultiplier();
     }
 }
-
 
