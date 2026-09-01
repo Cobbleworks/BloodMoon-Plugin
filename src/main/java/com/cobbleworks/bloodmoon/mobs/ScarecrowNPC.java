@@ -6,7 +6,6 @@ import java.util.*;
 import net.citizensnpcs.api.npc.NPC;
 import net.citizensnpcs.api.trait.Trait;
 import org.bukkit.*;
-import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.entity.Bat;
@@ -110,7 +109,7 @@ public final class ScarecrowNPC {
         if (e == null) {
             return plugin.getConfigManager().getScarecrowHealth();
         }
-        var attr = e.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        var attr = e.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
         return attr == null ? plugin.getConfigManager().getScarecrowHealth() : Math.max(1.0D, attr.getValue());
     }
 
@@ -270,7 +269,7 @@ public final class ScarecrowNPC {
 
     private void applyConfiguredHealth(LivingEntity entity) {
         double hp   = plugin.getConfigManager().getScarecrowHealth();
-        var    attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        var    attr = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
         if (attr != null) { attr.setBaseValue(hp); entity.setHealth(Math.min(hp, entity.getHealth())); }
     }
 
@@ -647,8 +646,8 @@ public final class ScarecrowNPC {
         World    world = entity.getWorld();
         if (world == null) return;
 
-        double healthFraction = entity.getHealth() / (entity.getAttribute(Attribute.GENERIC_MAX_HEALTH) != null
-            ? entity.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue() : 40.0D);
+        double healthFraction = entity.getHealth() / (entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth()) != null
+            ? entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth()).getValue() : 40.0D);
 
         // Ambient straw wisps — intensify with more fearmonger stacks
         int stackBonus = Math.min(fearmongerStacks / 3, 5);
@@ -779,7 +778,7 @@ public final class ScarecrowNPC {
     private void checkPhaseTransition() {
         LivingEntity entity = getLivingEntity();
         if (entity == null) return;
-        var attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        var attr = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
         if (attr == null || attr.getValue() <= 0.0D) return;
         double hpRatio = entity.getHealth() / attr.getValue();
 
@@ -1074,7 +1073,7 @@ public final class ScarecrowNPC {
 
                 if (totalHeal > 0) {
                     if (entity != null) {
-                        var hpAttr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+                        var hpAttr = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
                         double maxHp = hpAttr != null ? hpAttr.getValue() : 40.0D;
                         entity.setHealth(Math.min(maxHp, entity.getHealth() + totalHeal));
                     }
@@ -1174,7 +1173,7 @@ public final class ScarecrowNPC {
             Vector toPlayer = pLoc.toVector().subtract(center.toVector()).setY(0).normalize();
             if (forward.dot(toPlayer) < 0.0D) continue;
 
-            var hpAttr = p.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+            var hpAttr = p.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
             double maxHp = hpAttr != null ? hpAttr.getValue() : 20.0D;
 
             if (p.getHealth() / maxHp < 0.15D) {
@@ -1516,7 +1515,7 @@ public final class ScarecrowNPC {
                     SentinelTrait s = npc.getOrAddTrait(SentinelTrait.class);
                     s.damage = 4.0D * getFearmongerMultiplier();
 
-                    var hpAttr = caster.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+                    var hpAttr = caster.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
                     double maxHp = hpAttr != null ? hpAttr.getValue() : 40.0D;
                     caster.setHealth(Math.min(maxHp, caster.getHealth() + 2.0D));
 

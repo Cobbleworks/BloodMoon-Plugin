@@ -267,7 +267,7 @@ public final class ZombieNPC {
         if (entity == null) {
             return plugin.getConfigManager().getZombieHealth();
         }
-        var attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        var attr = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
         return attr == null ? plugin.getConfigManager().getZombieHealth() : Math.max(1.0D, attr.getValue());
     }
 
@@ -574,7 +574,7 @@ public final class ZombieNPC {
 
     private void applyConfiguredHealth(LivingEntity entity) {
         double hp = plugin.getConfigManager().getZombieHealth();
-        var attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        var attr = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
         if (attr != null) {
             attr.setBaseValue(hp);
             entity.setHealth(Math.min(hp, entity.getHealth()));
@@ -744,7 +744,7 @@ public final class ZombieNPC {
         if (!berserkerActive) {
             LivingEntity checkEntity = getLivingEntity();
             if (checkEntity != null) {
-                AttributeInstance maxHpAttr = checkEntity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+                AttributeInstance maxHpAttr = checkEntity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
                 double maxHp = maxHpAttr != null ? maxHpAttr.getValue() : plugin.getConfigManager().getZombieHealth();
                 if (checkEntity.getHealth() / maxHp <= BERSERKER_HP_FRACTION) {
                     berserkerActive = true;
@@ -1502,12 +1502,12 @@ public final class ZombieNPC {
             spawnLoc.setY(world.getHighestBlockYAt(spawnLoc.getBlockX(), spawnLoc.getBlockZ()) + 1.0D);
 
             org.bukkit.entity.Zombie hordeZombie = (org.bukkit.entity.Zombie) world.spawnEntity(spawnLoc, EntityType.ZOMBIE);
-            AttributeInstance maxHp = hordeZombie.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+            AttributeInstance maxHp = hordeZombie.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
             if (maxHp != null) { maxHp.setBaseValue(12.0D); }
             hordeZombie.setHealth(12.0D);
-            AttributeInstance speed = hordeZombie.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED);
+            AttributeInstance speed = hordeZombie.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.movementSpeed());
             if (speed != null) { speed.setBaseValue(0.27D); }
-            AttributeInstance dmg = hordeZombie.getAttribute(Attribute.GENERIC_ATTACK_DAMAGE);
+            AttributeInstance dmg = hordeZombie.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.attackDamage());
             if (dmg != null) { dmg.setBaseValue(2.5D); }
             hordeZombie.setMetadata("bloodmoon-zombie-horde", new FixedMetadataValue(plugin, true));
             hordeZombies.add(hordeZombie);
@@ -1615,7 +1615,7 @@ public final class ZombieNPC {
         world.spawnParticle(Particle.LAVA, loc.clone().add(0D, 0.5D, 0D), 15, 0.6D, 0.3D, 0.6D, 0D);
 
         // Speed boost
-        AttributeInstance speed = entity.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED);
+        AttributeInstance speed = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.movementSpeed());
         if (speed != null) {
             speed.setBaseValue(0.38D);
         }

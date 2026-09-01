@@ -7,7 +7,6 @@ import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
-import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
@@ -152,7 +151,7 @@ public final class BloodMagicProjectile {
         if (caster == null || caster.isDead() || healPercentOnHit <= 0.0D) {
             return;
         }
-        var attr = caster.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        var attr = caster.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
         if (attr == null) {
             return;
         }

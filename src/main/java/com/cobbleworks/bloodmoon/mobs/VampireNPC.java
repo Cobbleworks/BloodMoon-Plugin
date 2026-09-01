@@ -25,7 +25,6 @@ import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
-import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Bat;
@@ -2325,8 +2324,8 @@ public final class VampireNPC {
     }
 
     private double getMaxHealth(LivingEntity entity) {
-        if (entity.getAttribute(Attribute.GENERIC_MAX_HEALTH) != null) {
-            return Objects.requireNonNull(entity.getAttribute(Attribute.GENERIC_MAX_HEALTH)).getValue();
+        if (entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth()) != null) {
+            return Objects.requireNonNull(entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth())).getValue();
         }
         return plugin.getConfigManager().getVampireHealth();
     }
@@ -2337,8 +2336,8 @@ public final class VampireNPC {
     }
 
     private void applyConfiguredHealth(LivingEntity entity) {
-        if (entity.getAttribute(Attribute.GENERIC_MAX_HEALTH) != null) {
-            Objects.requireNonNull(entity.getAttribute(Attribute.GENERIC_MAX_HEALTH)).setBaseValue(plugin.getConfigManager().getVampireHealth());
+        if (entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth()) != null) {
+            Objects.requireNonNull(entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth())).setBaseValue(plugin.getConfigManager().getVampireHealth());
         }
         entity.setHealth(Math.min(plugin.getConfigManager().getVampireHealth(), getMaxHealth(entity)));
     }
@@ -2601,7 +2600,8 @@ public final class VampireNPC {
             try {
                 task.cancel();
             } catch (IllegalStateException ignored) {
-                // Bukkit throws if a task was never scheduled; defensive cleanup keeps disable robust.
+                // Bukkit rejects cancellation before a runnable has been scheduled. It is already
+                // inactive in that state, so cleanup can continue.
             }
         }
         ownedTasks.clear();

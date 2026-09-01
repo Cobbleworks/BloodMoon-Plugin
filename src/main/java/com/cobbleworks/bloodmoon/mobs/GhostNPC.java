@@ -152,7 +152,7 @@ public final class GhostNPC {
         if (entity == null) {
             return plugin.getConfigManager().getGhostHealth();
         }
-        var attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        var attr = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
         return attr == null ? plugin.getConfigManager().getGhostHealth() : Math.max(1.0D, attr.getValue());
     }
 
@@ -392,7 +392,7 @@ public final class GhostNPC {
 
     private void applyConfiguredHealth(LivingEntity entity) {
         double health = plugin.getConfigManager().getGhostHealth();
-        var attribute = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        var attribute = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
         if (attribute != null) {
             attribute.setBaseValue(health);
             entity.setHealth(Math.min(health, entity.getHealth()));

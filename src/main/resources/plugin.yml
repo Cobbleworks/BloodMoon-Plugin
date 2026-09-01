@@ -1,8 +1,9 @@
 name: BloodMoon-Event
-version: 1.0.0
+version: ${project.version}
 main: com.cobbleworks.bloodmoon.BloodMoonPlugin
 api-version: '1.20'
 author: Cobbleworks
+website: https://github.com/Cobbleworks/BloodMoon-Plugin
 depend:
   - Citizens
   - Sentinel

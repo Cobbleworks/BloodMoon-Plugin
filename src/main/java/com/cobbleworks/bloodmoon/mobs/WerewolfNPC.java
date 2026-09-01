@@ -140,7 +140,7 @@ public final class WerewolfNPC {
         if (entity == null) {
             return plugin.getConfigManager().getWerewolfHealth();
         }
-        var attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        var attr = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
         return attr == null ? plugin.getConfigManager().getWerewolfHealth() : Math.max(1.0D, attr.getValue());
     }
 
@@ -181,7 +181,7 @@ public final class WerewolfNPC {
             state      = WerewolfState.COMBAT;
             stateTicks = 0;
         }
-        if (entity.getHealth() <= entity.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue() * 0.3D) {
+        if (entity.getHealth() <= entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth()).getValue() * 0.3D) {
             triggerLunarSurge();
         }
     }
@@ -351,7 +351,7 @@ public final class WerewolfNPC {
 
     private void applyConfiguredHealth(LivingEntity entity) {
         double health = plugin.getConfigManager().getWerewolfHealth();
-        var attribute = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        var attribute = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
         if (attribute != null) {
             attribute.setBaseValue(health);
             entity.setHealth(Math.min(health, entity.getHealth()));
@@ -426,13 +426,13 @@ public final class WerewolfNPC {
         }
         npc.faceLocation(player.getEyeLocation());
 
-        if (entity.getHealth() <= entity.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue() * 0.3D) {
+        if (entity.getHealth() <= entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth()).getValue() * 0.3D) {
             triggerLunarSurge();
         }
 
         // FERAL RAGE phase — triggers once at ≤25% health
         if (!feralRageActive) {
-            AttributeInstance maxHpAttr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+            AttributeInstance maxHpAttr = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
             double maxHp = maxHpAttr != null ? maxHpAttr.getValue() : plugin.getConfigManager().getWerewolfHealth();
             if (entity.getHealth() / maxHp <= 0.25D) {
                 feralRageActive = true;
@@ -815,10 +815,10 @@ public final class WerewolfNPC {
             wolf.setRemoveWhenFarAway(false);
             wolf.setAdult();
             wolf.setTarget(player);
-            wolf.getAttribute(Attribute.GENERIC_MAX_HEALTH).setBaseValue(14.0D);
+            wolf.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth()).setBaseValue(14.0D);
             wolf.setHealth(14.0D);
-            wolf.getAttribute(Attribute.GENERIC_ATTACK_DAMAGE).setBaseValue(3.0D);
-            wolf.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED).setBaseValue(0.34D);
+            wolf.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.attackDamage()).setBaseValue(3.0D);
+            wolf.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.movementSpeed()).setBaseValue(0.34D);
             wolf.setMetadata("bloodmoon-werewolf-pack", new FixedMetadataValue(plugin, npc.getId()));
             packWolves.add(wolf);
             world.spawnParticle(Particle.SMOKE, spawn.add(0, 0.3, 0), 10, 0.3, 0.2, 0.3, 0.02);
@@ -848,8 +848,8 @@ public final class WerewolfNPC {
                     Location loc = sheep.getLocation();
                     sheep.damage(1000.0D, entity);
                     sheep.remove();
-                    double heal = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue() * 0.4D;
-                    entity.setHealth(Math.min(entity.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue(), entity.getHealth() + heal));
+                    double heal = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth()).getValue() * 0.4D;
+                    entity.setHealth(Math.min(entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth()).getValue(), entity.getHealth() + heal));
                     world.playSound(loc, Sound.ENTITY_GENERIC_EAT, 1.0F, 0.65F);
                     world.spawnParticle(Particle.DUST, loc.add(0, 0.6, 0), 24, 0.3, 0.3, 0.3, 0, DUST_RED);
                     cancel();
@@ -924,7 +924,7 @@ public final class WerewolfNPC {
     }
 
     private void updateBloodhuntAndMovement(LivingEntity entity, Player player) {
-        double maxHealth = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue();
+        double maxHealth = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth()).getValue();
         double healthFraction = entity.getHealth() / maxHealth;
         double movementBase = 0.32D;
         double frenzy = 1.0D + (1.0D - healthFraction) * 0.42D;
@@ -937,11 +937,11 @@ public final class WerewolfNPC {
         if (lunarSurgeTicks > 0) {
             frenzy += 0.16D;
         }
-        var speed = entity.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED);
+        var speed = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.movementSpeed());
         if (speed != null) {
             speed.setBaseValue(movementBase * frenzy);
         }
-        var kb = entity.getAttribute(Attribute.GENERIC_KNOCKBACK_RESISTANCE);
+        var kb = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.knockbackResistance());
         if (kb != null) {
             kb.setBaseValue(lunarSurgeTicks > 0 ? 1.0D : 0.25D);
         }
@@ -1032,8 +1032,8 @@ public final class WerewolfNPC {
             if (target != null && target.isOnline() && !target.isDead()) {
                 wolf.setTarget(target);
             }
-            wolf.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED).setBaseValue(packFrenzyTicks > 0 ? 0.52D : 0.34D);
-            wolf.getAttribute(Attribute.GENERIC_ATTACK_DAMAGE).setBaseValue(packFrenzyTicks > 0 ? 5.0D : 3.0D);
+            wolf.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.movementSpeed()).setBaseValue(packFrenzyTicks > 0 ? 0.52D : 0.34D);
+            wolf.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.attackDamage()).setBaseValue(packFrenzyTicks > 0 ? 5.0D : 3.0D);
             if (packFrenzyTicks > 0) {
                 wolf.getWorld().spawnParticle(Particle.DUST, wolf.getLocation().add(0, 0.5, 0), 2, 0.2, 0.2, 0.2, 0, DUST_RED);
             }
@@ -1062,7 +1062,7 @@ public final class WerewolfNPC {
         if (cooldowns.getOrDefault(WerewolfAbility.DEVOUR, 0) > 0) {
             return false;
         }
-        if (entity.getHealth() / entity.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue() > 0.65D) {
+        if (entity.getHealth() / entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth()).getValue() > 0.65D) {
             return false;
         }
         for (Entity nearby : entity.getNearbyEntities(18.0D, 6.0D, 18.0D)) {
@@ -1140,7 +1140,7 @@ public final class WerewolfNPC {
         if (entity == null) {
             return 18;
         }
-        double maxHealth = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue();
+        double maxHealth = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth()).getValue();
         double fraction = entity.getHealth() / maxHealth;
         if (lunarSurgeTicks > 0) {
             return 5;
@@ -1159,7 +1159,7 @@ public final class WerewolfNPC {
         if (entity == null) {
             return 1.0D;
         }
-        double maxHealth = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue();
+        double maxHealth = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth()).getValue();
         double fraction = entity.getHealth() / maxHealth;
         double bonus = 1.0D + (1.0D - fraction) * 0.45D;
         if (lunarSurgeTicks > 0) {
@@ -1378,8 +1378,8 @@ public final class WerewolfNPC {
 
         // Self-heal 3.0 HP
         double newHp = Math.min(entity.getHealth() + 3.0D,
-            entity.getAttribute(Attribute.GENERIC_MAX_HEALTH) != null
-                ? entity.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue()
+            entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth()) != null
+                ? entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth()).getValue()
                 : plugin.getConfigManager().getWerewolfHealth());
         entity.setHealth(newHp);
 
@@ -1417,7 +1417,7 @@ public final class WerewolfNPC {
         world.spawnParticle(Particle.DUST, loc.clone().add(0D, 1.0D, 0D), 20, 0.7D, 0.5D, 0.7D, 0D, DUST_DARK_BLOOD);
 
         // Speed boost
-        AttributeInstance speed = entity.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED);
+        AttributeInstance speed = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.movementSpeed());
         if (speed != null) {
             speed.setBaseValue(0.40D);
         }
@@ -1425,7 +1425,7 @@ public final class WerewolfNPC {
         // Claw damage boost — next scratch will deal more
         entity.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, Integer.MAX_VALUE, 1, false, false));
 
-        // Periodic howl every 30 ticks handled via stateTicks % 30 in tickCombat — just announce once
+        // tickCombat owns the repeated howl cadence; the phase transition broadcasts once here.
         for (Player p : world.getPlayers()) {
             if (p.getLocation().distanceSquared(loc) <= 900.0D && plugin.hasBossMessages(p.getUniqueId())) {
                 p.sendMessage("§4§l☠ The Werewolf enters a primal FERAL RAGE! ☠");

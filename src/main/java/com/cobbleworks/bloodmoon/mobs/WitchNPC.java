@@ -9,7 +9,6 @@ import net.citizensnpcs.api.npc.NPC;
 import net.citizensnpcs.api.npc.NPCRegistry;
 import net.citizensnpcs.api.trait.Trait;
 import org.bukkit.*;
-import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.*;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
@@ -133,7 +132,7 @@ public final class WitchNPC {
         if (e == null) {
             return plugin.getConfigManager().getWitchHealth();
         }
-        var attr = e.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        var attr = e.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
         return attr == null ? plugin.getConfigManager().getWitchHealth() : Math.max(1.0D, attr.getValue());
     }
 
@@ -330,7 +329,7 @@ public final class WitchNPC {
 
     private void applyConfiguredHealth(LivingEntity entity) {
         double hp   = plugin.getConfigManager().getWitchHealth();
-        var    attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        var    attr = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
         if (attr != null) { attr.setBaseValue(hp); entity.setHealth(Math.min(hp, entity.getHealth())); }
     }
 
@@ -968,7 +967,7 @@ public final class WitchNPC {
         cloneNpcs.add(cloneNpc);
 
         // Cap player clone health to 12 HP so it isn't too tanky
-        var maxHpAttr = cloneEntity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        var maxHpAttr = cloneEntity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
         if (maxHpAttr != null) {
             maxHpAttr.setBaseValue(12.0D);
         }
@@ -988,8 +987,8 @@ public final class WitchNPC {
                 cloneEntity.setCustomName(source.getCustomName());
                 cloneEntity.setCustomNameVisible(source.isCustomNameVisible());
             }
-            if (cloneEntity.getAttribute(Attribute.GENERIC_MAX_HEALTH) != null) {
-                cloneEntity.getAttribute(Attribute.GENERIC_MAX_HEALTH).setBaseValue(18.0D);
+            if (cloneEntity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth()) != null) {
+                cloneEntity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth()).setBaseValue(18.0D);
                 cloneEntity.setHealth(18.0D);
             }
             return cloneEntity;
@@ -1467,7 +1466,7 @@ public final class WitchNPC {
                 if (t % 8 == 0) {
                     double dmg = 1.5D;
                     player.damage(dmg, e);
-                    var attr = e.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+                    var attr = e.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
                     if (attr != null) e.setHealth(Math.min(attr.getValue(), e.getHealth() + (dmg * 0.45D)));
                     world.spawnParticle(Particle.DUST, e.getLocation().add(0, 1.2, 0), 6, 0.3, 0.3, 0.3, 0, DUST_CRIMSON);
                 }
@@ -1643,7 +1642,7 @@ public final class WitchNPC {
     private void checkPhaseTransition() {
         LivingEntity entity = getLivingEntity();
         if (entity == null) return;
-        var attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        var attr = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
         if (attr == null || attr.getValue() <= 0.0D) return;
         double ratio = entity.getHealth() / attr.getValue();
 

@@ -19,7 +19,6 @@ import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
-import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.ExperienceOrb;
 import org.bukkit.entity.Fireball;
 import org.bukkit.entity.Firework;
@@ -174,7 +173,7 @@ public final class ClownNPC {
         if (entity == null) {
             return plugin.getConfigManager().getClownHealth();
         }
-        var attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        var attr = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
         return attr == null ? plugin.getConfigManager().getClownHealth() : Math.max(1.0D, attr.getValue());
     }
 
@@ -345,7 +344,7 @@ public final class ClownNPC {
 
     private void applyConfiguredHealth(LivingEntity entity) {
         double hp = plugin.getConfigManager().getClownHealth();
-        var attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        var attr = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
         if (attr != null) { attr.setBaseValue(hp); entity.setHealth(Math.min(hp, entity.getHealth())); }
     }
 
@@ -458,7 +457,7 @@ public final class ClownNPC {
     private void checkManicTransition() {
         if (state == ClownState.MANIC) return;
         LivingEntity entity = getLivingEntity(); if (entity == null) return;
-        var attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH); if (attr == null) return;
+        var attr = entity.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth()); if (attr == null) return;
         if (entity.getHealth() / attr.getValue() <= plugin.getConfigManager().getClownManicHpThreshold()) {
             state = ClownState.MANIC; stateTicks = 0; combatInitialized = false;
             Location loc = getCurrentLocation(); World world = loc.getWorld();

@@ -67,7 +67,7 @@ public final class VampireBatSwarm {
             // tick dominates the bat's own wander goal.
             bat.setGravity(false);
             // Reduce HP so bats die in 1-2 hits
-            AttributeInstance maxHp = bat.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+            AttributeInstance maxHp = bat.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
             if (maxHp != null) {
                 maxHp.setBaseValue(2.0D);
                 bat.setHealth(2.0D);
