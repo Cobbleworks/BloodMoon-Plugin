@@ -1,9 +1,10 @@
 <p align="center">
-  <img src="images/plugin-logo.png" alt="BloodMoon Plugin" width="200" height="200" />
+  <img src="images/plugin-banner.png" alt="Cobbleworks - Blood Moon Plugin banner" width="818" />
 </p>
-<h1 align="center">BloodMoon Event Plugin</h1>
+<h1 align="center">Cobbleworks - Blood Moon Plugin</h1>
 <p align="center">
-  <b>High-pressure Blood Moon nights built around seven custom NPC encounters.</b>
+  <b>Turn selected nights into high-pressure server events with seven distinct NPC encounters.</b><br>
+  <b>Configure event frequency, difficulty, abilities, rewards, worlds, and encounter population.</b>
 </p>
 <p align="center">
   <a href="https://github.com/Cobbleworks/BloodMoon-Plugin/releases"><img src="https://img.shields.io/github/v/release/Cobbleworks/BloodMoon-Plugin?include_prereleases&style=flat-square&color=4CAF50" alt="Latest Release"></a>&nbsp;&nbsp;<a href="https://github.com/Cobbleworks/BloodMoon-Plugin/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="License"></a>&nbsp;&nbsp;<img src="https://img.shields.io/badge/Java-17+-orange?style=flat-square" alt="Java Version">&nbsp;&nbsp;<img src="https://img.shields.io/badge/Minecraft-1.20+-green?style=flat-square" alt="Minecraft Version">&nbsp;&nbsp;<img src="https://img.shields.io/badge/Platform-Spigot%2FPaper-yellow?style=flat-square" alt="Platform">
@@ -11,7 +12,7 @@
 
 BloodMoon Event turns selected Minecraft nights into server-wide encounters. During an active event, custom Citizens NPCs spawn around players, use distinct combat mechanics, and disappear cleanly at sunrise. Administrators can configure eligible worlds and encounter values, test individual enemies, or change the active difficulty without restarting the server.
 
-### Core Features
+## Core Features
 
 - Seven special NPCs: Vampire, Clown, Zombie, Witch, Scarecrow, Ghost, and Werewolf
 - Per-player spawning with separate health, radius, and population limits for each NPC type
@@ -21,7 +22,7 @@ BloodMoon Event turns selected Minecraft nights into server-wide encounters. Dur
 - Admin controls for starting, stopping, testing, clearing, and reloading events
 - Segmented overhead health bars and automatic cleanup of supporting entities
 
-### Supported Platforms
+## Supported Platforms
 
 - Minecraft 1.20 or newer
 - Spigot, Paper, Purpur, or a compatible Bukkit server
@@ -30,17 +31,23 @@ BloodMoon Event turns selected Minecraft nights into server-wide encounters. Dur
 
 ## Table of Contents
 
-1. [Installation](#installation)
-2. [Third-Party Plugins](#third-party-plugins)
-3. [How Blood Moons Work](#how-blood-moons-work)
-4. [Special NPCs](#special-npcs)
-5. [Configuration](#configuration)
-6. [Commands](#commands)
-7. [Permissions](#permissions)
-8. [Performance and Operations](#performance-and-operations)
-9. [Building From Source](#building-from-source)
-10. [License](#license)
-11. [Screenshots](#screenshots)
+1. [Core Features](#core-features)
+2. [Supported Platforms](#supported-platforms)
+3. [Installation](#installation)
+4. [Third-Party Plugins](#third-party-plugins)
+5. [How Blood Moons Work](#how-blood-moons-work)
+6. [Special NPCs](#special-npcs)
+7. [Configuration](#configuration)
+   - [Event Settings](#event-settings)
+   - [NPC Settings](#npc-settings)
+   - [Bleed Settings](#bleed-settings)
+   - [Difficulty Profiles](#difficulty-profiles)
+8. [Commands](#commands)
+9. [Permissions](#permissions)
+10. [Performance and Operations](#performance-and-operations)
+11. [Building From Source](#building-from-source)
+12. [License](#license)
+13. [Screenshots](#screenshots)
 
 ## Installation
 
