@@ -170,7 +170,7 @@ public final class BloodMoonCommand implements CommandExecutor {
             switch (type) {
                 case "vampire"   -> plugin.getNPCManager().spawnVampire(loc, target).ifPresentOrElse(
                     v -> MessageUtils.send(sender, "§aSpawned vampire at your target."),
-                    () -> MessageUtils.send(sender, "§cCould not spawn. Citizens/Sentinel may not be ready."));
+                    () -> MessageUtils.send(sender, "§cCould not spawn. Blockfolk may not be ready."));
                 case "clown"     -> plugin.getNPCManager().spawnClown(loc).ifPresentOrElse(
                     c -> MessageUtils.send(sender, "§aSpawned clown at your target."),
                     () -> MessageUtils.send(sender, "§cCould not spawn clown here."));
@@ -197,7 +197,7 @@ public final class BloodMoonCommand implements CommandExecutor {
             switch (type) {
                 case "vampire"   -> plugin.getNPCManager().spawnVampireNear(near).ifPresentOrElse(
                     v -> MessageUtils.send(sender, "§aSpawned vampire near §e" + near.getName() + "§a."),
-                    () -> MessageUtils.send(sender, "§cCould not spawn. Citizens/Sentinel may not be ready."));
+                    () -> MessageUtils.send(sender, "§cCould not spawn. Blockfolk may not be ready."));
                 case "clown"     -> plugin.getNPCManager().spawnClownNear(near).ifPresentOrElse(
                     c -> MessageUtils.send(sender, "§aSpawned clown near §e" + near.getName() + "§a."),
                     () -> MessageUtils.send(sender, "§cCould not spawn clown here right now."));
@@ -246,7 +246,7 @@ public final class BloodMoonCommand implements CommandExecutor {
 
     private void handleReload(CommandSender sender) {
         plugin.getConfigManager().reload();
-        plugin.getNPCManager().getActiveVampires().forEach(vampire -> vampire.refreshSentinelSettings());
+        plugin.getNPCManager().getActiveVampires().forEach(vampire -> vampire.refreshCombatSettings());
         MessageUtils.send(sender, "§aBloodMoon config reloaded.");
     }
 

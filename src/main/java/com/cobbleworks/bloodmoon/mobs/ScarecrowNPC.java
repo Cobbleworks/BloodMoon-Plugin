@@ -1,10 +1,9 @@
 package com.cobbleworks.bloodmoon.mobs;
 
+import com.cobbleworks.bloodmoon.npc.BlockfolkNpc;
+
 import com.cobbleworks.bloodmoon.BloodMoonPlugin;
-import com.cobbleworks.bloodmoon.traits.ScarecrowTrait;
 import java.util.*;
-import net.citizensnpcs.api.npc.NPC;
-import net.citizensnpcs.api.trait.Trait;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.Ageable;
@@ -19,9 +18,6 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 import org.bukkit.util.Vector;
-import org.mcmonkey.sentinel.SentinelTrait;
-import org.mcmonkey.sentinel.events.SentinelAttackEvent;
-import org.mcmonkey.sentinel.targeting.SentinelTargetList;
 
 public final class ScarecrowNPC {
 
@@ -47,7 +43,7 @@ public final class ScarecrowNPC {
 
     // ─── Fields ───────────────────────────────────────────────────────────────
     private final BloodMoonPlugin plugin;
-    private final NPC npc;
+    private final BlockfolkNpc npc;
     private final Location spawnLocation;
     private final Random random = new Random();
     private final Map<ScarecrowAbility, Integer> cooldowns = new EnumMap<>(ScarecrowAbility.class);
@@ -79,7 +75,7 @@ public final class ScarecrowNPC {
     private int fearmongerStacks = 0;
 
     // ─── Constructor ──────────────────────────────────────────────────────────
-    public ScarecrowNPC(BloodMoonPlugin plugin, NPC npc, Location spawnLocation, Player initialTarget) {
+    public ScarecrowNPC(BloodMoonPlugin plugin, BlockfolkNpc npc, Location spawnLocation, Player initialTarget) {
         this.plugin = plugin;
         this.npc = npc;
         this.spawnLocation = spawnLocation.clone();
@@ -90,7 +86,7 @@ public final class ScarecrowNPC {
     }
 
     // ─── Public API ───────────────────────────────────────────────────────────
-    public NPC getNpc() { return npc; }
+    public BlockfolkNpc getNpc() { return npc; }
 
     public boolean isDead() { return state == ScarecrowState.DEAD || cleaned || deathStarted; }
 
@@ -123,9 +119,8 @@ public final class ScarecrowNPC {
         if (e != null) applyConfiguredHealth(e);
     }
 
-    public void handleSentinelAttack(SentinelAttackEvent event) {
-        event.setCancelled(true);
-        if (!(event.getTarget() instanceof Player player) || state == ScarecrowState.DEAD) return;
+    public void onCombatTarget(Player player) {
+        if (player == null || state == ScarecrowState.DEAD) return;
         target = player;
     }
 
@@ -202,56 +197,21 @@ public final class ScarecrowNPC {
 
     // ─── NPC Setup ────────────────────────────────────────────────────────────
     private void configureNpc() {
-        npc.data().set("bloodmoon-scarecrow", true);
-        npc.data().set("nameplate-visible", false);
-        npc.data().setPersistent(NPC.Metadata.NAMEPLATE_VISIBLE, false);
         npc.setProtected(false);
-        ScarecrowTrait trait = npc.getOrAddTrait(ScarecrowTrait.class);
-        trait.bind(this);
         configureSkin();
-        configureSentinel();
+        configureCombat();
         if (!npc.isSpawned()) npc.spawn(spawnLocation.clone());
         LivingEntity e = getLivingEntity();
         if (e != null) { applyConfiguredHealth(e); hideNameplate(e); }
     }
 
     private void configureSkin() {
-        String skinName  = plugin.getConfigManager().getScarecrowSkinName();
-        String texture   = plugin.getConfigManager().getScarecrowSkinTexture();
-        String signature = plugin.getConfigManager().getScarecrowSkinSignature();
-        if ((skinName == null || skinName.isBlank()) && (texture == null || texture.isBlank())) return;
-        try {
-            Class<? extends Trait> skinTraitClass = Class.forName("net.citizensnpcs.trait.SkinTrait").asSubclass(Trait.class);
-            Trait skinTrait = npc.getOrAddTrait(skinTraitClass);
-            skinTraitClass.getMethod("setShouldUpdateSkins", boolean.class).invoke(skinTrait, false);
-            skinTraitClass.getMethod("setFetchDefaultSkin",  boolean.class).invoke(skinTrait, false);
-            if (texture != null && !texture.isBlank() && signature != null && !signature.isBlank()) {
-                skinTraitClass.getMethod("setSkinPersistent", String.class, String.class, String.class)
-                              .invoke(skinTrait, skinName, signature, texture);
-                return;
-            }
-            if (skinName != null && !skinName.isBlank()) {
-                skinTraitClass.getMethod("setSkinName", String.class, boolean.class).invoke(skinTrait, skinName, true);
-            }
-        } catch (ReflectiveOperationException ex) {
-            plugin.getLogger().warning("Could not apply scarecrow skin: " + ex.getMessage());
-        }
+        npc.setSkin(plugin.getConfigManager().getScarecrowSkinName(),
+                plugin.getConfigManager().getScarecrowSkinTexture(), plugin.getConfigManager().getScarecrowSkinSignature());
     }
 
-    private void configureSentinel() {
-        SentinelTrait s = npc.getOrAddTrait(SentinelTrait.class);
-        s.setInvincible(false);
-        s.setHealth(plugin.getConfigManager().getScarecrowHealth());
-        s.health = plugin.getConfigManager().getScarecrowHealth();
-        s.damage = 4.0D * getFearmongerMultiplier();
-        s.respawnTime = -1;
-        s.chaseRange = 32.0D;
-        s.armor = 0.1D;
-        s.protectFromIgnores = false;
-        s.allTargets = new SentinelTargetList();
-        s.addTarget("players");
-        s.allIgnores = new SentinelTargetList();
-        s.addIgnore("npcs");
+    private void configureCombat() {
+        npc.configureCombat(plugin.getConfigManager().getScarecrowHealth(), 0.1, 32.0);
     }
 
     private void hideNameplate(LivingEntity entity) {
@@ -263,7 +223,7 @@ public final class ScarecrowNPC {
                 team = board.registerNewTeam("bm_hidden_npc");
                 team.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER);
             }
-            if (entity instanceof Player p) team.addEntry(p.getName());
+            if (entity instanceof LivingEntity p) team.addEntry(entity.getUniqueId().toString());
         } catch (Exception ignored) {}
     }
 
@@ -357,7 +317,7 @@ public final class ScarecrowNPC {
     // ─── Casting animation dispatch ───────────────────────────────────────────
     private void updateCastingAnimation() {
         LivingEntity entity = getLivingEntity();
-        if (!(entity instanceof Player player)) return;
+        if (!(entity instanceof LivingEntity player)) return;
         if (pending == null) return;
         switch (pending) {
             case FEAR       -> animateFear(player);
@@ -372,46 +332,46 @@ public final class ScarecrowNPC {
         }
     }
 
-    private void animateFear(Player player) {
-        if (stateTicks % 3 == 0) playCitizensPlayerAnimation(player, "ARM_SWING");
+    private void animateFear(LivingEntity player) {
+        if (stateTicks % 3 == 0) playBlockfolkAnimation(player, "ARM_SWING");
     }
 
-    private void animateDrain(Player player) {
-        if (stateTicks % 2 == 0) playCitizensPlayerAnimation(player, "ARM_SWING");
+    private void animateDrain(LivingEntity player) {
+        if (stateTicks % 2 == 0) playBlockfolkAnimation(player, "ARM_SWING");
     }
 
-    private void animateBloom(Player player) {
-        if (stateTicks % 4 == 0) playCitizensPlayerAnimation(player, "ARM_SWING");
+    private void animateBloom(LivingEntity player) {
+        if (stateTicks % 4 == 0) playBlockfolkAnimation(player, "ARM_SWING");
     }
 
-    private void animateReap(Player player) {
-        if (stateTicks % 3 == 0) playCitizensPlayerAnimation(player, "ARM_SWING");
+    private void animateReap(LivingEntity player) {
+        if (stateTicks % 3 == 0) playBlockfolkAnimation(player, "ARM_SWING");
     }
 
-    private void animateFireballs(Player player) {
-        if (stateTicks % 4 == 0) playCitizensPlayerAnimation(player, "ARM_SWING");
+    private void animateFireballs(LivingEntity player) {
+        if (stateTicks % 4 == 0) playBlockfolkAnimation(player, "ARM_SWING");
     }
 
-    private void animatePhantom(Player player) {
-        if (stateTicks % 5 == 0) playCitizensPlayerAnimation(player, "ARM_SWING");
+    private void animatePhantom(LivingEntity player) {
+        if (stateTicks % 5 == 0) playBlockfolkAnimation(player, "ARM_SWING");
     }
 
-    private void animateCrowstorm(Player player) {
-        if (stateTicks % 3 == 0) playCitizensPlayerAnimation(player, "ARM_SWING");
+    private void animateCrowstorm(LivingEntity player) {
+        if (stateTicks % 3 == 0) playBlockfolkAnimation(player, "ARM_SWING");
     }
 
-    private void animateDarkWind(Player player) {
-        if (stateTicks % 4 == 0) playCitizensPlayerAnimation(player, "ARM_SWING");
+    private void animateDarkWind(LivingEntity player) {
+        if (stateTicks % 4 == 0) playBlockfolkAnimation(player, "ARM_SWING");
     }
 
-    private void animateHighJump(Player player) {
-        if (stateTicks % 3 == 0) playCitizensPlayerAnimation(player, "ARM_SWING");
+    private void animateHighJump(LivingEntity player) {
+        if (stateTicks % 3 == 0) playBlockfolkAnimation(player, "ARM_SWING");
     }
 
     private void resetCastingAnimation() {
         LivingEntity entity = getLivingEntity();
-        if (!(entity instanceof Player player)) return;
-        playCitizensPlayerAnimation(player, "ARM_SWING");
+        if (!(entity instanceof LivingEntity player)) return;
+        playBlockfolkAnimation(player, "ARM_SWING");
     }
 
     private void startCasting(ScarecrowAbility ability) {
@@ -674,7 +634,7 @@ public final class ScarecrowNPC {
 
     private void runCombatMovementPattern(Player player) {
         // Grounded pursuit so the scarecrow behaves like a hunter, not a teleporter.
-        npc.getNavigator().getDefaultParameters().speedModifier(1.18F);
+        npc.getNavigator().setSpeedModifier(1.18F);
         if (stateTicks % 20 == 0) {
             double strafe = random.nextBoolean() ? 2.4D : -2.4D;
             Vector right = player.getLocation().getDirection().setY(0).normalize();
@@ -1012,10 +972,10 @@ public final class ScarecrowNPC {
                 Location base = root.clone();
                 base.setYaw(entity.getLocation().getYaw());
                 base.setPitch(-35.0F);
-                if (entity instanceof Player npcPlayer) {
+                if (entity instanceof LivingEntity npcPlayer) {
                     npcPlayer.teleport(base, PlayerTeleportEvent.TeleportCause.PLUGIN);
                     if (t % 8 == 0) {
-                        playCitizensPlayerAnimation(npcPlayer, "ARM_SWING");
+                        playBlockfolkAnimation(npcPlayer, "ARM_SWING");
                     }
                 } else {
                     entity.teleport(base);
@@ -1490,7 +1450,7 @@ public final class ScarecrowNPC {
 
     /**
      * Fearmonger (passive): every 2 seconds, search nearby blocks for fully grown wheat.
-     * Each consumed crop heals 1 HP and adds 10% damage via Sentinel damage scaling.
+     * Each consumed crop heals 1 HP and adds 10% damage via BloodMoon combat damage scaling.
      */
     private void tickFearmonger() {
         LivingEntity caster = getLivingEntity();
@@ -1511,9 +1471,7 @@ public final class ScarecrowNPC {
                     block.setType(Material.AIR);
                     fearmongerStacks++;
 
-                    // Scale sentinel damage
-                    SentinelTrait s = npc.getOrAddTrait(SentinelTrait.class);
-                    s.damage = 4.0D * getFearmongerMultiplier();
+                    // Fearmonger stacks scale the existing ability damage.
 
                     var hpAttr = caster.getAttribute(com.cobbleworks.bloodmoon.util.ServerAttributes.maxHealth());
                     double maxHp = hpAttr != null ? hpAttr.getValue() : 40.0D;
@@ -1677,7 +1635,7 @@ public final class ScarecrowNPC {
             if (living.isDead() || living.equals(caster) || nearby instanceof ArmorStand) {
                 continue;
             }
-            if (nearby.hasMetadata("NPC")) {
+            if (nearby instanceof org.bukkit.entity.Mannequin) {
                 continue;
             }
             targets.add(living);
@@ -1685,13 +1643,8 @@ public final class ScarecrowNPC {
         return targets;
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    private void playCitizensPlayerAnimation(Player player, String animationName) {
-        try {
-            Class<? extends Enum> animationClass = Class.forName("net.citizensnpcs.util.PlayerAnimation").asSubclass(Enum.class);
-            Enum animation = Enum.valueOf(animationClass, animationName);
-            animationClass.getMethod("play", Player.class).invoke(animation, player);
-        } catch (ReflectiveOperationException ignored) {}
+    private void playBlockfolkAnimation(LivingEntity player, String animationName) {
+        npc.animate(animationName);
     }
 
     /** Draws a particle line between two locations. */
@@ -1735,10 +1688,4 @@ public final class ScarecrowNPC {
         return min + random.nextDouble() * (max - min);
     }
 }
-
-
-
-
-
-
 

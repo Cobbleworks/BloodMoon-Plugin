@@ -7,10 +7,10 @@
   <b>Configure event frequency, difficulty, abilities, rewards, worlds, and encounter population.</b>
 </p>
 <p align="center">
-  <a href="https://github.com/Cobbleworks/BloodMoon-Plugin/releases"><img src="https://img.shields.io/github/v/release/Cobbleworks/BloodMoon-Plugin?include_prereleases&style=flat-square&color=4CAF50" alt="Latest Release"></a>&nbsp;&nbsp;<a href="https://github.com/Cobbleworks/BloodMoon-Plugin/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="License"></a>&nbsp;&nbsp;<img src="https://img.shields.io/badge/Java-17+-orange?style=flat-square" alt="Java Version">&nbsp;&nbsp;<img src="https://img.shields.io/badge/Minecraft-1.20+-green?style=flat-square" alt="Minecraft Version">&nbsp;&nbsp;<img src="https://img.shields.io/badge/Platform-Spigot%2FPaper-yellow?style=flat-square" alt="Platform">
+  <a href="https://github.com/Cobbleworks/BloodMoon-Plugin/releases"><img src="https://img.shields.io/github/v/release/Cobbleworks/BloodMoon-Plugin?include_prereleases&style=flat-square&color=4CAF50" alt="Latest Release"></a>&nbsp;&nbsp;<a href="https://github.com/Cobbleworks/BloodMoon-Plugin/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="License"></a>&nbsp;&nbsp;<img src="https://img.shields.io/badge/Java-25+-orange?style=flat-square" alt="Java Version">&nbsp;&nbsp;<img src="https://img.shields.io/badge/Minecraft-26.2-green?style=flat-square" alt="Minecraft Version">&nbsp;&nbsp;<img src="https://img.shields.io/badge/Platform-Paper-yellow?style=flat-square" alt="Platform">
 </p>
 
-BloodMoon Event turns selected Minecraft nights into server-wide encounters. During an active event, custom Citizens NPCs spawn around players, use distinct combat mechanics, and disappear cleanly at sunrise. Administrators can configure eligible worlds and encounter values, test individual enemies, or change the active difficulty without restarting the server.
+BloodMoon Event turns selected Minecraft nights into server-wide encounters. During an active event, temporary Blockfolk NPCs spawn around players, use distinct combat mechanics, and disappear cleanly at sunrise. Administrators can configure eligible worlds and encounter values, test individual enemies, or change the active difficulty without restarting the server.
 
 ## Core Features
 
@@ -24,10 +24,10 @@ BloodMoon Event turns selected Minecraft nights into server-wide encounters. Dur
 
 ## Supported Platforms
 
-- Minecraft 1.20 or newer
-- Spigot, Paper, Purpur, or a compatible Bukkit server
-- Java 17 or newer
-- Citizens 2 and Sentinel
+- Minecraft 26.2
+- Paper or a compatible Paper fork
+- Java 25 or newer
+- Blockfolk 1.3.0 or newer
 
 ## Table of Contents
 
@@ -51,23 +51,22 @@ BloodMoon Event turns selected Minecraft nights into server-wide encounters. Dur
 
 ## Installation
 
-1. Install compatible versions of [Citizens 2](https://www.spigotmc.org/resources/citizens.13811/) and [Sentinel](https://www.spigotmc.org/resources/sentinel.23328/).
+1. Install [Blockfolk 1.3.0 or newer](https://github.com/Cobbleworks/Blockfolk-NPC-Plugin/releases) on Paper 26.2 with Java 25.
 2. Download the latest BloodMoon jar from [Releases](https://github.com/Cobbleworks/BloodMoon-Plugin/releases).
-3. Stop the server and place the three plugin jars in `plugins/`.
+3. Stop the server and place the Blockfolk and BloodMoon plugin jars in `plugins/`.
 4. Start the server once to generate `plugins/BloodMoon-Event/config.yml`.
 5. Add every world that should receive natural Blood Moons to `bloodmoon.worlds`.
 6. Run `/bloodmoon status` to verify the setup. Use `/bloodmoon spawn vampire` while looking at a safe test location to check NPC creation.
 
-BloodMoon will not load unless Citizens and Sentinel are both available.
+BloodMoon 2.0 requires Blockfolk's temporary NPC API. Upgrade Blockfolk before BloodMoon. Existing BloodMoon configuration, signed skin textures, commands, and permissions are preserved. Citizens and Sentinel are no longer dependencies of either plugin; the previous BloodMoon release remains available for older servers.
 
 ## Third-Party Plugins
 
 | Plugin | Required | Purpose |
 |--------|----------|---------|
-| [Citizens 2](https://github.com/CitizensDev/Citizens2) | Yes | Creates the NPCs, applies their skins, and manages their lifecycle. |
-| [Sentinel](https://github.com/mcmonkeyprojects/Sentinel) | Yes | Supplies targeting and chase behavior for the Citizens NPCs. |
+| [Blockfolk](https://github.com/Cobbleworks/Blockfolk-NPC-Plugin) 1.3.0+ | Yes | Supplies temporary mannequins, skins, native pathfinding, looking, and casting animations. |
 
-BloodMoon owns each encounter's abilities, damage effects, phases, and rewards; the dependencies provide the underlying NPC and targeting frameworks.
+BloodMoon owns each encounter's abilities, damage effects, phases, and rewards; Blockfolk supplies their visible NPCs and navigation. Bosses, witch mirror clones, and ghost echoes are owned by BloodMoon and never saved as administrator NPC presets. They are removed on death, event end, clear, or shutdown.
 
 ## How Blood Moons Work
 
@@ -109,7 +108,7 @@ The generated `config.yml` is the source of truth for event and NPC values. Use 
 
 ### NPC Settings
 
-Each NPC section supports `health`, `spawn-radius`, `max-per-player`, and signed Citizens skin values. Some encounters provide additional tuning:
+Each NPC section supports `health`, `spawn-radius`, `max-per-player`, and signed Minecraft skin texture values. Some encounters provide additional tuning:
 
 | Section | Extra Controls |
 |---------|----------------|
@@ -152,7 +151,7 @@ A lower ability interval means abilities occur more frequently. The profile is n
 | `/bloodmoon status` | Show active worlds, chance, difficulty, NPC counts, and the next roll window. |
 | `/bloodmoon spawn <type> [player]` | Spawn an NPC at the block a player is looking at, or near the named player. Console must supply a player. |
 | `/bloodmoon clear [world]` | Remove BloodMoon NPCs in one world or across all worlds. |
-| `/bloodmoon reload` | Reload the configuration and refresh active Vampire Sentinel settings. |
+| `/bloodmoon reload` | Reload the configuration and refresh active Vampire combat settings. |
 | `/bloodmoon enable <world>` | Add a loaded world to the natural-event list and save the change. |
 | `/bloodmoon disable <world>` | Remove a world from the list, save the change, and stop its active event. |
 | `/bloodmoon chance <1-100>` | Set a temporary one-in-N chance override for the current session. |
@@ -178,11 +177,11 @@ Spawn types are `vampire`, `clown`, `zombie`, `witch`, `scarecrow`, `ghost`, and
 - Enable only worlds that should actually host Blood Moons.
 - Monitor server tick rate after increasing population limits or using the faster difficulty profiles.
 - Use `/bloodmoon clear [world]` if a test encounter needs to be removed without waiting for sunrise.
-- Skin texture and signature values are generated credentials for Citizens skins. Avoid hand-editing them unless you are deliberately replacing a skin.
+- Skin texture and signature values are public Minecraft profile properties supported by Blockfolk. Avoid hand-editing them unless you are deliberately replacing a skin.
 
 ## Building From Source
 
-Requirements: Java 17 or newer and Maven 3.6 or newer.
+Requirements: Java 25 or newer and Maven 3.6 or newer.
 
 ```bash
 git clone https://github.com/Cobbleworks/BloodMoon-Plugin.git

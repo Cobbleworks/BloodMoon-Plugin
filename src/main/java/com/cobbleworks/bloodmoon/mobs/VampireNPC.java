@@ -1,9 +1,10 @@
 package com.cobbleworks.bloodmoon.mobs;
 
+import com.cobbleworks.bloodmoon.npc.BlockfolkNpc;
+import com.cobbleworks.bloodmoon.npc.BlockfolkNavigator;
+
 import com.cobbleworks.bloodmoon.BloodMoonPlugin;
 import com.cobbleworks.bloodmoon.effects.BloodMagicProjectile;
-import com.cobbleworks.bloodmoon.traits.VampireTrait;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -14,9 +15,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.UUID;
-import net.citizensnpcs.api.ai.Navigator;
-import net.citizensnpcs.api.npc.NPC;
-import net.citizensnpcs.api.trait.Trait;
 import org.bukkit.Color;
 import org.bukkit.Bukkit;
 import org.bukkit.FluidCollisionMode;
@@ -46,14 +44,11 @@ import org.bukkit.potion.PotionType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
-import org.mcmonkey.sentinel.SentinelTrait;
-import org.mcmonkey.sentinel.events.SentinelAttackEvent;
-import org.mcmonkey.sentinel.targeting.SentinelTargetList;
 
 /**
  * Main Blood Moon vampire controller.
  *
- * <p>The controller owns the disguise bat, Citizens NPC, Sentinel combat setup,
+ * <p>The controller owns the disguise bat, Blockfolk BlockfolkNpc, BloodMoon combat combat setup,
  * state machine, ability scheduling, minion bats, loot drops, and cleanup.</p>
  */
 public final class VampireNPC {
@@ -135,7 +130,7 @@ public final class VampireNPC {
     private static final Particle.DustOptions SHADOW_DUST = new Particle.DustOptions(Color.fromRGB(18, 18, 22), 1.0F);
 
     private final BloodMoonPlugin plugin;
-    private final NPC npc;
+    private final BlockfolkNpc npc;
     private final Location spawnLocation;
     private final Random random;
     private final Map<VampireAbility, Integer> cooldowns;
@@ -165,7 +160,7 @@ public final class VampireNPC {
     private boolean visible;
     private boolean combatInitialized;
 
-    public VampireNPC(BloodMoonPlugin plugin, NPC npc, Location spawnLocation, Player initialTarget) {
+    public VampireNPC(BloodMoonPlugin plugin, BlockfolkNpc npc, Location spawnLocation, Player initialTarget) {
         this.plugin = plugin;
         this.npc = npc;
         this.spawnLocation = spawnLocation.clone();
@@ -186,11 +181,11 @@ public final class VampireNPC {
     }
 
     /**
-     * Returns the Citizens NPC backing this vampire.
+     * Returns the Blockfolk BlockfolkNpc backing this vampire.
      *
-     * @return Citizens NPC
+     * @return Blockfolk BlockfolkNpc
      */
-    public NPC getNpc() {
+    public BlockfolkNpc getNpc() {
         return npc;
     }
 
@@ -261,14 +256,14 @@ public final class VampireNPC {
     }
 
     /**
-     * Called by the Citizens trait every tick as a secondary driving point.
+     * Called by the Blockfolk trait every tick as a secondary driving point.
      */
     public void onTraitTick() {
         updateLastKnownLocation();
     }
 
     /**
-     * Called when the NPC entity is spawned by Citizens.
+     * Called when the BlockfolkNpc entity is spawned by Blockfolk.
      *
      */
     public void onNpcSpawn() {
@@ -299,13 +294,12 @@ public final class VampireNPC {
     }
 
     /**
-     * Handles a Sentinel attack event.
+     * Handles a BloodMoon combat attack event.
      *
      * @param event attack event
      */
-    public void handleSentinelAttack(SentinelAttackEvent event) {
-        event.setCancelled(true);
-        if (!(event.getTarget() instanceof Player player)) {
+    public void onCombatTarget(Player player) {
+        if (player == null) {
             return;
         }
         if (state == VampireState.DISGUISED_BAT || state == VampireState.STALKING || state == VampireState.CASTING || state == VampireState.BAT_FORM_ESCAPE || state == VampireState.DEAD) {
@@ -453,71 +447,20 @@ public final class VampireNPC {
     }
 
     private void configureNpc() {
-        npc.data().set("bloodmoon-vampire", true);
-        npc.data().set("nameplate-visible", false);
-        npc.data().set("always-use-name-hologram", false);
-        npc.data().setPersistent(NPC.Metadata.NAMEPLATE_VISIBLE, false);
         npc.setProtected(false);
-        configureVampireTrait();
+
         configureSkin();
-        configureSentinel();
+        configureCombat();
         spawnHiddenNpc();
     }
 
-    private void configureVampireTrait() {
-        VampireTrait trait = npc.getOrAddTrait(VampireTrait.class);
-        trait.bind(this);
-    }
-
     private void configureSkin() {
-        String skinName = plugin.getConfigManager().getVampireSkinName();
-        String texture = plugin.getConfigManager().getVampireSkinTexture();
-        String signature = plugin.getConfigManager().getVampireSkinSignature();
-        if ((skinName == null || skinName.isBlank()) && (texture == null || texture.isBlank())) {
-            return;
-        }
-        try {
-            Class<? extends Trait> skinTraitClass = Class.forName("net.citizensnpcs.trait.SkinTrait").asSubclass(Trait.class);
-            Trait skinTrait = npc.getOrAddTrait(skinTraitClass);
-            Method setShouldUpdateSkins = skinTraitClass.getMethod("setShouldUpdateSkins", boolean.class);
-            Method setFetchDefaultSkin = skinTraitClass.getMethod("setFetchDefaultSkin", boolean.class);
-            setShouldUpdateSkins.invoke(skinTrait, false);
-            setFetchDefaultSkin.invoke(skinTrait, false);
-
-            if (texture != null && !texture.isBlank() && signature != null && !signature.isBlank()) {
-                Method setSkinPersistent = skinTraitClass.getMethod("setSkinPersistent", String.class, String.class, String.class);
-                String cacheKey = (skinName == null || skinName.isBlank()) ? "bloodmoon_selected_vampire" : skinName;
-                setSkinPersistent.invoke(skinTrait, cacheKey, signature, texture);
-                return;
-            }
-
-            if (skinName != null && !skinName.isBlank()) {
-                Method setSkinName = skinTraitClass.getMethod("setSkinName", String.class, boolean.class);
-                setSkinName.invoke(skinTrait, skinName, true);
-                return;
-            }
-
-            plugin.getLogger().warning("Vampire NPC " + npc.getId() + " has no valid Citizens skin configuration.");
-        } catch (ReflectiveOperationException ex) {
-            plugin.getLogger().warning("Could not apply Citizens SkinTrait to vampire NPC " + npc.getId() + ": " + ex.getMessage());
-        }
+        npc.setSkin(plugin.getConfigManager().getVampireSkinName(),
+                plugin.getConfigManager().getVampireSkinTexture(), plugin.getConfigManager().getVampireSkinSignature());
     }
 
-    private void configureSentinel() {
-        SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
-        sentinel.setInvincible(false);
-        sentinel.setHealth(plugin.getConfigManager().getVampireHealth());
-        sentinel.health = plugin.getConfigManager().getVampireHealth();
-        sentinel.damage = 0.0D;
-        sentinel.respawnTime = -1;
-        sentinel.chaseRange = 30.0D;
-        sentinel.armor = 0.2D;
-        sentinel.protectFromIgnores = false;
-        sentinel.allTargets = new SentinelTargetList();
-        sentinel.addTarget("players");
-        sentinel.allIgnores = new SentinelTargetList();
-        sentinel.addIgnore("npcs");
-        npc.setProtected(false);
+    private void configureCombat() {
+        npc.configureCombat(plugin.getConfigManager().getVampireHealth(), 0.2, 30.0);
     }
 
     private void spawnHiddenNpc() {
@@ -547,11 +490,11 @@ public final class VampireNPC {
                 team = board.registerNewTeam("bm_hidden_npc");
                 team.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER);
             }
-            if (entity instanceof Player player) {
-                team.addEntry(player.getName());
+            if (entity instanceof LivingEntity player) {
+                team.addEntry(entity.getUniqueId().toString());
             }
         } catch (Exception ex) {
-            plugin.getLogger().warning("Could not hide NPC nameplate: " + ex.getMessage());
+            plugin.getLogger().warning("Could not hide BlockfolkNpc nameplate: " + ex.getMessage());
         }
     }
 
@@ -740,8 +683,8 @@ public final class VampireNPC {
             return;
         }
         npc.faceLocation(player.getEyeLocation());
-        Navigator navigator = npc.getNavigator();
-        navigator.getDefaultParameters().speedModifier(0.6F);
+        BlockfolkNavigator navigator = npc.getNavigator();
+        navigator.setSpeedModifier(0.6F);
         navigator.setTarget(player, false);
     }
 
@@ -768,13 +711,9 @@ public final class VampireNPC {
         }
         combatInitialized = true;
         setNavigationSpeed(1.4F);
-        SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
-        sentinel.allTargets = new SentinelTargetList();
-        sentinel.addTarget("players");
-        sentinel.allIgnores = new SentinelTargetList();
-        sentinel.addIgnore("npcs");
-        sentinel.chaseRange = 30.0D;
-        sentinel.respawnTime = -1;
+
+        npc.setChaseRange(30.0D);
+
     }
 
     private void tickCombat() {
@@ -853,7 +792,7 @@ public final class VampireNPC {
             case EXECUTION_DASH -> random.nextInt(5) + 18;
             default -> random.nextInt(11) + 20;
         };
-        Navigator navigator = npc.getNavigator();
+        BlockfolkNavigator navigator = npc.getNavigator();
         navigator.cancelNavigation();
         Location location = getCurrentLocation();
         World world = location.getWorld();
@@ -905,7 +844,7 @@ public final class VampireNPC {
 
     private void updateCastingAnimation() {
         LivingEntity entity = getLivingEntity();
-        if (!(entity instanceof Player player)) {
+        if (!(entity instanceof LivingEntity player)) {
             return;
         }
         if (target != null && target.isOnline() && !target.isDead()) {
@@ -932,8 +871,8 @@ public final class VampireNPC {
 
     private void resetCastingAnimation() {
         LivingEntity entity = getLivingEntity();
-        if (entity instanceof Player player) {
-            playCitizensPlayerAnimation(player, "STOP_USE_ITEM");
+        if (entity instanceof LivingEntity player) {
+            playBlockfolkAnimation(player, "STOP_USE_ITEM");
         }
     }
 
@@ -1088,119 +1027,111 @@ public final class VampireNPC {
         }
     }
 
-    private void animateBloodMagicCasting(Player player) {
+    private void animateBloodMagicCasting(LivingEntity player) {
         if (stateTicks % 4 == 0) {
             player.swingMainHand();
-            playCitizensPlayerAnimation(player, "ARM_SWING");
+            playBlockfolkAnimation(player, "ARM_SWING");
         }
         if (stateTicks % 8 == 0) {
             player.swingOffHand();
-            playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
-            playCitizensPlayerAnimation(player, "START_USE_MAINHAND_ITEM");
-            playCitizensPlayerAnimation(player, "START_USE_OFFHAND_ITEM");
+            playBlockfolkAnimation(player, "ARM_SWING_OFFHAND");
+            playBlockfolkAnimation(player, "START_USE_MAINHAND_ITEM");
+            playBlockfolkAnimation(player, "START_USE_OFFHAND_ITEM");
         }
     }
 
-    private void animateDrainLifeCasting(Player player) {
+    private void animateDrainLifeCasting(LivingEntity player) {
         if (stateTicks % 5 == 0) {
-            playCitizensPlayerAnimation(player, "START_USE_MAINHAND_ITEM");
-            playCitizensPlayerAnimation(player, "START_USE_OFFHAND_ITEM");
+            playBlockfolkAnimation(player, "START_USE_MAINHAND_ITEM");
+            playBlockfolkAnimation(player, "START_USE_OFFHAND_ITEM");
         }
         if (stateTicks % 10 == 0) {
             player.swingMainHand();
             player.swingOffHand();
-            playCitizensPlayerAnimation(player, "ARM_SWING");
-            playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
+            playBlockfolkAnimation(player, "ARM_SWING");
+            playBlockfolkAnimation(player, "ARM_SWING_OFFHAND");
         }
     }
 
-    private void animateHemoplagueCasting(Player player) {
+    private void animateHemoplagueCasting(LivingEntity player) {
         if (stateTicks % 4 == 0) {
-            playCitizensPlayerAnimation(player, "START_USE_MAINHAND_ITEM");
-            playCitizensPlayerAnimation(player, "START_USE_OFFHAND_ITEM");
+            playBlockfolkAnimation(player, "START_USE_MAINHAND_ITEM");
+            playBlockfolkAnimation(player, "START_USE_OFFHAND_ITEM");
         }
         if (stateTicks % 8 == 0) {
             player.swingMainHand();
-            playCitizensPlayerAnimation(player, "ARM_SWING");
+            playBlockfolkAnimation(player, "ARM_SWING");
         }
         if (stateTicks % 12 == 0) {
             player.swingOffHand();
-            playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
+            playBlockfolkAnimation(player, "ARM_SWING_OFFHAND");
         }
     }
 
-    private void animateSummonBatsCasting(Player player) {
+    private void animateSummonBatsCasting(LivingEntity player) {
         if (stateTicks % 2 == 0) {
             player.swingOffHand();
-            playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
+            playBlockfolkAnimation(player, "ARM_SWING_OFFHAND");
         }
         if (stateTicks % 5 == 0) {
             player.swingMainHand();
-            playCitizensPlayerAnimation(player, "ARM_SWING");
+            playBlockfolkAnimation(player, "ARM_SWING");
         }
     }
 
-    private void animateShadowDashCasting(Player player) {
+    private void animateShadowDashCasting(LivingEntity player) {
         if (stateTicks % 2 == 0) {
             player.swingMainHand();
-            playCitizensPlayerAnimation(player, "ARM_SWING");
+            playBlockfolkAnimation(player, "ARM_SWING");
         }
         if (stateTicks % 4 == 0) {
             player.swingOffHand();
-            playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
+            playBlockfolkAnimation(player, "ARM_SWING_OFFHAND");
         }
     }
 
-    private void animateExecutionDashCasting(Player player) {
+    private void animateExecutionDashCasting(LivingEntity player) {
         if (stateTicks % 3 == 0) {
             player.swingMainHand();
-            playCitizensPlayerAnimation(player, "ARM_SWING");
+            playBlockfolkAnimation(player, "ARM_SWING");
         }
         if (stateTicks % 6 == 0) {
             player.swingOffHand();
-            playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
-            playCitizensPlayerAnimation(player, "START_USE_MAINHAND_ITEM");
+            playBlockfolkAnimation(player, "ARM_SWING_OFFHAND");
+            playBlockfolkAnimation(player, "START_USE_MAINHAND_ITEM");
         }
     }
 
-    private void animateTidesOfBloodCasting(Player player) {
+    private void animateTidesOfBloodCasting(LivingEntity player) {
         if (stateTicks % 3 == 0) {
-            playCitizensPlayerAnimation(player, "START_USE_MAINHAND_ITEM");
+            playBlockfolkAnimation(player, "START_USE_MAINHAND_ITEM");
         }
         if (stateTicks % 9 == 0) {
             player.swingOffHand();
-            playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
+            playBlockfolkAnimation(player, "ARM_SWING_OFFHAND");
         }
     }
 
-    private void animateBloodShieldCasting(Player player) {
+    private void animateBloodShieldCasting(LivingEntity player) {
         if (stateTicks % 5 == 0) {
-            playCitizensPlayerAnimation(player, "START_USE_MAINHAND_ITEM");
-            playCitizensPlayerAnimation(player, "START_USE_OFFHAND_ITEM");
+            playBlockfolkAnimation(player, "START_USE_MAINHAND_ITEM");
+            playBlockfolkAnimation(player, "START_USE_OFFHAND_ITEM");
         }
         if (stateTicks % 10 == 0) {
             player.swingOffHand();
-            playCitizensPlayerAnimation(player, "ARM_SWING_OFFHAND");
+            playBlockfolkAnimation(player, "ARM_SWING_OFFHAND");
         }
     }
 
-    private void animateEscapeCasting(Player player) {
+    private void animateEscapeCasting(LivingEntity player) {
         if (stateTicks % 4 == 0) {
             player.swingMainHand();
-            playCitizensPlayerAnimation(player, "ARM_SWING");
+            playBlockfolkAnimation(player, "ARM_SWING");
         }
     }
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
-    private void playCitizensPlayerAnimation(Player player, String animationName) {
-        try {
-            Class<? extends Enum> animationClass = Class.forName("net.citizensnpcs.util.PlayerAnimation").asSubclass(Enum.class);
-            Enum animation = Enum.valueOf(animationClass, animationName);
-            Method playMethod = animationClass.getMethod("play", Player.class);
-            playMethod.invoke(animation, player);
-        } catch (ReflectiveOperationException ignored) {
-            // Citizens implementation classes are not on the compile classpath; hand animation falls back to Bukkit swings.
-        }
+    private void playBlockfolkAnimation(LivingEntity player, String animationName) {
+        npc.animate(animationName);
     }
 
     private void executeAbility(VampireAbility ability) {
@@ -2346,7 +2277,7 @@ public final class VampireNPC {
         if (!npc.isSpawned()) {
             return;
         }
-        npc.getNavigator().getDefaultParameters().speedModifier(speed);
+        npc.getNavigator().setSpeedModifier(speed);
     }
 
     private Player ensureTarget(double radius) {
@@ -2688,7 +2619,7 @@ public final class VampireNPC {
         Location location = getCurrentLocation();
         String worldName = location != null && location.getWorld() != null ? location.getWorld().getName() : "unknown";
         String targetName = target != null && target.isOnline() ? target.getName() : "none";
-        return "NPC " + npc.getId()
+        return "BlockfolkNpc " + npc.getId()
             + " state=" + state
             + " world=" + worldName
             + " target=" + targetName
@@ -2711,7 +2642,7 @@ public final class VampireNPC {
     }
 
     /**
-     * Returns whether this NPC is active in combat.
+     * Returns whether this BlockfolkNpc is active in combat.
      *
      * @return true when combat-capable and visible
      */
@@ -2788,7 +2719,7 @@ public final class VampireNPC {
     }
 
     /**
-     * Returns whether the NPC is still disguised as a bat.
+     * Returns whether the BlockfolkNpc is still disguised as a bat.
      *
      * @return true if disguised
      */
@@ -2797,7 +2728,7 @@ public final class VampireNPC {
     }
 
     /**
-     * Returns whether the Citizens entity is currently visible.
+     * Returns whether the Blockfolk entity is currently visible.
      *
      * @return visibility state
      */
@@ -2824,7 +2755,7 @@ public final class VampireNPC {
     }
 
     /**
-     * Marks the NPC visible without playing transform effects.
+     * Marks the BlockfolkNpc visible without playing transform effects.
      */
     public void revealSilently() {
         removeDisguiseBat();
@@ -2961,10 +2892,10 @@ public final class VampireNPC {
     }
 
     /**
-     * Recalculates and applies Sentinel combat properties from config.
+     * Recalculates and applies BloodMoon combat combat properties from config.
      */
-    public void refreshSentinelSettings() {
-        configureSentinel();
+    public void refreshCombatSettings() {
+        configureCombat();
         LivingEntity entity = getLivingEntity();
         if (entity != null) {
             applyConfiguredHealth(entity);
@@ -2992,10 +2923,4 @@ public final class VampireNPC {
         return pendingAbility;
     }
 }
-
-
-
-
-
-
 

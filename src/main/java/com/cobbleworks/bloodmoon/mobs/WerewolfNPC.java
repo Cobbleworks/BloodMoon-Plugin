@@ -1,7 +1,8 @@
 package com.cobbleworks.bloodmoon.mobs;
 
+import com.cobbleworks.bloodmoon.npc.BlockfolkNpc;
+
 import com.cobbleworks.bloodmoon.BloodMoonPlugin;
-import com.cobbleworks.bloodmoon.traits.WerewolfTrait;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -9,8 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
-import net.citizensnpcs.api.npc.NPC;
-import net.citizensnpcs.api.trait.Trait;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
@@ -36,11 +35,7 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
-import java.lang.reflect.Method;
 import org.bukkit.util.Vector;
-import org.mcmonkey.sentinel.SentinelTrait;
-import org.mcmonkey.sentinel.events.SentinelAttackEvent;
-import org.mcmonkey.sentinel.targeting.SentinelTargetList;
 
 public final class WerewolfNPC {
 
@@ -68,7 +63,7 @@ public final class WerewolfNPC {
     }
 
     private final BloodMoonPlugin plugin;
-    private final NPC npc;
+    private final BlockfolkNpc npc;
     private final Location spawnLocation;
     private final Random random = new Random();
     private final Map<WerewolfAbility, Integer> cooldowns = new EnumMap<>(WerewolfAbility.class);
@@ -106,7 +101,7 @@ public final class WerewolfNPC {
         }
     }
 
-    public WerewolfNPC(BloodMoonPlugin plugin, NPC npc, Location spawnLocation, Player initialTarget) {
+    public WerewolfNPC(BloodMoonPlugin plugin, BlockfolkNpc npc, Location spawnLocation, Player initialTarget) {
         this.plugin = plugin;
         this.npc = npc;
         this.spawnLocation = spawnLocation.clone();
@@ -117,7 +112,7 @@ public final class WerewolfNPC {
         startController();
     }
 
-    public NPC getNpc() {
+    public BlockfolkNpc getNpc() {
         return npc;
     }
 
@@ -158,9 +153,8 @@ public final class WerewolfNPC {
         }
     }
 
-    public void handleSentinelAttack(SentinelAttackEvent event) {
-        event.setCancelled(true);
-        if (!(event.getTarget() instanceof Player player) || state == WerewolfState.DEAD) {
+    public void onCombatTarget(Player player) {
+        if (player == null || state == WerewolfState.DEAD) {
             return;
         }
         target = player;
@@ -271,18 +265,13 @@ public final class WerewolfNPC {
     }
 
     private void configureNpc() {
-        npc.data().set("bloodmoon-werewolf", true);
-        npc.data().set("nameplate-visible", false);
-        npc.data().setPersistent(NPC.Metadata.NAMEPLATE_VISIBLE, false);
         npc.setProtected(false);
-        WerewolfTrait trait = npc.getOrAddTrait(WerewolfTrait.class);
-        trait.bind(this);
         configureSkin();
-        configureSentinel();
+        configureCombat();
         if (!npc.isSpawned()) {
             npc.spawn(spawnLocation.clone());
         }
-        npc.getNavigator().getDefaultParameters().speedModifier(0.9F).stationaryTicks(-1).avoidWater(false);
+        npc.getNavigator().setSpeedModifier(0.9F);
         LivingEntity entity = getLivingEntity();
         if (entity != null) {
             applyConfiguredHealth(entity);
@@ -291,44 +280,12 @@ public final class WerewolfNPC {
     }
 
     private void configureSkin() {
-        String skinName = plugin.getConfigManager().getWerewolfSkinName();
-        String texture = plugin.getConfigManager().getWerewolfSkinTexture();
-        String signature = plugin.getConfigManager().getWerewolfSkinSignature();
-        if ((skinName == null || skinName.isBlank()) && (texture == null || texture.isBlank())) {
-            return;
-        }
-        try {
-            Class<? extends Trait> skinTraitClass = Class.forName("net.citizensnpcs.trait.SkinTrait").asSubclass(Trait.class);
-            Trait skinTrait = npc.getOrAddTrait(skinTraitClass);
-            skinTraitClass.getMethod("setShouldUpdateSkins", boolean.class).invoke(skinTrait, false);
-            skinTraitClass.getMethod("setFetchDefaultSkin", boolean.class).invoke(skinTrait, false);
-            if (texture != null && !texture.isBlank() && signature != null && !signature.isBlank()) {
-                skinTraitClass.getMethod("setSkinPersistent", String.class, String.class, String.class)
-                    .invoke(skinTrait, skinName, signature, texture);
-                return;
-            }
-            if (skinName != null && !skinName.isBlank()) {
-                skinTraitClass.getMethod("setSkinName", String.class, boolean.class).invoke(skinTrait, skinName, true);
-            }
-        } catch (ReflectiveOperationException ex) {
-            plugin.getLogger().warning("Could not apply werewolf skin: " + ex.getMessage());
-        }
+        npc.setSkin(plugin.getConfigManager().getWerewolfSkinName(),
+                plugin.getConfigManager().getWerewolfSkinTexture(), plugin.getConfigManager().getWerewolfSkinSignature());
     }
 
-    private void configureSentinel() {
-        SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
-        sentinel.setInvincible(false);
-        sentinel.setHealth(plugin.getConfigManager().getWerewolfHealth());
-        sentinel.health = plugin.getConfigManager().getWerewolfHealth();
-        sentinel.damage = 0.0D;
-        sentinel.respawnTime = -1;
-        sentinel.chaseRange = 60.0D;
-        sentinel.armor = 0.12D;
-        sentinel.protectFromIgnores = false;
-        sentinel.allTargets = new SentinelTargetList();
-        sentinel.addTarget("players");
-        sentinel.allIgnores = new SentinelTargetList();
-        sentinel.addIgnore("npcs");
+    private void configureCombat() {
+        npc.configureCombat(plugin.getConfigManager().getWerewolfHealth(), 0.12, 60.0);
     }
 
     private void hideNameplate(LivingEntity entity) {
@@ -342,8 +299,8 @@ public final class WerewolfNPC {
                 team = board.registerNewTeam("bm_hidden_npc");
                 team.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER);
             }
-            if (entity instanceof Player player) {
-                team.addEntry(player.getName());
+            if (entity instanceof LivingEntity player) {
+                team.addEntry(entity.getUniqueId().toString());
             }
         } catch (Exception ignored) {
         }
@@ -422,7 +379,7 @@ public final class WerewolfNPC {
         setNavigationSpeed(0.9F);
         npc.getNavigator().setTarget(player, true);
         if (stateTicks % 8 == 0) {
-            lockSentinelChase(player, 54.0D);
+            lockCombatChase(player, 54.0D);
         }
         npc.faceLocation(player.getEyeLocation());
 
@@ -498,7 +455,7 @@ public final class WerewolfNPC {
         npc.getNavigator().cancelNavigation();
         if (entity != null && target != null && target.isOnline() && !target.isDead()) {
             if (stateTicks % 10 == 0) {
-                lockSentinelChase(target, 54.0D);
+                lockCombatChase(target, 54.0D);
             }
             npc.faceLocation(target.getEyeLocation());
         }
@@ -1106,24 +1063,19 @@ public final class WerewolfNPC {
 
     private void setNavigationSpeed(float speed) {
         try {
-            npc.getNavigator().getDefaultParameters().speedModifier(speed);
+            npc.getNavigator().setSpeedModifier(speed);
         } catch (Exception ignored) {
         }
     }
 
-    private void lockSentinelChase(Player player, double chaseRange) {
+    private void lockCombatChase(Player player, double chaseRange) {
         if (player == null || !player.isOnline() || player.isDead()) {
             return;
         }
         try {
-            SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
-            sentinel.allTargets = new SentinelTargetList();
-            sentinel.addTarget("players");
-            sentinel.addTarget("player:" + player.getName());
-            sentinel.allIgnores = new SentinelTargetList();
-            sentinel.addIgnore("npcs");
-            sentinel.chaseRange = Math.max(sentinel.chaseRange, chaseRange);
-            sentinel.respawnTime = -1;
+
+            npc.setChaseRange(Math.max(npc.getChaseRange(), chaseRange));
+
         } catch (Exception ignored) {
         }
     }
@@ -1629,7 +1581,7 @@ public final class WerewolfNPC {
             setNavigationSpeed(0.85F);
             npc.getNavigator().setTarget(target, true);
             if (stateTicks % 10 == 0) {
-                lockSentinelChase(target, 54.0D);
+                lockCombatChase(target, 54.0D);
             }
             npc.faceLocation(target.getEyeLocation());
         }
@@ -1828,12 +1780,12 @@ public final class WerewolfNPC {
     }
 
     // =========================================================================
-    // Casting animation system  (Citizens PlayerAnimation via reflection)
+    // Casting animation system  (Blockfolk mannequin animations)
     // =========================================================================
 
     private void updateCastingAnimation() {
         LivingEntity entity = getLivingEntity();
-        if (!(entity instanceof Player npcPlayer)) {
+        if (!(entity instanceof LivingEntity npcPlayer)) {
             return;
         }
         if (target != null && target.isOnline() && !target.isDead()) {
@@ -1855,106 +1807,93 @@ public final class WerewolfNPC {
     }
 
     /** Bite: snap-lunge forward arm swing building up. */
-    private void animateBite(Player p) {
+    private void animateBite(LivingEntity p) {
         if (stateTicks % 5 == 0) {
-            playCitizensPlayerAnimation(p, "ARM_SWING");
+            playBlockfolkAnimation(p, "ARM_SWING");
         }
         if (stateTicks == castTicks - 2) {
             p.swingMainHand();
-            playCitizensPlayerAnimation(p, "START_USE_MAINHAND_ITEM");
+            playBlockfolkAnimation(p, "START_USE_MAINHAND_ITEM");
         }
     }
 
     /** Furious Claws: rapid bilateral sweep arms. */
-    private void animateFuriousClaws(Player p) {
+    private void animateFuriousClaws(LivingEntity p) {
         if (stateTicks % 4 == 0) {
-            playCitizensPlayerAnimation(p, "ARM_SWING");
+            playBlockfolkAnimation(p, "ARM_SWING");
         }
         if (stateTicks % 6 == 0) {
-            playCitizensPlayerAnimation(p, "ARM_SWING_OFFHAND");
+            playBlockfolkAnimation(p, "ARM_SWING_OFFHAND");
         }
     }
 
     /** Far Jump: coiling crouch before the leap. */
-    private void animateFarJump(Player p) {
+    private void animateFarJump(LivingEntity p) {
         if (stateTicks % 6 == 0) {
-            playCitizensPlayerAnimation(p, "START_USE_MAINHAND_ITEM");
+            playBlockfolkAnimation(p, "START_USE_MAINHAND_ITEM");
         }
         if (stateTicks == castTicks - 1) {
             p.swingMainHand();
-            playCitizensPlayerAnimation(p, "ARM_SWING");
+            playBlockfolkAnimation(p, "ARM_SWING");
         }
     }
 
     /** Wolf Pack: raised summon arms. */
-    private void animateWolfPack(Player p) {
+    private void animateWolfPack(LivingEntity p) {
         if (stateTicks % 6 == 0) {
-            playCitizensPlayerAnimation(p, "START_USE_MAINHAND_ITEM");
-            playCitizensPlayerAnimation(p, "START_USE_OFFHAND_ITEM");
+            playBlockfolkAnimation(p, "START_USE_MAINHAND_ITEM");
+            playBlockfolkAnimation(p, "START_USE_OFFHAND_ITEM");
         }
     }
 
     /** Devour: reach-out lunge toward prey. */
-    private void animateDevour(Player p) {
+    private void animateDevour(LivingEntity p) {
         if (stateTicks % 5 == 0) {
             p.swingMainHand();
-            playCitizensPlayerAnimation(p, "ARM_SWING");
+            playBlockfolkAnimation(p, "ARM_SWING");
         }
     }
 
     /** Territorial Snarl: stomp-stamp on the ground. */
-    private void animateSnarl(Player p) {
+    private void animateSnarl(LivingEntity p) {
         if (stateTicks % 7 == 0) {
-            playCitizensPlayerAnimation(p, "ARM_SWING");
-            playCitizensPlayerAnimation(p, "ARM_SWING_OFFHAND");
+            playBlockfolkAnimation(p, "ARM_SWING");
+            playBlockfolkAnimation(p, "ARM_SWING_OFFHAND");
         }
     }
 
     /** Pack Frenzy: frenzied double-arm signal. */
-    private void animatePackFrenzy(Player p) {
+    private void animatePackFrenzy(LivingEntity p) {
         if (stateTicks % 4 == 0) {
-            playCitizensPlayerAnimation(p, "ARM_SWING");
+            playBlockfolkAnimation(p, "ARM_SWING");
         }
         if (stateTicks % 5 == 0) {
-            playCitizensPlayerAnimation(p, "ARM_SWING_OFFHAND");
+            playBlockfolkAnimation(p, "ARM_SWING_OFFHAND");
         }
     }
 
     /** Bone Slam: giant overhead two-handed slam. */
-    private void animateBoneSlam(Player p) {
+    private void animateBoneSlam(LivingEntity p) {
         if (stateTicks % 5 == 0) {
-            playCitizensPlayerAnimation(p, "START_USE_MAINHAND_ITEM");
+            playBlockfolkAnimation(p, "START_USE_MAINHAND_ITEM");
         }
         if (stateTicks == castTicks - 2) {
             p.swingMainHand();
             p.swingOffHand();
-            playCitizensPlayerAnimation(p, "ARM_SWING");
-            playCitizensPlayerAnimation(p, "ARM_SWING_OFFHAND");
+            playBlockfolkAnimation(p, "ARM_SWING");
+            playBlockfolkAnimation(p, "ARM_SWING_OFFHAND");
         }
     }
 
     private void resetCastingAnimation() {
         LivingEntity entity = getLivingEntity();
-        if (entity instanceof Player p) {
-            playCitizensPlayerAnimation(p, "STOP_USE_ITEM");
+        if (entity instanceof LivingEntity p) {
+            playBlockfolkAnimation(p, "STOP_USE_ITEM");
         }
     }
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
-    private void playCitizensPlayerAnimation(Player player, String animationName) {
-        try {
-            Class<? extends Enum> animationClass =
-                Class.forName("net.citizensnpcs.util.PlayerAnimation").asSubclass(Enum.class);
-            Enum animation = Enum.valueOf(animationClass, animationName);
-            Method playMethod = animationClass.getMethod("play", Player.class);
-            playMethod.invoke(animation, player);
-        } catch (ReflectiveOperationException ignored) {
-        }
+    private void playBlockfolkAnimation(LivingEntity player, String animationName) {
+        npc.animate(animationName);
     }
 }
-
-
-
-
-
 

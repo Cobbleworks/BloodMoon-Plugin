@@ -1,12 +1,11 @@
 name: BloodMoon-Event
 version: ${project.version}
 main: com.cobbleworks.bloodmoon.BloodMoonPlugin
-api-version: '1.20'
+api-version: '26.2'
 author: Cobbleworks
 website: https://github.com/Cobbleworks/BloodMoon-Plugin
 depend:
-  - Citizens
-  - Sentinel
+  - Blockfolk
 commands:
   bloodmoon:
     description: Manage the Blood Moon event.

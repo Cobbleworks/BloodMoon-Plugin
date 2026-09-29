@@ -1,13 +1,10 @@
 package com.cobbleworks.bloodmoon.mobs;
 
+import com.cobbleworks.bloodmoon.npc.BlockfolkNpc;
+import com.cobbleworks.bloodmoon.npc.BlockfolkBridge;
+
 import com.cobbleworks.bloodmoon.BloodMoonPlugin;
-import com.cobbleworks.bloodmoon.traits.WitchTrait;
-import java.lang.reflect.Method;
 import java.util.*;
-import net.citizensnpcs.api.CitizensAPI;
-import net.citizensnpcs.api.npc.NPC;
-import net.citizensnpcs.api.npc.NPCRegistry;
-import net.citizensnpcs.api.trait.Trait;
 import org.bukkit.*;
 import org.bukkit.entity.*;
 import org.bukkit.event.player.PlayerTeleportEvent;
@@ -22,9 +19,6 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 import org.bukkit.util.Vector;
-import org.mcmonkey.sentinel.SentinelTrait;
-import org.mcmonkey.sentinel.events.SentinelAttackEvent;
-import org.mcmonkey.sentinel.targeting.SentinelTargetList;
 
 public final class WitchNPC {
 
@@ -68,14 +62,14 @@ public final class WitchNPC {
 
     // ─── Fields ───────────────────────────────────────────────────────────────
     private final BloodMoonPlugin plugin;
-    private final NPC npc;
+    private final BlockfolkNpc npc;
     private final Location spawnLocation;
     private final Random random = new Random();
     private final Map<WitchAbility, Integer> cooldowns = new EnumMap<>(WitchAbility.class);
     private final Map<WitchAbility, Integer> abilityUseCounts = new EnumMap<>(WitchAbility.class);
     private final List<BukkitRunnable> tasks = new ArrayList<>();
     private final List<LivingEntity> clones = new ArrayList<>();
-    private final List<NPC> cloneNpcs = new ArrayList<>();
+    private final List<BlockfolkNpc> cloneNpcs = new ArrayList<>();
     private final List<Location> runeLocations = new ArrayList<>();
 
     // Deadly Spell accumulator
@@ -102,7 +96,7 @@ public final class WitchNPC {
     private boolean unravelingTriggered = false;
 
     // ─── Constructor ──────────────────────────────────────────────────────────
-    public WitchNPC(BloodMoonPlugin plugin, NPC npc, Location spawnLocation, Player initialTarget) {
+    public WitchNPC(BloodMoonPlugin plugin, BlockfolkNpc npc, Location spawnLocation, Player initialTarget) {
         this.plugin = plugin;
         this.npc = npc;
         this.spawnLocation = spawnLocation.clone();
@@ -113,7 +107,7 @@ public final class WitchNPC {
     }
 
     // ─── Public API ───────────────────────────────────────────────────────────
-    public NPC getNpc() { return npc; }
+    public BlockfolkNpc getNpc() { return npc; }
 
     public boolean isDead() { return state == WitchState.DEAD || cleaned || deathStarted; }
 
@@ -155,9 +149,8 @@ public final class WitchNPC {
         }
     }
 
-    public void handleSentinelAttack(SentinelAttackEvent event) {
-        event.setCancelled(true);
-        if (!(event.getTarget() instanceof Player player) || state == WitchState.DEAD) return;
+    public void onCombatTarget(Player player) {
+        if (player == null || state == WitchState.DEAD) return;
         target = player;
     }
 
@@ -216,7 +209,7 @@ public final class WitchNPC {
         entity.getWorld().spawnParticle(Particle.SMOKE, entity.getLocation().add(0, 1, 0), 14, 0.2, 0.3, 0.2, 0.03);
         entity.getWorld().playSound(entity.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 0.7F, 1.3F);
         clones.remove(entity);
-        for (NPC cloneNpc : List.copyOf(cloneNpcs)) {
+        for (BlockfolkNpc cloneNpc : List.copyOf(cloneNpcs)) {
             if (cloneNpc.getEntity() == entity) {
                 try { cloneNpc.despawn(); } catch (Exception ignored) {}
                 try { cloneNpc.destroy(); } catch (Exception ignored) {}
@@ -229,40 +222,17 @@ public final class WitchNPC {
 
     // ─── NPC Setup ────────────────────────────────────────────────────────────
     private void configureNpc() {
-        npc.data().set("bloodmoon-witch", true);
-        npc.data().set("nameplate-visible", false);
-        npc.data().setPersistent(NPC.Metadata.NAMEPLATE_VISIBLE, false);
         npc.setProtected(false);
-        WitchTrait trait = npc.getOrAddTrait(WitchTrait.class);
-        trait.bind(this);
         configureSkin();
-        configureSentinel();
+        configureCombat();
         if (!npc.isSpawned()) npc.spawn(spawnLocation.clone());
         LivingEntity e = getLivingEntity();
         if (e != null) { applyConfiguredHealth(e); hideNameplate(e); }
     }
 
     private void configureSkin() {
-        String skinName  = plugin.getConfigManager().getWitchSkinName();
-        String texture   = plugin.getConfigManager().getWitchSkinTexture();
-        String signature = plugin.getConfigManager().getWitchSkinSignature();
-        if ((skinName == null || skinName.isBlank()) && (texture == null || texture.isBlank())) return;
-        try {
-            Class<? extends Trait> skinTraitClass = Class.forName("net.citizensnpcs.trait.SkinTrait").asSubclass(Trait.class);
-            Trait skinTrait = npc.getOrAddTrait(skinTraitClass);
-            skinTraitClass.getMethod("setShouldUpdateSkins", boolean.class).invoke(skinTrait, false);
-            skinTraitClass.getMethod("setFetchDefaultSkin",  boolean.class).invoke(skinTrait, false);
-            if (texture != null && !texture.isBlank() && signature != null && !signature.isBlank()) {
-                skinTraitClass.getMethod("setSkinPersistent", String.class, String.class, String.class)
-                              .invoke(skinTrait, skinName, signature, texture);
-                return;
-            }
-            if (skinName != null && !skinName.isBlank()) {
-                skinTraitClass.getMethod("setSkinName", String.class, boolean.class).invoke(skinTrait, skinName, true);
-            }
-        } catch (ReflectiveOperationException ex) {
-            plugin.getLogger().warning("Could not apply witch skin: " + ex.getMessage());
-        }
+        npc.setSkin(plugin.getConfigManager().getWitchSkinName(),
+                plugin.getConfigManager().getWitchSkinTexture(), plugin.getConfigManager().getWitchSkinSignature());
     }
 
     private void dropLoot(World world, Location location) {
@@ -298,20 +268,8 @@ public final class WitchNPC {
         return item;
     }
 
-    private void configureSentinel() {
-        SentinelTrait s = npc.getOrAddTrait(SentinelTrait.class);
-        s.setInvincible(false);
-        s.setHealth(plugin.getConfigManager().getWitchHealth());
-        s.health = plugin.getConfigManager().getWitchHealth();
-        s.damage = 0.0D;
-        s.respawnTime = -1;
-        s.chaseRange = 30.0D;
-        s.armor = 0.04D;
-        s.protectFromIgnores = false;
-        s.allTargets = new SentinelTargetList();
-        s.addTarget("players");
-        s.allIgnores = new SentinelTargetList();
-        s.addIgnore("npcs");
+    private void configureCombat() {
+        npc.configureCombat(plugin.getConfigManager().getWitchHealth(), 0.04, 30.0);
     }
 
     private void hideNameplate(LivingEntity entity) {
@@ -323,7 +281,7 @@ public final class WitchNPC {
                 team = board.registerNewTeam("bm_hidden_npc");
                 team.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER);
             }
-            if (entity instanceof Player p) team.addEntry(p.getName());
+            if (entity instanceof LivingEntity p) team.addEntry(entity.getUniqueId().toString());
         } catch (Exception ignored) {}
     }
 
@@ -403,7 +361,7 @@ public final class WitchNPC {
     }
 
     private void runCastingAnimation() {
-        if (!(npc.getEntity() instanceof Player witchPlayer)) {
+        if (!(npc.getEntity() instanceof LivingEntity witchPlayer)) {
             return;
         }
         if (target != null && target.isOnline() && !target.isDead()) {
@@ -821,11 +779,11 @@ public final class WitchNPC {
     /** Mirror Image – spawns 2-3 indistinguishable phantom witches that cast weakened spells. */
     private void castMirrorImage() {
         LivingEntity caster = getLivingEntity();
-        if (caster == null || !CitizensAPI.hasImplementation()) return;
+        if (caster == null || !plugin.getNPCManager().isBlockfolkReady()) return;
         Location base = caster.getLocation();
         World world = base.getWorld();
         if (world == null) return;
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        BlockfolkBridge registry = plugin.getNPCManager().getBlockfolk();
         if (registry == null) return;
 
         clearMirrorClones();
@@ -862,7 +820,7 @@ public final class WitchNPC {
                         continue;
                     }
 
-                    if (clone instanceof Player) {
+                    if (clone instanceof LivingEntity) {
                         Vector dir = victim.getLocation().toVector().subtract(clone.getLocation().toVector());
                         if (dir.lengthSquared() > 0.001D) {
                             Vector move = dir.normalize().multiply(0.28D);
@@ -877,7 +835,7 @@ public final class WitchNPC {
 
                     World cw = clone.getWorld();
                     cw.spawnParticle(Particle.DUST, clone.getLocation().add(0.0D, 1.0D, 0.0D), 3, 0.18D, 0.20D, 0.18D, 0.0D, DUST_VIOLET);
-                    if (t % 20 == 0 && clone.getLocation().distanceSquared(victim.getLocation()) <= 6.0D && clone instanceof Player) {
+                    if (t % 20 == 0 && clone.getLocation().distanceSquared(victim.getLocation()) <= 6.0D && clone instanceof LivingEntity) {
                         victim.damage(2.0D, caster);
                         cw.playSound(victim.getLocation(), Sound.ENTITY_PLAYER_HURT, 0.45F, 0.85F);
                     }
@@ -915,7 +873,7 @@ public final class WitchNPC {
         return candidates;
     }
 
-    private void spawnMirrorClone(LivingEntity source, Location spawnLoc, NPCRegistry registry, LivingEntity caster) {
+    private void spawnMirrorClone(LivingEntity source, Location spawnLoc, BlockfolkBridge registry, LivingEntity caster) {
         LivingEntity cloneEntity = null;
 
         if (source instanceof Player sourcePlayer) {
@@ -941,22 +899,12 @@ public final class WitchNPC {
         cloneEntity.getWorld().spawnParticle(Particle.DUST, spawnLoc.clone().add(0, 1, 0), 18, 0.3, 0.4, 0.3, 0.0D, DUST_VIOLET);
     }
 
-    private LivingEntity spawnPlayerMirrorClone(String skinName, Location spawnLoc, NPCRegistry registry) {
-        NPC cloneNpc = registry.createNPC(EntityType.PLAYER, npc.getName());
+    private LivingEntity spawnPlayerMirrorClone(String skinName, Location spawnLoc, BlockfolkBridge registry) {
+        BlockfolkNpc cloneNpc = registry.createNpc(npc.getName());
         cloneNpc.setProtected(false);
-        cloneNpc.data().setPersistent(NPC.Metadata.NAMEPLATE_VISIBLE, true);
         cloneNpc.spawn(spawnLoc);
 
-        try {
-            Class<? extends Trait> skinTraitClass = Class.forName("net.citizensnpcs.trait.SkinTrait").asSubclass(Trait.class);
-            Trait skinTrait = cloneNpc.getOrAddTrait(skinTraitClass);
-            skinTraitClass.getMethod("setShouldUpdateSkins", boolean.class).invoke(skinTrait, false);
-            skinTraitClass.getMethod("setFetchDefaultSkin", boolean.class).invoke(skinTrait, false);
-            if (skinName != null && !skinName.isBlank()) {
-                skinTraitClass.getMethod("setSkinName", String.class, boolean.class).invoke(skinTrait, skinName, true);
-            }
-        } catch (ReflectiveOperationException ignored) {
-        }
+        cloneNpc.setSkin(skinName, null, null);
 
         if (!(cloneNpc.getEntity() instanceof LivingEntity cloneEntity)) {
             try { cloneNpc.despawn(); } catch (Exception ignored) {}
@@ -1017,7 +965,7 @@ public final class WitchNPC {
             }
         }
         clones.clear();
-        for (NPC cloneNpc : List.copyOf(cloneNpcs)) {
+        for (BlockfolkNpc cloneNpc : List.copyOf(cloneNpcs)) {
             try { cloneNpc.despawn(); } catch (Exception ignored) {}
             try { cloneNpc.destroy(); } catch (Exception ignored) {}
         }
@@ -1691,8 +1639,7 @@ public final class WitchNPC {
         }
 
         npc.getNavigator().cancelNavigation();
-        SentinelTrait s = npc.getOrAddTrait(SentinelTrait.class);
-        s.chaseRange = 0.0D;
+        npc.setChaseRange(0.0D);
 
         reduceCooldowns(0.5D);
         cooldowns.put(WitchAbility.HEX_CIRCLE, 0);
@@ -1783,9 +1730,4 @@ public final class WitchNPC {
         }
     }
 }
-
-
-
-
-
 

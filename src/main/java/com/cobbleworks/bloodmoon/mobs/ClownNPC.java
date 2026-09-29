@@ -1,16 +1,14 @@
 package com.cobbleworks.bloodmoon.mobs;
 
+import com.cobbleworks.bloodmoon.npc.BlockfolkNpc;
+
 import com.cobbleworks.bloodmoon.BloodMoonPlugin;
-import com.cobbleworks.bloodmoon.traits.ClownTrait;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import net.citizensnpcs.api.npc.NPC;
-import net.citizensnpcs.api.trait.Trait;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.FireworkEffect;
@@ -43,9 +41,6 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 import org.bukkit.util.Vector;
-import org.mcmonkey.sentinel.SentinelTrait;
-import org.mcmonkey.sentinel.events.SentinelAttackEvent;
-import org.mcmonkey.sentinel.targeting.SentinelTargetList;
 
 public final class ClownNPC {
 
@@ -110,7 +105,7 @@ public final class ClownNPC {
     private static final Particle.DustOptions JESTER_BLACK = new Particle.DustOptions(Color.fromRGB(22, 22, 30), 1.0F);
 
     private final BloodMoonPlugin plugin;
-    private final NPC npc;
+    private final BlockfolkNpc npc;
     private final Location spawnLocation;
     private final Random random;
     private final Map<ClownAbility, Integer> cooldowns;
@@ -136,7 +131,7 @@ public final class ClownNPC {
     private boolean deathSequenceStarted;
     private boolean combatInitialized;
 
-    public ClownNPC(BloodMoonPlugin plugin, NPC npc, Location spawnLocation) {
+    public ClownNPC(BloodMoonPlugin plugin, BlockfolkNpc npc, Location spawnLocation) {
         this.plugin        = plugin;
         this.npc           = npc;
         this.spawnLocation = spawnLocation.clone();
@@ -153,7 +148,7 @@ public final class ClownNPC {
         startController();
     }
 
-    public NPC getNpc()          { return npc; }
+    public BlockfolkNpc getNpc()          { return npc; }
     public ClownState getState() { return state; }
     public boolean isDead()      { return state == ClownState.DEAD || cleanedUp || deathSequenceStarted; }
 
@@ -218,10 +213,9 @@ public final class ClownNPC {
         hideNameplate(entity);
     }
 
-    public void handleSentinelAttack(SentinelAttackEvent event) {
-        event.setCancelled(true);
-        if (!(event.getTarget() instanceof Player player)) return;
-        if (state == ClownState.WANDERING || state == ClownState.CASTING || state == ClownState.TAUNTING || state == ClownState.DEAD) { event.setCancelled(true); return; }
+    public void onCombatTarget(Player player) {
+        if (player == null) return;
+        if (state == ClownState.WANDERING || state == ClownState.CASTING || state == ClownState.TAUNTING || state == ClownState.DEAD) { return; }
         target = player;
         if (random.nextDouble() < 0.10D) { ClownAbility a = chooseAbility(); if (a != null && canUseAbility(a)) startCasting(a); }
     }
@@ -274,52 +268,17 @@ public final class ClownNPC {
     }
 
     private void configureNpc() {
-        npc.data().set("bloodmoon-clown", true);
-        npc.data().set("nameplate-visible", false);
-        npc.data().set("always-use-name-hologram", false);
-        npc.data().setPersistent(NPC.Metadata.NAMEPLATE_VISIBLE, false);
         npc.setProtected(false);
-        configureClownTrait(); configureSkin(); configureSentinel(); spawnHiddenNpc();
-    }
-
-    private void configureClownTrait() {
-        ClownTrait trait = npc.getOrAddTrait(ClownTrait.class); trait.bind(this);
+         configureSkin(); configureCombat(); spawnHiddenNpc();
     }
 
     private void configureSkin() {
-        String skinName  = plugin.getConfigManager().getClownSkinName();
-        String texture   = plugin.getConfigManager().getClownSkinTexture();
-        String signature = plugin.getConfigManager().getClownSkinSignature();
-        if ((skinName == null || skinName.isBlank()) && (texture == null || texture.isBlank())) return;
-        try {
-            Class<? extends Trait> sc = Class.forName("net.citizensnpcs.trait.SkinTrait").asSubclass(Trait.class);
-            Trait st = npc.getOrAddTrait(sc);
-            sc.getMethod("setShouldUpdateSkins", boolean.class).invoke(st, false);
-            sc.getMethod("setFetchDefaultSkin",  boolean.class).invoke(st, false);
-            if (texture != null && !texture.isBlank() && signature != null && !signature.isBlank()) {
-                String key = (skinName == null || skinName.isBlank()) ? "bloodmoon_clown" : skinName;
-                sc.getMethod("setSkinPersistent", String.class, String.class, String.class).invoke(st, key, signature, texture);
-                return;
-            }
-            if (skinName != null && !skinName.isBlank()) {
-                sc.getMethod("setSkinName", String.class, boolean.class).invoke(st, skinName, true);
-            }
-        } catch (ReflectiveOperationException ex) {
-            plugin.getLogger().warning("Could not apply SkinTrait to clown NPC " + npc.getId() + ": " + ex.getMessage());
-        }
+        npc.setSkin(plugin.getConfigManager().getClownSkinName(),
+                plugin.getConfigManager().getClownSkinTexture(), plugin.getConfigManager().getClownSkinSignature());
     }
 
-    private void configureSentinel() {
-        SentinelTrait s = npc.getOrAddTrait(SentinelTrait.class);
-        s.setInvincible(false);
-        s.setHealth(plugin.getConfigManager().getClownHealth());
-        s.health = plugin.getConfigManager().getClownHealth();
-        s.damage = 0.0D; s.respawnTime = -1; s.chaseRange = 26.0D; s.armor = 0.0D;
-        s.protectFromIgnores = false;
-        s.allTargets = new SentinelTargetList(); s.addTarget("players");
-        s.allIgnores = new SentinelTargetList();
-        s.addIgnore("npcs");
-        npc.setProtected(false);
+    private void configureCombat() {
+        npc.configureCombat(plugin.getConfigManager().getClownHealth(), 0.0, 26.0);
     }
 
     private void spawnHiddenNpc() {
@@ -338,7 +297,7 @@ public final class ClownNPC {
             if (board == null) return;
             Team team = board.getTeam("bm_hidden_npc");
             if (team == null) { team = board.registerNewTeam("bm_hidden_npc"); team.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER); }
-            if (entity instanceof Player player) team.addEntry(player.getName());
+            if (entity instanceof LivingEntity player) team.addEntry(entity.getUniqueId().toString());
         } catch (Exception ex) { plugin.getLogger().warning("Could not hide clown nameplate: " + ex.getMessage()); }
     }
 
@@ -405,10 +364,8 @@ public final class ClownNPC {
     private void initializeCombat() {
         if (combatInitialized) return;
         combatInitialized = true; setNavigationSpeed(1.3F);
-        SentinelTrait s = npc.getOrAddTrait(SentinelTrait.class);
-        s.allTargets = new SentinelTargetList(); s.addTarget("players");
-        s.allIgnores = new SentinelTargetList();
-        s.addIgnore("npcs"); s.chaseRange = 26.0D; s.respawnTime = -1; s.damage = 0.0D;
+
+         npc.setChaseRange(26.0D);
     }
 
     private void tickCombat() {
@@ -583,7 +540,7 @@ public final class ClownNPC {
 
     private void updateCastingAnimation() {
         LivingEntity entity = getLivingEntity();
-        if (!(entity instanceof Player npcPlayer)) return;
+        if (!(entity instanceof LivingEntity npcPlayer)) return;
         if (target != null && target.isOnline() && !target.isDead()) npc.faceLocation(target.getEyeLocation());
         if (pendingAbility == null) return;
         switch (pendingAbility) {
@@ -600,7 +557,7 @@ public final class ClownNPC {
 
     private void resetCastingAnimation() {
         LivingEntity entity = getLivingEntity();
-        if (entity instanceof Player p) playCitizensPlayerAnimation(p, "STOP_USE_ITEM");
+        if (entity instanceof LivingEntity p) playBlockfolkAnimation(p, "STOP_USE_ITEM");
     }
 
     private void spawnGenericCastingRing(World world, Location base) {
@@ -670,27 +627,26 @@ public final class ClownNPC {
         if (stateTicks % 4 == 0) world.playSound(base, Sound.ENTITY_ILLUSIONER_PREPARE_BLINDNESS, 0.25F, 1.5F);
     }
 
-    private void animateFireworkVolley(Player p) {
-        if (stateTicks%4==0) { p.swingMainHand(); playCitizensPlayerAnimation(p,"ARM_SWING"); }
-        if (stateTicks%8==0) { p.swingOffHand();  playCitizensPlayerAnimation(p,"ARM_SWING_OFFHAND"); }
+    private void animateFireworkVolley(LivingEntity p) {
+        if (stateTicks%4==0) { p.swingMainHand(); playBlockfolkAnimation(p,"ARM_SWING"); }
+        if (stateTicks%8==0) { p.swingOffHand();  playBlockfolkAnimation(p,"ARM_SWING_OFFHAND"); }
     }
-    private void animateBunnySwarm(Player p) {
-        if (stateTicks%5==0) { p.swingMainHand(); playCitizensPlayerAnimation(p,"ARM_SWING"); }
-        if (stateTicks%3==0) { p.swingOffHand();  playCitizensPlayerAnimation(p,"ARM_SWING_OFFHAND"); }
+    private void animateBunnySwarm(LivingEntity p) {
+        if (stateTicks%5==0) { p.swingMainHand(); playBlockfolkAnimation(p,"ARM_SWING"); }
+        if (stateTicks%3==0) { p.swingOffHand();  playBlockfolkAnimation(p,"ARM_SWING_OFFHAND"); }
     }
-    private void animateHookPull(Player p) {
-        if (stateTicks%8==0) playCitizensPlayerAnimation(p,"START_USE_MAINHAND_ITEM");
-        if (stateTicks==castingDurationTicks-4) { p.swingMainHand(); playCitizensPlayerAnimation(p,"ARM_SWING"); }
+    private void animateHookPull(LivingEntity p) {
+        if (stateTicks%8==0) playBlockfolkAnimation(p,"START_USE_MAINHAND_ITEM");
+        if (stateTicks==castingDurationTicks-4) { p.swingMainHand(); playBlockfolkAnimation(p,"ARM_SWING"); }
     }
-    private void animateWindBurst(Player p) {
-        if (stateTicks%2==0) { p.swingMainHand(); playCitizensPlayerAnimation(p,"ARM_SWING"); }
-        if (stateTicks%3==0) { p.swingOffHand();  playCitizensPlayerAnimation(p,"ARM_SWING_OFFHAND"); }
+    private void animateWindBurst(LivingEntity p) {
+        if (stateTicks%2==0) { p.swingMainHand(); playBlockfolkAnimation(p,"ARM_SWING"); }
+        if (stateTicks%3==0) { p.swingOffHand();  playBlockfolkAnimation(p,"ARM_SWING_OFFHAND"); }
     }
-    private void animateChaosDash(Player p) {
-        if (stateTicks%3==0) { p.swingMainHand(); playCitizensPlayerAnimation(p,"ARM_SWING"); }
-        if (stateTicks%5==0) { p.swingOffHand();  playCitizensPlayerAnimation(p,"ARM_SWING_OFFHAND"); }
+    private void animateChaosDash(LivingEntity p) {
+        if (stateTicks%3==0) { p.swingMainHand(); playBlockfolkAnimation(p,"ARM_SWING"); }
+        if (stateTicks%5==0) { p.swingOffHand();  playBlockfolkAnimation(p,"ARM_SWING_OFFHAND"); }
     }
-
 
     private void spawnParrotCastingParticles(World world, Location base) {
         spawnGenericCastingRing(world, base);
@@ -699,9 +655,9 @@ public final class ClownNPC {
         if (stateTicks % 6 == 0) world.playSound(base, Sound.ENTITY_PARROT_AMBIENT, 0.4F, 1.3F);
     }
 
-    private void animateParrotBarrage(Player p) {
-        if (stateTicks%4==0) { p.swingMainHand(); playCitizensPlayerAnimation(p,"ARM_SWING"); }
-        if (stateTicks%7==0) { p.swingOffHand();  playCitizensPlayerAnimation(p,"ARM_SWING_OFFHAND"); }
+    private void animateParrotBarrage(LivingEntity p) {
+        if (stateTicks%4==0) { p.swingMainHand(); playBlockfolkAnimation(p,"ARM_SWING"); }
+        if (stateTicks%7==0) { p.swingOffHand();  playBlockfolkAnimation(p,"ARM_SWING_OFFHAND"); }
     }
     private void executeAbility(ClownAbility ability) {
         if (ability == null) return;
@@ -1128,7 +1084,6 @@ public final class ClownNPC {
             returnToCombat();
         });
     }
-
 
     private void castParrotBarrage() {
         Player player = ensureTarget(40.0D); LivingEntity caster = getLivingEntity();
@@ -1789,7 +1744,7 @@ public final class ClownNPC {
 
     private void updateLastKnownLocation() { LivingEntity e = getLivingEntity(); if (e != null) lastKnownLocation = e.getLocation().clone(); }
     private void setNpcVisible() { if (!npc.isSpawned()) npc.spawn(lastKnownLocation == null ? spawnLocation.clone() : lastKnownLocation.clone()); }
-    private void setNavigationSpeed(float speed) { if (npc.isSpawned()) npc.getNavigator().getDefaultParameters().speedModifier(speed); }
+    private void setNavigationSpeed(float speed) { if (npc.isSpawned()) npc.getNavigator().setSpeedModifier(speed); }
     private LivingEntity getLivingEntity() { return npc.isSpawned() && npc.getEntity() instanceof LivingEntity living ? living : null; }
 
     private void cancelControllerOnly() { if (controllerTask != null) { controllerTask.cancel(); controllerTask = null; } }
@@ -1932,13 +1887,8 @@ public final class ClownNPC {
         if (loud) location.getWorld().playSound(location, Sound.ENTITY_ENDERMAN_STARE, 0.35F, 0.7F);
     }
 
-    @SuppressWarnings({"rawtypes","unchecked"})
-    private void playCitizensPlayerAnimation(Player player, String animationName) {
-        try {
-            Class<? extends Enum> ac = Class.forName("net.citizensnpcs.util.PlayerAnimation").asSubclass(Enum.class);
-            Enum animation = Enum.valueOf(ac, animationName);
-            ac.getMethod("play", Player.class).invoke(animation, player);
-        } catch (ReflectiveOperationException ignored) {}
+    private void playBlockfolkAnimation(LivingEntity player, String animationName) {
+        npc.animate(animationName);
     }
 
     private void spawnDeathExplosion(World world, Location loc) {
@@ -2019,10 +1969,4 @@ public final class ClownNPC {
 
     private record AbilityWeight(ClownAbility ability, int weight) {}
 }
-
-
-
-
-
-
 

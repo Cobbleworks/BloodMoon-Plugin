@@ -3,8 +3,6 @@ package com.cobbleworks.bloodmoon.listeners;
 import com.cobbleworks.bloodmoon.BloodMoonPlugin;
 import java.util.Comparator;
 import java.util.Random;
-import net.citizensnpcs.api.event.CitizensEnableEvent;
-import net.citizensnpcs.api.event.NPCDeathEvent;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Monster;
@@ -32,11 +30,6 @@ public final class BloodMoonListener implements Listener {
     }
 
     @EventHandler
-    public void onCitizensEnable(CitizensEnableEvent event) {
-        plugin.getNPCManager().initializeCitizens();
-    }
-
-    @EventHandler
     public void onTimeSkip(TimeSkipEvent event) {
         World world = event.getWorld();
         long oldTime = world.getTime();
@@ -50,14 +43,6 @@ public final class BloodMoonListener implements Listener {
     public void onWorldLoad(WorldLoadEvent event) {
         if (plugin.getBloodMoonManager().isConfiguredWorld(event.getWorld())) {
             plugin.getLogger().fine("BloodMoon world registered: " + event.getWorld().getName());
-        }
-    }
-
-    @EventHandler
-    public void onNpcDeath(NPCDeathEvent event) {
-        if (plugin.getNPCManager().getVampire(event.getNPC()) != null) {
-            event.setDroppedExp(0);
-            event.getDrops().clear();
         }
     }
 
@@ -134,5 +119,4 @@ public final class BloodMoonListener implements Listener {
         return oldTime > newTime && newTime >= NIGHT_START;
     }
 }
-
 

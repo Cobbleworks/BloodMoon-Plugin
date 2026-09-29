@@ -1,8 +1,8 @@
 package com.cobbleworks.bloodmoon.mobs;
 
+import com.cobbleworks.bloodmoon.npc.BlockfolkNpc;
+
 import com.cobbleworks.bloodmoon.BloodMoonPlugin;
-import com.cobbleworks.bloodmoon.traits.ZombieTrait;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -10,8 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import net.citizensnpcs.api.npc.NPC;
-import net.citizensnpcs.api.trait.Trait;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
@@ -39,9 +37,6 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 import org.bukkit.util.Vector;
-import org.mcmonkey.sentinel.SentinelTrait;
-import org.mcmonkey.sentinel.events.SentinelAttackEvent;
-import org.mcmonkey.sentinel.targeting.SentinelTargetList;
 
 /**
  * Blood Moon Zombie boss controller.
@@ -186,7 +181,7 @@ public final class ZombieNPC {
     // -------------------------------------------------------------------------
 
     private final BloodMoonPlugin plugin;
-    private final NPC npc;
+    private final BlockfolkNpc npc;
     private final Location spawnLocation;
     private final Random random;
     private final Map<ZombieAbility, Integer> cooldowns;
@@ -220,7 +215,7 @@ public final class ZombieNPC {
     // Constructor
     // -------------------------------------------------------------------------
 
-    public ZombieNPC(BloodMoonPlugin plugin, NPC npc, Location spawnLocation, Player initialTarget) {
+    public ZombieNPC(BloodMoonPlugin plugin, BlockfolkNpc npc, Location spawnLocation, Player initialTarget) {
         this.plugin          = plugin;
         this.npc             = npc;
         this.spawnLocation   = spawnLocation.clone();
@@ -241,7 +236,7 @@ public final class ZombieNPC {
     // Public API
     // -------------------------------------------------------------------------
 
-    public NPC getNpc() {
+    public BlockfolkNpc getNpc() {
         return npc;
     }
 
@@ -285,7 +280,7 @@ public final class ZombieNPC {
     }
 
     /**
-     * Called by Sentinel on melee attack.
+     * Called by BloodMoon combat on melee attack.
      * Applies the 15 % outgoing-damage debuff to the player.
      */
     public void onMeleeHit(Player player) {
@@ -300,9 +295,8 @@ public final class ZombieNPC {
             Sound.ENTITY_ZOMBIE_ATTACK_IRON_DOOR, 0.7F, 0.8F);
     }
 
-    public void handleSentinelAttack(SentinelAttackEvent event) {
-        event.setCancelled(true);
-        if (!(event.getTarget() instanceof Player player)) {
+    public void onCombatTarget(Player player) {
+        if (player == null) {
             return;
         }
         if (state == ZombieState.DEAD) {
@@ -467,82 +461,31 @@ public final class ZombieNPC {
     }
 
     // -------------------------------------------------------------------------
-    // NPC setup
+    // BlockfolkNpc setup
     // -------------------------------------------------------------------------
 
     private void configureNpc() {
-        npc.data().set("bloodmoon-zombie", true);
-        npc.data().set("nameplate-visible", false);
-        npc.data().set("always-use-name-hologram", false);
-        npc.data().setPersistent(NPC.Metadata.NAMEPLATE_VISIBLE, false);
         npc.setProtected(false);
-        configureZombieTrait();
+
         configureSkin();
-        configureSentinel();
+        configureCombat();
         spawnNpc();
     }
 
-    private void configureZombieTrait() {
-        ZombieTrait trait = npc.getOrAddTrait(ZombieTrait.class);
-        trait.bind(this);
-    }
-
     private void configureSkin() {
-        String skinName  = plugin.getConfigManager().getZombieSkinName();
-        String texture   = plugin.getConfigManager().getZombieSkinTexture();
-        String signature = plugin.getConfigManager().getZombieSkinSignature();
-        if ((skinName == null || skinName.isBlank()) && (texture == null || texture.isBlank())) {
-            return;
-        }
-        try {
-            Class<? extends Trait> skinTraitClass =
-                Class.forName("net.citizensnpcs.trait.SkinTrait").asSubclass(Trait.class);
-            Trait skinTrait = npc.getOrAddTrait(skinTraitClass);
-            Method setShouldUpdateSkins = skinTraitClass.getMethod("setShouldUpdateSkins", boolean.class);
-            Method setFetchDefaultSkin  = skinTraitClass.getMethod("setFetchDefaultSkin",  boolean.class);
-            setShouldUpdateSkins.invoke(skinTrait, false);
-            setFetchDefaultSkin.invoke(skinTrait, false);
-
-            if (texture != null && !texture.isBlank() && signature != null && !signature.isBlank()) {
-                Method setSkinPersistent = skinTraitClass.getMethod(
-                    "setSkinPersistent", String.class, String.class, String.class);
-                String cacheKey = (skinName == null || skinName.isBlank())
-                    ? "bloodmoon_selected_zombie" : skinName;
-                setSkinPersistent.invoke(skinTrait, cacheKey, signature, texture);
-                return;
-            }
-            if (skinName != null && !skinName.isBlank()) {
-                Method setSkinName = skinTraitClass.getMethod("setSkinName", String.class, boolean.class);
-                setSkinName.invoke(skinTrait, skinName, true);
-            }
-        } catch (ReflectiveOperationException ex) {
-            plugin.getLogger().warning(
-                "Could not apply Citizens SkinTrait to zombie NPC " + npc.getId() + ": " + ex.getMessage());
-        }
+        npc.setSkin(plugin.getConfigManager().getZombieSkinName(),
+                plugin.getConfigManager().getZombieSkinTexture(), plugin.getConfigManager().getZombieSkinSignature());
     }
 
-    private void configureSentinel() {
-        SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
-        sentinel.setInvincible(false);
-        sentinel.setHealth(plugin.getConfigManager().getZombieHealth());
-        sentinel.health      = plugin.getConfigManager().getZombieHealth();
-        sentinel.damage      = 0.0D;
-        sentinel.respawnTime = -1;
-        sentinel.chaseRange  = 60.0D;
-        sentinel.armor       = 0.15D;
-        sentinel.protectFromIgnores = false;
-        sentinel.allTargets  = new SentinelTargetList();
-        sentinel.addTarget("players");
-        sentinel.allIgnores = new SentinelTargetList();
-        sentinel.addIgnore("npcs");
-        npc.setProtected(false);
+    private void configureCombat() {
+        npc.configureCombat(plugin.getConfigManager().getZombieHealth(), 0.15, 60.0);
     }
 
     private void spawnNpc() {
         if (!npc.isSpawned()) {
             npc.spawn(spawnLocation.clone());
         }
-        npc.getNavigator().getDefaultParameters().speedModifier(1.1F).stationaryTicks(-1).avoidWater(false);
+        npc.getNavigator().setSpeedModifier(1.1F);
         LivingEntity entity = getLivingEntity();
         if (entity != null) {
             applyConfiguredHealth(entity);
@@ -564,8 +507,8 @@ public final class ZombieNPC {
                 team = board.registerNewTeam("bm_hidden_npc");
                 team.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER);
             }
-            if (entity instanceof Player player) {
-                team.addEntry(player.getName());
+            if (entity instanceof LivingEntity player) {
+                team.addEntry(entity.getUniqueId().toString());
             }
         } catch (Exception ex) {
             plugin.getLogger().warning("Could not hide zombie nameplate: " + ex.getMessage());
@@ -697,7 +640,7 @@ public final class ZombieNPC {
             setNavigationSpeed(0.90F);
             npc.getNavigator().setTarget(rageTarget, true);
             if (stateTicks % 12 == 0) {
-                lockSentinelChase(rageTarget, 42.0D);
+                lockCombatChase(rageTarget, 42.0D);
             }
         }
     }
@@ -727,7 +670,7 @@ public final class ZombieNPC {
         }
         npc.getNavigator().setTarget(player, true);
         if (stateTicks % 8 == 0) {
-            lockSentinelChase(player, 48.0D);
+            lockCombatChase(player, 48.0D);
         }
         npc.faceLocation(player.getEyeLocation());
 
@@ -1575,7 +1518,7 @@ public final class ZombieNPC {
             }
         }
 
-        // Lingering poison cloud — manual runnable instead of AreaEffectCloud to avoid poisoning this NPC
+        // Lingering poison cloud — manual runnable instead of AreaEffectCloud to avoid poisoning this BlockfolkNpc
         final Location cloudLoc = loc.clone().add(0D, 0.3D, 0D);
         final double cloudRadiusSq = 16.0D;
         new BukkitRunnable() {
@@ -1886,13 +1829,9 @@ public final class ZombieNPC {
             return;
         }
         combatInitialized = true;
-        SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
-        sentinel.allTargets  = new SentinelTargetList();
-        sentinel.addTarget("players");
-        sentinel.allIgnores = new SentinelTargetList();
-        sentinel.addIgnore("npcs");
-        sentinel.chaseRange  = 32.0D;
-        sentinel.respawnTime = -1;
+
+        npc.setChaseRange(32.0D);
+
     }
 
     private void updateLastKnownLocation() {
@@ -1904,24 +1843,19 @@ public final class ZombieNPC {
 
     private void setNavigationSpeed(float speed) {
         try {
-            npc.getNavigator().getDefaultParameters().speedModifier(speed);
+            npc.getNavigator().setSpeedModifier(speed);
         } catch (Exception ignored) {
         }
     }
 
-    private void lockSentinelChase(Player player, double chaseRange) {
+    private void lockCombatChase(Player player, double chaseRange) {
         if (player == null || !player.isOnline() || player.isDead()) {
             return;
         }
         try {
-            SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
-            sentinel.allTargets = new SentinelTargetList();
-            sentinel.addTarget("players");
-            sentinel.addTarget("player:" + player.getName());
-            sentinel.allIgnores = new SentinelTargetList();
-            sentinel.addIgnore("npcs");
-            sentinel.chaseRange = Math.max(sentinel.chaseRange, chaseRange);
-            sentinel.respawnTime = -1;
+
+            npc.setChaseRange(Math.max(npc.getChaseRange(), chaseRange));
+
         } catch (Exception ignored) {
         }
     }
@@ -2082,13 +2016,13 @@ public final class ZombieNPC {
     }
 
     // =========================================================================
-    // Casting animation system  (Citizens PlayerAnimation via reflection)
+    // Casting animation system  (Blockfolk mannequin animations)
     // =========================================================================
 
     /** Called every tick during CASTING; faces target and dispatches arm animations. */
     private void updateCastingAnimation() {
         LivingEntity entity = getLivingEntity();
-        if (!(entity instanceof Player npcPlayer)) {
+        if (!(entity instanceof LivingEntity npcPlayer)) {
             return;
         }
         if (target != null && target.isOnline() && !target.isDead()) {
@@ -2105,75 +2039,66 @@ public final class ZombieNPC {
         }
     }
 
-    /** Acid-spit cast: NPC holds item up to aim, then releases with a main-hand swing. */
-    private void animateAcidSpitCasting(Player p) {
+    /** Acid-spit cast: BlockfolkNpc holds item up to aim, then releases with a main-hand swing. */
+    private void animateAcidSpitCasting(LivingEntity p) {
         if (stateTicks % 6 == 0) {
-            playCitizensPlayerAnimation(p, "START_USE_MAINHAND_ITEM");
+            playBlockfolkAnimation(p, "START_USE_MAINHAND_ITEM");
         }
         if (stateTicks == castingTicks - 2) {
             p.swingMainHand();
-            playCitizensPlayerAnimation(p, "ARM_SWING");
+            playBlockfolkAnimation(p, "ARM_SWING");
         }
     }
 
     /** Rot-zone cast: two-handed incantation – slow, deliberate arm swings. */
-    private void animateRotZoneCasting(Player p) {
+    private void animateRotZoneCasting(LivingEntity p) {
         if (stateTicks % 5 == 0) {
-            playCitizensPlayerAnimation(p, "START_USE_MAINHAND_ITEM");
-            playCitizensPlayerAnimation(p, "START_USE_OFFHAND_ITEM");
+            playBlockfolkAnimation(p, "START_USE_MAINHAND_ITEM");
+            playBlockfolkAnimation(p, "START_USE_OFFHAND_ITEM");
         }
         if (stateTicks % 10 == 0) {
             p.swingMainHand();
             p.swingOffHand();
-            playCitizensPlayerAnimation(p, "ARM_SWING");
-            playCitizensPlayerAnimation(p, "ARM_SWING_OFFHAND");
+            playBlockfolkAnimation(p, "ARM_SWING");
+            playBlockfolkAnimation(p, "ARM_SWING_OFFHAND");
         }
     }
 
     /** Power-leap cast: aggressive rapid arm swings as the zombie winds up. */
-    private void animatePowerLeapCasting(Player p) {
+    private void animatePowerLeapCasting(LivingEntity p) {
         if (stateTicks % 3 == 0) {
             p.swingMainHand();
-            playCitizensPlayerAnimation(p, "ARM_SWING");
+            playBlockfolkAnimation(p, "ARM_SWING");
         }
         if (stateTicks % 5 == 0) {
             p.swingOffHand();
-            playCitizensPlayerAnimation(p, "ARM_SWING_OFFHAND");
+            playBlockfolkAnimation(p, "ARM_SWING_OFFHAND");
         }
     }
 
     /** Charge-leap cast: rapid alternating swings with item hold – kinetic wind-up. */
-    private void animateChargeLeapCasting(Player p) {
+    private void animateChargeLeapCasting(LivingEntity p) {
         if (stateTicks % 2 == 0) {
             p.swingMainHand();
-            playCitizensPlayerAnimation(p, "ARM_SWING");
+            playBlockfolkAnimation(p, "ARM_SWING");
         }
         if (stateTicks % 4 == 0) {
             p.swingOffHand();
-            playCitizensPlayerAnimation(p, "ARM_SWING_OFFHAND");
-            playCitizensPlayerAnimation(p, "START_USE_MAINHAND_ITEM");
+            playBlockfolkAnimation(p, "ARM_SWING_OFFHAND");
+            playBlockfolkAnimation(p, "START_USE_MAINHAND_ITEM");
         }
     }
 
-    /** Clears any held-item animation on the NPC after a cast completes. */
+    /** Clears any held-item animation on the BlockfolkNpc after a cast completes. */
     private void resetCastingAnimation() {
         LivingEntity entity = getLivingEntity();
-        if (entity instanceof Player p) {
-            playCitizensPlayerAnimation(p, "STOP_USE_ITEM");
+        if (entity instanceof LivingEntity p) {
+            playBlockfolkAnimation(p, "STOP_USE_ITEM");
         }
     }
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
-    private void playCitizensPlayerAnimation(Player player, String animationName) {
-        try {
-            Class<? extends Enum> animationClass =
-                Class.forName("net.citizensnpcs.util.PlayerAnimation").asSubclass(Enum.class);
-            Enum animation = Enum.valueOf(animationClass, animationName);
-            Method playMethod = animationClass.getMethod("play", Player.class);
-            playMethod.invoke(animation, player);
-        } catch (ReflectiveOperationException ignored) {
-            // Citizens implementation classes are not on the compile classpath; hand animation falls back to Bukkit swings.
-        }
+    private void playBlockfolkAnimation(LivingEntity player, String animationName) {
+        npc.animate(animationName);
     }
 
     // =========================================================================
@@ -2181,7 +2106,7 @@ public final class ZombieNPC {
     // =========================================================================
 
     /**
-     * Called by NPCListener whenever the zombie NPC takes damage.
+     * Called by NPCListener whenever the zombie BlockfolkNpc takes damage.
      * Snaps the zombie to COMBAT if it is not already engaged, and emits a
      * short burst of infected particles as a visual hurt-reaction.
      */
@@ -2229,7 +2154,7 @@ public final class ZombieNPC {
     // Visibility utility
     // =========================================================================
 
-    /** Ensures the NPC is spawned and visible in the world. */
+    /** Ensures the BlockfolkNpc is spawned and visible in the world. */
     private void setNpcVisible() {
         if (!npc.isSpawned()) {
             npc.spawn(lastKnownLocation == null
@@ -2242,10 +2167,4 @@ public final class ZombieNPC {
         }
     }
 }
-
-
-
-
-
-
 

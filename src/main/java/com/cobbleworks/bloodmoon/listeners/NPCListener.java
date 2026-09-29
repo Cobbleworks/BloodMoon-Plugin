@@ -1,5 +1,9 @@
 package com.cobbleworks.bloodmoon.listeners;
 
+import com.cobbleworks.bloodmoon.npc.BlockfolkNpc;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDeathEvent;
+
 import com.cobbleworks.bloodmoon.BloodMoonPlugin;
 import com.cobbleworks.bloodmoon.mobs.ClownNPC;
 import com.cobbleworks.bloodmoon.mobs.GhostNPC;
@@ -8,16 +12,6 @@ import com.cobbleworks.bloodmoon.mobs.VampireNPC;
 import com.cobbleworks.bloodmoon.mobs.WerewolfNPC;
 import com.cobbleworks.bloodmoon.mobs.WitchNPC;
 import com.cobbleworks.bloodmoon.mobs.ZombieNPC;
-import com.cobbleworks.bloodmoon.traits.ClownTrait;
-import com.cobbleworks.bloodmoon.traits.GhostTrait;
-import com.cobbleworks.bloodmoon.traits.ScarecrowTrait;
-import com.cobbleworks.bloodmoon.traits.VampireTrait;
-import com.cobbleworks.bloodmoon.traits.WerewolfTrait;
-import com.cobbleworks.bloodmoon.traits.WitchTrait;
-import com.cobbleworks.bloodmoon.traits.ZombieTrait;
-import net.citizensnpcs.api.event.NPCDamageEvent;
-import net.citizensnpcs.api.event.NPCDeathEvent;
-import net.citizensnpcs.api.npc.NPC;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.Sound;
@@ -26,10 +20,9 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
-import org.mcmonkey.sentinel.events.SentinelAttackEvent;
 
 /**
- * Handles Citizens and Sentinel events for Blood Moon NPCs.
+ * Handles Bukkit damage and death events for Blood Moon NPCs.
  */
 public final class NPCListener implements Listener {
 
@@ -39,72 +32,76 @@ public final class NPCListener implements Listener {
         this.plugin = plugin;
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onNpcDamage(NPCDamageEvent event) {
-        VampireNPC vampire = plugin.getNPCManager().getVampire(event.getNPC());
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onNpcDamage(EntityDamageEvent event) {
+        BlockfolkNpc npc = resolveBloodMoonNpc(event.getEntity());
+        if (npc == null) return;
+        event.setDamage(npc.reduceArmorDamage(event.getDamage()));
+
+        VampireNPC vampire = plugin.getNPCManager().getVampire(npc);
         if (vampire != null) {
             event.setDamage(vampire.reduceIncomingDamage(event.getDamage()));
-            if (event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
-                event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_ZOMBIE_VILLAGER_HURT, 0.8F, 0.65F);
+            if (npc.isSpawned() && npc.getEntity() != null) {
+                npc.getEntity().getWorld().playSound(npc.getEntity().getLocation(), Sound.ENTITY_ZOMBIE_VILLAGER_HURT, 0.8F, 0.65F);
             }
             return;
         }
 
-        ClownNPC clown = plugin.getNPCManager().getClown(event.getNPC());
-        if (clown != null && event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
-            event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_WITCH_HURT, 0.9F, 1.2F);
+        ClownNPC clown = plugin.getNPCManager().getClown(npc);
+        if (clown != null && npc.isSpawned() && npc.getEntity() != null) {
+            npc.getEntity().getWorld().playSound(npc.getEntity().getLocation(), Sound.ENTITY_WITCH_HURT, 0.9F, 1.2F);
             clown.onTakeDamage();
             return;
         }
 
-        ZombieNPC zombie = plugin.getNPCManager().getZombie(event.getNPC());
+        ZombieNPC zombie = plugin.getNPCManager().getZombie(npc);
         if (zombie != null) {
-            if (event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
-                event.getNPC().getEntity().getWorld().playSound(
-                    event.getNPC().getEntity().getLocation(),
+            if (npc.isSpawned() && npc.getEntity() != null) {
+                npc.getEntity().getWorld().playSound(
+                    npc.getEntity().getLocation(),
                     Sound.ENTITY_ZOMBIE_HURT, 0.9F, 0.8F);
             }
             zombie.onTakeDamage();
             return;
         }
 
-        WitchNPC witch = plugin.getNPCManager().getWitch(event.getNPC());
-        if (witch != null && event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
-            event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_WITCH_HURT, 0.95F, 1.05F);
+        WitchNPC witch = plugin.getNPCManager().getWitch(npc);
+        if (witch != null && npc.isSpawned() && npc.getEntity() != null) {
+            npc.getEntity().getWorld().playSound(npc.getEntity().getLocation(), Sound.ENTITY_WITCH_HURT, 0.95F, 1.05F);
             witch.onTakeDamage(event.getDamage());
             return;
         }
 
-        ScarecrowNPC scarecrow = plugin.getNPCManager().getScarecrow(event.getNPC());
-        if (scarecrow != null && event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
-            event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_SKELETON_HURT, 0.95F, 0.85F);
+        ScarecrowNPC scarecrow = plugin.getNPCManager().getScarecrow(npc);
+        if (scarecrow != null && npc.isSpawned() && npc.getEntity() != null) {
+            npc.getEntity().getWorld().playSound(npc.getEntity().getLocation(), Sound.ENTITY_SKELETON_HURT, 0.95F, 0.85F);
             scarecrow.onTakeDamage();
             return;
         }
 
-        GhostNPC ghost = plugin.getNPCManager().getGhost(event.getNPC());
-        if (ghost != null && event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
+        GhostNPC ghost = plugin.getNPCManager().getGhost(npc);
+        if (ghost != null && npc.isSpawned() && npc.getEntity() != null) {
             if (ghost.isUntargetable()) {
                 event.setCancelled(true);
                 return;
             }
             event.setDamage(ghost.reduceIncomingDamage(event.getDamage()));
             ghost.onTakeDamage(event.getDamage());
-            event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_ALLAY_HURT, 0.85F, 0.6F);
+            npc.getEntity().getWorld().playSound(npc.getEntity().getLocation(), Sound.ENTITY_ALLAY_HURT, 0.85F, 0.6F);
             return;
         }
 
-        WerewolfNPC werewolf = plugin.getNPCManager().getWerewolf(event.getNPC());
-        if (werewolf != null && event.getNPC().isSpawned() && event.getNPC().getEntity() != null) {
+        WerewolfNPC werewolf = plugin.getNPCManager().getWerewolf(npc);
+        if (werewolf != null && npc.isSpawned() && npc.getEntity() != null) {
             werewolf.onTakeDamage();
-            event.getNPC().getEntity().getWorld().playSound(event.getNPC().getEntity().getLocation(), Sound.ENTITY_WOLF_HURT, 0.95F, 0.75F);
+            npc.getEntity().getWorld().playSound(npc.getEntity().getLocation(), Sound.ENTITY_WOLF_HURT, 0.95F, 0.75F);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
-        NPC attacker = resolveBloodMoonNpc(event.getDamager());
-        NPC victim = resolveBloodMoonNpc(event.getEntity());
+        BlockfolkNpc attacker = resolveBloodMoonNpc(event.getDamager());
+        BlockfolkNpc victim = resolveBloodMoonNpc(event.getEntity());
         if (attacker == null || victim == null || attacker.equals(victim)) {
             return;
         }
@@ -117,8 +114,11 @@ public final class NPCListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
-    public void onNpcDeath(NPCDeathEvent event) {
-        VampireNPC vampire = plugin.getNPCManager().getVampire(event.getNPC());
+    public void onNpcDeath(EntityDeathEvent event) {
+        BlockfolkNpc npc = resolveBloodMoonNpc(event.getEntity());
+        if (npc == null) return;
+
+        VampireNPC vampire = plugin.getNPCManager().getVampire(npc);
         if (vampire != null) {
             event.getDrops().clear();
             event.setDroppedExp(0);
@@ -126,7 +126,7 @@ public final class NPCListener implements Listener {
             return;
         }
 
-        ClownNPC clown = plugin.getNPCManager().getClown(event.getNPC());
+        ClownNPC clown = plugin.getNPCManager().getClown(npc);
         if (clown != null) {
             event.getDrops().clear();
             event.setDroppedExp(0);
@@ -134,7 +134,7 @@ public final class NPCListener implements Listener {
             return;
         }
 
-        ZombieNPC zombie = plugin.getNPCManager().getZombie(event.getNPC());
+        ZombieNPC zombie = plugin.getNPCManager().getZombie(npc);
         if (zombie != null) {
             event.getDrops().clear();
             event.setDroppedExp(0);
@@ -142,7 +142,7 @@ public final class NPCListener implements Listener {
             return;
         }
 
-        WitchNPC witch = plugin.getNPCManager().getWitch(event.getNPC());
+        WitchNPC witch = plugin.getNPCManager().getWitch(npc);
         if (witch != null) {
             event.getDrops().clear();
             event.setDroppedExp(0);
@@ -150,7 +150,7 @@ public final class NPCListener implements Listener {
             return;
         }
 
-        ScarecrowNPC scarecrow = plugin.getNPCManager().getScarecrow(event.getNPC());
+        ScarecrowNPC scarecrow = plugin.getNPCManager().getScarecrow(npc);
         if (scarecrow != null) {
             event.getDrops().clear();
             event.setDroppedExp(0);
@@ -158,7 +158,7 @@ public final class NPCListener implements Listener {
             return;
         }
 
-        GhostNPC ghost = plugin.getNPCManager().getGhost(event.getNPC());
+        GhostNPC ghost = plugin.getNPCManager().getGhost(npc);
         if (ghost != null) {
             event.getDrops().clear();
             event.setDroppedExp(0);
@@ -166,51 +166,13 @@ public final class NPCListener implements Listener {
             return;
         }
 
-        WerewolfNPC werewolf = plugin.getNPCManager().getWerewolf(event.getNPC());
+        WerewolfNPC werewolf = plugin.getNPCManager().getWerewolf(npc);
         if (werewolf != null) {
             event.getDrops().clear();
             event.setDroppedExp(0);
             werewolf.startDeathSequence();
         }
 
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onSentinelAttack(SentinelAttackEvent event) {
-        if (event.getNPC().hasTrait(VampireTrait.class)) {
-            VampireTrait trait = event.getNPC().getOrAddTrait(VampireTrait.class);
-            trait.handleSentinelAttack(event);
-            return;
-        }
-        if (event.getNPC().hasTrait(ClownTrait.class)) {
-            ClownTrait trait = event.getNPC().getOrAddTrait(ClownTrait.class);
-            trait.handleSentinelAttack(event);
-            return;
-        }
-        if (event.getNPC().hasTrait(ZombieTrait.class)) {
-            ZombieTrait trait = event.getNPC().getOrAddTrait(ZombieTrait.class);
-            trait.handleSentinelAttack(event);
-            return;
-        }
-        if (event.getNPC().hasTrait(WitchTrait.class)) {
-            WitchTrait trait = event.getNPC().getOrAddTrait(WitchTrait.class);
-            trait.handleSentinelAttack(event);
-            return;
-        }
-        if (event.getNPC().hasTrait(ScarecrowTrait.class)) {
-            ScarecrowTrait trait = event.getNPC().getOrAddTrait(ScarecrowTrait.class);
-            trait.handleSentinelAttack(event);
-            return;
-        }
-        if (event.getNPC().hasTrait(GhostTrait.class)) {
-            GhostTrait trait = event.getNPC().getOrAddTrait(GhostTrait.class);
-            trait.handleSentinelAttack(event);
-            return;
-        }
-        if (event.getNPC().hasTrait(WerewolfTrait.class)) {
-            WerewolfTrait trait = event.getNPC().getOrAddTrait(WerewolfTrait.class);
-            trait.handleSentinelAttack(event);
-        }
     }
 
     /**
@@ -232,11 +194,12 @@ public final class NPCListener implements Listener {
         if (resolveBloodMoonNpc(event.getEntity()) == null) return;
         Entity damager = event.getDamager();
         if (damager instanceof Player) return;
+        if (damager instanceof org.bukkit.entity.Projectile projectile && projectile.getShooter() instanceof Player) return;
         if (resolveBloodMoonNpc(damager) != null) return;
         event.setCancelled(true);
     }
 
-    private NPC resolveBloodMoonNpc(Entity entity) {
+    private BlockfolkNpc resolveBloodMoonNpc(Entity entity) {
         if (entity == null) {
             return null;
         }
@@ -268,5 +231,4 @@ public final class NPCListener implements Listener {
         return werewolf == null ? null : werewolf.getNpc();
     }
 }
-
 

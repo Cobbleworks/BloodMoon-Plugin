@@ -1,5 +1,8 @@
 package com.cobbleworks.bloodmoon.managers;
 
+import com.cobbleworks.bloodmoon.npc.BlockfolkNpc;
+import com.cobbleworks.bloodmoon.npc.BlockfolkBridge;
+
 import com.cobbleworks.bloodmoon.BloodMoonPlugin;
 import com.cobbleworks.bloodmoon.mobs.ClownNPC;
 import com.cobbleworks.bloodmoon.mobs.GhostNPC;
@@ -8,13 +11,6 @@ import com.cobbleworks.bloodmoon.mobs.VampireNPC;
 import com.cobbleworks.bloodmoon.mobs.WerewolfNPC;
 import com.cobbleworks.bloodmoon.mobs.WitchNPC;
 import com.cobbleworks.bloodmoon.mobs.ZombieNPC;
-import com.cobbleworks.bloodmoon.traits.ClownTrait;
-import com.cobbleworks.bloodmoon.traits.GhostTrait;
-import com.cobbleworks.bloodmoon.traits.ScarecrowTrait;
-import com.cobbleworks.bloodmoon.traits.VampireTrait;
-import com.cobbleworks.bloodmoon.traits.WerewolfTrait;
-import com.cobbleworks.bloodmoon.traits.WitchTrait;
-import com.cobbleworks.bloodmoon.traits.ZombieTrait;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -25,11 +21,6 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
-import net.citizensnpcs.api.CitizensAPI;
-import net.citizensnpcs.api.npc.NPC;
-import net.citizensnpcs.api.npc.NPCRegistry;
-import net.citizensnpcs.api.trait.TraitFactory;
-import net.citizensnpcs.api.trait.TraitInfo;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -41,12 +32,9 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Zombie;
 import org.bukkit.util.RayTraceResult;
-import org.mcmonkey.sentinel.SentinelIntegration;
-import org.mcmonkey.sentinel.SentinelPlugin;
-import org.mcmonkey.sentinel.SentinelTrait;
 
 /**
- * Creates, tracks, and cleans vampire Citizens NPCs and disguise bats.
+ * Creates, tracks, and cleans vampire Blockfolk NPCs and disguise bats.
  */
 public final class NPCManager {
 
@@ -62,49 +50,24 @@ public final class NPCManager {
     private final Map<Integer, WerewolfNPC> werewolves = new HashMap<>();
     private final Map<UUID, Location> shamblingZombies = new HashMap<>();
     private final Random random = new Random();
-    private boolean citizensInitialized;
-    private boolean sentinelIntegrationRegistered;
+    private boolean blockfolkInitialized;
+    private BlockfolkBridge blockfolk;
+
+    public BlockfolkBridge getBlockfolk() { return blockfolk; }
 
     public NPCManager(BloodMoonPlugin plugin) {
         this.plugin = plugin;
     }
 
-    public void initializeCitizens() {
-        if (!isCitizensReady()) {
-            return;
-        }
-
-        TraitFactory factory = CitizensAPI.getTraitFactory();
-        if (factory != null && factory.getTraitClass("bloodmoon_vampire") == null) {
-            factory.registerTrait(TraitInfo.create(VampireTrait.class).withName("bloodmoon_vampire"));
-        }
-        if (factory != null && factory.getTraitClass("bloodmoon_clown") == null) {
-            factory.registerTrait(TraitInfo.create(ClownTrait.class).withName("bloodmoon_clown"));
-        }
-        if (factory != null && factory.getTraitClass("bloodmoon_zombie") == null) {
-            factory.registerTrait(TraitInfo.create(ZombieTrait.class).withName("bloodmoon_zombie"));
-        }
-        if (factory != null && factory.getTraitClass("bloodmoon_witch") == null) {
-            factory.registerTrait(TraitInfo.create(WitchTrait.class).withName("bloodmoon_witch"));
-        }
-        if (factory != null && factory.getTraitClass("bloodmoon_scarecrow") == null) {
-            factory.registerTrait(TraitInfo.create(ScarecrowTrait.class).withName("bloodmoon_scarecrow"));
-        }
-        if (factory != null && factory.getTraitClass("bloodmoon_ghost") == null) {
-            factory.registerTrait(TraitInfo.create(GhostTrait.class).withName("bloodmoon_ghost"));
-        }
-        if (factory != null && factory.getTraitClass("bloodmoon_werewolf") == null) {
-            factory.registerTrait(TraitInfo.create(WerewolfTrait.class).withName("bloodmoon_werewolf"));
-        }
-
-        registerSentinelIntegration();
-        citizensInitialized = true;
+    public void initializeBlockfolk() {
+        if (blockfolk != null) return;
+        blockfolk = new BlockfolkBridge(plugin);
+        blockfolkInitialized = true;
+        plugin.getServer().getScheduler().runTaskTimer(plugin, this::updateCombatTargets, 30L, 30L);
     }
 
-    public boolean isCitizensReady() {
-        return CitizensAPI.hasImplementation()
-            && CitizensAPI.getNPCRegistry() != null
-            && CitizensAPI.getTraitFactory() != null;
+    public boolean isBlockfolkReady() {
+        return blockfolk != null;
     }
 
     public Optional<VampireNPC> spawnVampireNear(Player player) {
@@ -206,19 +169,19 @@ public final class NPCManager {
     }
 
     public Optional<VampireNPC> spawnVampire(Location location, Player initialTarget) {
-        if (!citizensInitialized) {
-            initializeCitizens();
+        if (!blockfolkInitialized) {
+            initializeBlockfolk();
         }
-        if (!isCitizensReady() || location == null || location.getWorld() == null) {
+        if (!isBlockfolkReady() || location == null || location.getWorld() == null) {
             return Optional.empty();
         }
 
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        BlockfolkBridge registry = plugin.getNPCManager().getBlockfolk();
         if (registry == null) {
             return Optional.empty();
         }
 
-        NPC npc = registry.createNPC(EntityType.PLAYER, "§4Vampire");
+        BlockfolkNpc npc = registry.createNpc("§4Vampire");
         VampireNPC vampire = new VampireNPC(plugin, npc, location, initialTarget);
         activeNpcIds.add(npc.getId());
         vampires.put(npc.getId(), vampire);
@@ -226,19 +189,19 @@ public final class NPCManager {
     }
 
     public Optional<ClownNPC> spawnClown(Location location) {
-        if (!citizensInitialized) {
-            initializeCitizens();
+        if (!blockfolkInitialized) {
+            initializeBlockfolk();
         }
-        if (!isCitizensReady() || location == null || location.getWorld() == null) {
+        if (!isBlockfolkReady() || location == null || location.getWorld() == null) {
             return Optional.empty();
         }
 
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        BlockfolkBridge registry = plugin.getNPCManager().getBlockfolk();
         if (registry == null) {
             return Optional.empty();
         }
 
-        NPC npc = registry.createNPC(EntityType.PLAYER, "§dClown");
+        BlockfolkNpc npc = registry.createNpc("§dClown");
         ClownNPC clown = new ClownNPC(plugin, npc, location);
         activeNpcIds.add(npc.getId());
         clowns.put(npc.getId(), clown);
@@ -250,19 +213,19 @@ public final class NPCManager {
     }
 
     public Optional<WitchNPC> spawnWitch(Location location, Player initialTarget) {
-        if (!citizensInitialized) {
-            initializeCitizens();
+        if (!blockfolkInitialized) {
+            initializeBlockfolk();
         }
-        if (!isCitizensReady() || location == null || location.getWorld() == null) {
+        if (!isBlockfolkReady() || location == null || location.getWorld() == null) {
             return Optional.empty();
         }
 
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        BlockfolkBridge registry = plugin.getNPCManager().getBlockfolk();
         if (registry == null) {
             return Optional.empty();
         }
 
-        NPC npc = registry.createNPC(EntityType.PLAYER, "§5Witch");
+        BlockfolkNpc npc = registry.createNpc("§5Witch");
         WitchNPC controller = new WitchNPC(plugin, npc, location, initialTarget);
         activeNpcIds.add(npc.getId());
         witches.put(npc.getId(), controller);
@@ -270,19 +233,19 @@ public final class NPCManager {
     }
 
     public Optional<ScarecrowNPC> spawnScarecrow(Location location, Player initialTarget) {
-        if (!citizensInitialized) {
-            initializeCitizens();
+        if (!blockfolkInitialized) {
+            initializeBlockfolk();
         }
-        if (!isCitizensReady() || location == null || location.getWorld() == null) {
+        if (!isBlockfolkReady() || location == null || location.getWorld() == null) {
             return Optional.empty();
         }
 
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        BlockfolkBridge registry = plugin.getNPCManager().getBlockfolk();
         if (registry == null) {
             return Optional.empty();
         }
 
-        NPC npc = registry.createNPC(EntityType.PLAYER, "§2Scarecrow");
+        BlockfolkNpc npc = registry.createNpc("§2Scarecrow");
         ScarecrowNPC controller = new ScarecrowNPC(plugin, npc, location, initialTarget);
         activeNpcIds.add(npc.getId());
         scarecrows.put(npc.getId(), controller);
@@ -290,19 +253,19 @@ public final class NPCManager {
     }
 
     public Optional<GhostNPC> spawnGhost(Location location, Player initialTarget) {
-        if (!citizensInitialized) {
-            initializeCitizens();
+        if (!blockfolkInitialized) {
+            initializeBlockfolk();
         }
-        if (!isCitizensReady() || location == null || location.getWorld() == null) {
+        if (!isBlockfolkReady() || location == null || location.getWorld() == null) {
             return Optional.empty();
         }
 
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        BlockfolkBridge registry = plugin.getNPCManager().getBlockfolk();
         if (registry == null) {
             return Optional.empty();
         }
 
-        NPC npc = registry.createNPC(EntityType.PLAYER, "§fGhost");
+        BlockfolkNpc npc = registry.createNpc("§fGhost");
         GhostNPC controller = new GhostNPC(plugin, npc, location, initialTarget);
         activeNpcIds.add(npc.getId());
         ghosts.put(npc.getId(), controller);
@@ -310,19 +273,19 @@ public final class NPCManager {
     }
 
     public Optional<WerewolfNPC> spawnWerewolf(Location location, Player initialTarget) {
-        if (!citizensInitialized) {
-            initializeCitizens();
+        if (!blockfolkInitialized) {
+            initializeBlockfolk();
         }
-        if (!isCitizensReady() || location == null || location.getWorld() == null) {
+        if (!isBlockfolkReady() || location == null || location.getWorld() == null) {
             return Optional.empty();
         }
 
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        BlockfolkBridge registry = plugin.getNPCManager().getBlockfolk();
         if (registry == null) {
             return Optional.empty();
         }
 
-        NPC npc = registry.createNPC(EntityType.PLAYER, "§8Werewolf");
+        BlockfolkNpc npc = registry.createNpc("§8Werewolf");
         WerewolfNPC controller = new WerewolfNPC(plugin, npc, location, initialTarget);
         activeNpcIds.add(npc.getId());
         werewolves.put(npc.getId(), controller);
@@ -330,19 +293,19 @@ public final class NPCManager {
     }
 
     public Optional<ZombieNPC> spawnZombie(Location location, Player initialTarget) {
-        if (!citizensInitialized) {
-            initializeCitizens();
+        if (!blockfolkInitialized) {
+            initializeBlockfolk();
         }
-        if (!isCitizensReady() || location == null || location.getWorld() == null) {
+        if (!isBlockfolkReady() || location == null || location.getWorld() == null) {
             return Optional.empty();
         }
 
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        BlockfolkBridge registry = plugin.getNPCManager().getBlockfolk();
         if (registry == null) {
             return Optional.empty();
         }
 
-        NPC npc = registry.createNPC(EntityType.PLAYER, "§2Infected");
+        BlockfolkNpc npc = registry.createNpc("§2Infected");
         ZombieNPC controller = new ZombieNPC(plugin, npc, location, initialTarget);
         activeNpcIds.add(npc.getId());
         zombies.put(npc.getId(), controller);
@@ -357,18 +320,18 @@ public final class NPCManager {
         shamblingZombies.remove(shambling.getUniqueId());
         shambling.remove();
 
-        if (!citizensInitialized) {
-            initializeCitizens();
+        if (!blockfolkInitialized) {
+            initializeBlockfolk();
         }
-        if (!isCitizensReady()) {
+        if (!isBlockfolkReady()) {
             return Optional.empty();
         }
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        BlockfolkBridge registry = plugin.getNPCManager().getBlockfolk();
         if (registry == null) {
             return Optional.empty();
         }
 
-        NPC npc = registry.createNPC(EntityType.PLAYER, "§2Infected");
+        BlockfolkNpc npc = registry.createNpc("§2Infected");
         ZombieNPC controller = new ZombieNPC(plugin, npc, spawn, aggressor);
         activeNpcIds.add(npc.getId());
         zombies.put(npc.getId(), controller);
@@ -389,15 +352,15 @@ public final class NPCManager {
         return vampires.get(npcId);
     }
 
-    public VampireNPC getVampire(NPC npc) {
+    public VampireNPC getVampire(BlockfolkNpc npc) {
         return npc == null ? null : vampires.get(npc.getId());
     }
 
     public VampireNPC getVampire(Entity entity) {
-        if (entity == null || !entity.hasMetadata("NPC") || !isCitizensReady()) {
+        if (entity == null || !isBlockfolkReady()) {
             return null;
         }
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        BlockfolkBridge registry = plugin.getNPCManager().getBlockfolk();
         if (registry == null || !registry.isNPC(entity)) {
             return null;
         }
@@ -408,15 +371,15 @@ public final class NPCManager {
         return clowns.get(npcId);
     }
 
-    public ClownNPC getClown(NPC npc) {
+    public ClownNPC getClown(BlockfolkNpc npc) {
         return npc == null ? null : clowns.get(npc.getId());
     }
 
     public ClownNPC getClown(Entity entity) {
-        if (entity == null || !entity.hasMetadata("NPC") || !isCitizensReady()) {
+        if (entity == null || !isBlockfolkReady()) {
             return null;
         }
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        BlockfolkBridge registry = plugin.getNPCManager().getBlockfolk();
         if (registry == null || !registry.isNPC(entity)) {
             return null;
         }
@@ -427,15 +390,15 @@ public final class NPCManager {
         return zombies.get(npcId);
     }
 
-    public ZombieNPC getZombie(NPC npc) {
+    public ZombieNPC getZombie(BlockfolkNpc npc) {
         return npc == null ? null : zombies.get(npc.getId());
     }
 
     public ZombieNPC getZombie(Entity entity) {
-        if (entity == null || !entity.hasMetadata("NPC") || !isCitizensReady()) {
+        if (entity == null || !isBlockfolkReady()) {
             return null;
         }
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        BlockfolkBridge registry = plugin.getNPCManager().getBlockfolk();
         if (registry == null || !registry.isNPC(entity)) {
             return null;
         }
@@ -446,15 +409,15 @@ public final class NPCManager {
         return witches.get(npcId);
     }
 
-    public WitchNPC getWitch(NPC npc) {
+    public WitchNPC getWitch(BlockfolkNpc npc) {
         return npc == null ? null : witches.get(npc.getId());
     }
 
     public WitchNPC getWitch(Entity entity) {
-        if (entity == null || !entity.hasMetadata("NPC") || !isCitizensReady()) {
+        if (entity == null || !isBlockfolkReady()) {
             return null;
         }
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        BlockfolkBridge registry = plugin.getNPCManager().getBlockfolk();
         if (registry == null || !registry.isNPC(entity)) {
             return null;
         }
@@ -465,15 +428,15 @@ public final class NPCManager {
         return scarecrows.get(npcId);
     }
 
-    public ScarecrowNPC getScarecrow(NPC npc) {
+    public ScarecrowNPC getScarecrow(BlockfolkNpc npc) {
         return npc == null ? null : scarecrows.get(npc.getId());
     }
 
     public ScarecrowNPC getScarecrow(Entity entity) {
-        if (entity == null || !entity.hasMetadata("NPC") || !isCitizensReady()) {
+        if (entity == null || !isBlockfolkReady()) {
             return null;
         }
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        BlockfolkBridge registry = plugin.getNPCManager().getBlockfolk();
         if (registry == null || !registry.isNPC(entity)) {
             return null;
         }
@@ -484,15 +447,15 @@ public final class NPCManager {
         return ghosts.get(npcId);
     }
 
-    public GhostNPC getGhost(NPC npc) {
+    public GhostNPC getGhost(BlockfolkNpc npc) {
         return npc == null ? null : ghosts.get(npc.getId());
     }
 
     public GhostNPC getGhost(Entity entity) {
-        if (entity == null || !entity.hasMetadata("NPC") || !isCitizensReady()) {
+        if (entity == null || !isBlockfolkReady()) {
             return null;
         }
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        BlockfolkBridge registry = plugin.getNPCManager().getBlockfolk();
         if (registry == null || !registry.isNPC(entity)) {
             return null;
         }
@@ -503,15 +466,15 @@ public final class NPCManager {
         return werewolves.get(npcId);
     }
 
-    public WerewolfNPC getWerewolf(NPC npc) {
+    public WerewolfNPC getWerewolf(BlockfolkNpc npc) {
         return npc == null ? null : werewolves.get(npc.getId());
     }
 
     public WerewolfNPC getWerewolf(Entity entity) {
-        if (entity == null || !entity.hasMetadata("NPC") || !isCitizensReady()) {
+        if (entity == null || !isBlockfolkReady()) {
             return null;
         }
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        BlockfolkBridge registry = plugin.getNPCManager().getBlockfolk();
         if (registry == null || !registry.isNPC(entity)) {
             return null;
         }
@@ -838,6 +801,7 @@ public final class NPCManager {
         activeNpcIds.clear();
         cleanupTrackedBats();
         cleanupShamblingZombies();
+            if (blockfolk != null) blockfolk.shutdown();
     }
 
     public void cleanupWorld(World world) {
@@ -1001,53 +965,51 @@ public final class NPCManager {
             && location.getY() < location.getWorld().getMaxHeight() - 2;
     }
 
-    private void registerSentinelIntegration() {
-        if (sentinelIntegrationRegistered) {
-            return;
+    private void updateCombatTargets() {
+        for (var boss : List.copyOf(vampires.values())) {
+            if (boss.isDead()) continue;
+            Player target = findCombatTarget(boss.getNpc(), boss.getCurrentLocation());
+            if (target != null) boss.onCombatTarget(target);
         }
-        if (SentinelPlugin.instance == null) {
-            return;
+        for (var boss : List.copyOf(clowns.values())) {
+            if (boss.isDead()) continue;
+            Player target = findCombatTarget(boss.getNpc(), boss.getCurrentLocation());
+            if (target != null) boss.onCombatTarget(target);
         }
-        SentinelPlugin.instance.registerIntegration(new BloodMoonSentinelIntegration(this));
-        sentinelIntegrationRegistered = true;
+        for (var boss : List.copyOf(zombies.values())) {
+            if (boss.isDead()) continue;
+            Player target = findCombatTarget(boss.getNpc(), boss.getCurrentLocation());
+            if (target != null) boss.onCombatTarget(target);
+        }
+        for (var boss : List.copyOf(witches.values())) {
+            if (boss.isDead()) continue;
+            Player target = findCombatTarget(boss.getNpc(), boss.getCurrentLocation());
+            if (target != null) boss.onCombatTarget(target);
+        }
+        for (var boss : List.copyOf(scarecrows.values())) {
+            if (boss.isDead()) continue;
+            Player target = findCombatTarget(boss.getNpc(), boss.getCurrentLocation());
+            if (target != null) boss.onCombatTarget(target);
+        }
+        for (var boss : List.copyOf(ghosts.values())) {
+            if (boss.isDead()) continue;
+            Player target = findCombatTarget(boss.getNpc(), boss.getCurrentLocation());
+            if (target != null) boss.onCombatTarget(target);
+        }
+        for (var boss : List.copyOf(werewolves.values())) {
+            if (boss.isDead()) continue;
+            Player target = findCombatTarget(boss.getNpc(), boss.getCurrentLocation());
+            if (target != null) boss.onCombatTarget(target);
+        }
     }
 
-    private static final class BloodMoonSentinelIntegration extends SentinelIntegration {
-
-        private final NPCManager manager;
-
-        private BloodMoonSentinelIntegration(NPCManager manager) {
-            this.manager = manager;
-        }
-
-        @Override
-        public String getTargetHelp() {
-            return "bloodmoonvampire:active";
-        }
-
-        @Override
-        public String[] getTargetPrefixes() {
-            return new String[] {"bloodmoonvampire"};
-        }
-
-        @Override
-        public boolean isTarget(LivingEntity entity, String prefix, String value) {
-            return "bloodmoonvampire".equalsIgnoreCase(prefix)
-                && ("active".equalsIgnoreCase(value) || "true".equalsIgnoreCase(value))
-                && manager.isBloodMoonNpc(entity);
-        }
-
-        @Override
-        public boolean tryAttack(SentinelTrait sentinel, LivingEntity entity) {
-            NPC npc = sentinel.getNPC();
-            VampireNPC vampire = manager.getVampire(npc);
-            if (vampire == null || entity == null) {
-                return false;
-            }
-            vampire.nudgeTowardTarget();
-            return false;
-        }
+    private Player findCombatTarget(BlockfolkNpc npc, Location location) {
+        double range = npc.getChaseRange();
+        if (location == null || location.getWorld() == null || range <= 0) return null;
+        return location.getWorld().getPlayers().stream()
+                .filter(player -> !player.isDead() && player.getGameMode() != org.bukkit.GameMode.SPECTATOR)
+                .filter(player -> player.getLocation().distanceSquared(location) <= range * range)
+                .min(java.util.Comparator.comparingDouble(player -> player.getLocation().distanceSquared(location)))
+                .orElse(null);
     }
 }
-
-

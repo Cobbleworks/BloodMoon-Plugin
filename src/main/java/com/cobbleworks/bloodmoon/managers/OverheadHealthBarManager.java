@@ -13,7 +13,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import net.citizensnpcs.api.npc.NPC;
+import com.cobbleworks.bloodmoon.npc.BlockfolkNpc;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
@@ -69,7 +69,7 @@ public final class OverheadHealthBarManager {
     }
 
     public void setEnabled(Player player, boolean enabled) {
-        // Overhead NPC bars are always active by design.
+        // Overhead BlockfolkNpc bars are always active by design.
     }
 
     public boolean isEnabled(Player player) {
@@ -139,7 +139,7 @@ public final class OverheadHealthBarManager {
         }
     }
 
-    private void applyOverheadBar(NPC npc, double currentHealth, double maximumHealth) {
+    private void applyOverheadBar(BlockfolkNpc npc, double currentHealth, double maximumHealth) {
         if (npc == null || !npc.isSpawned()) {
             return;
         }
@@ -148,7 +148,7 @@ public final class OverheadHealthBarManager {
             return;
         }
 
-        forceHideCitizensNameplate(npc, living);
+        hideBlockfolkNameplate(npc, living);
         updateFloatingBar(living, currentHealth, maximumHealth);
     }
 
@@ -161,7 +161,7 @@ public final class OverheadHealthBarManager {
         updateFloatingBar(living, currentHealth, maximumHealth);
     }
 
-    private void hideNpcEntityNameplate(NPC npc, LivingEntity activeCarrier) {
+    private void hideNpcEntityNameplate(BlockfolkNpc npc, LivingEntity activeCarrier) {
         if (npc == null || !npc.isSpawned()) {
             return;
         }
@@ -169,14 +169,10 @@ public final class OverheadHealthBarManager {
         if (!(entity instanceof LivingEntity npcEntity) || npcEntity == activeCarrier) {
             return;
         }
-        npc.data().set("nameplate-visible", false);
-        npc.data().setPersistent(NPC.Metadata.NAMEPLATE_VISIBLE, false);
         npcEntity.setCustomNameVisible(false);
     }
 
-    private void forceHideCitizensNameplate(NPC npc, LivingEntity living) {
-        npc.data().set("nameplate-visible", false);
-        npc.data().setPersistent(NPC.Metadata.NAMEPLATE_VISIBLE, false);
+    private void hideBlockfolkNameplate(BlockfolkNpc npc, LivingEntity living) {
         living.setCustomNameVisible(false);
     }
 
@@ -267,8 +263,8 @@ public final class OverheadHealthBarManager {
 
     /**
      * Explicitly removes the health bar for a given host entity UUID.
-     * Call this from each NPC's {@code cleanup()} to prevent orphaned bars
-     * when the NPC dies or is unregistered mid-cycle.
+     * Call this from each BlockfolkNpc's {@code cleanup()} to prevent orphaned bars
+     * when the BlockfolkNpc dies or is unregistered mid-cycle.
      *
      * @param entityId the {@link UUID} of the host entity whose bar should be removed
      */
@@ -343,5 +339,4 @@ public final class OverheadHealthBarManager {
     }
 
 }
-
 

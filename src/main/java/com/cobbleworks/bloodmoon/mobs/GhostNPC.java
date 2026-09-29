@@ -1,8 +1,9 @@
 package com.cobbleworks.bloodmoon.mobs;
 
+import com.cobbleworks.bloodmoon.npc.BlockfolkNpc;
+import com.cobbleworks.bloodmoon.npc.BlockfolkBridge;
+
 import com.cobbleworks.bloodmoon.BloodMoonPlugin;
-import com.cobbleworks.bloodmoon.traits.GhostTrait;
-import java.lang.reflect.Method;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -13,10 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
-import net.citizensnpcs.api.CitizensAPI;
-import net.citizensnpcs.api.npc.NPC;
-import net.citizensnpcs.api.npc.NPCRegistry;
-import net.citizensnpcs.api.trait.Trait;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
@@ -42,9 +39,6 @@ import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 import org.bukkit.util.Vector;
-import org.mcmonkey.sentinel.SentinelTrait;
-import org.mcmonkey.sentinel.events.SentinelAttackEvent;
-import org.mcmonkey.sentinel.targeting.SentinelTargetList;
 
 public final class GhostNPC {
 
@@ -83,14 +77,14 @@ public final class GhostNPC {
     private static final int PERIODIC_REVEAL_INTERVAL   = 220;
 
     private final BloodMoonPlugin plugin;
-    private final NPC npc;
+    private final BlockfolkNpc npc;
     private final Location spawnLocation;
     private final Random random = new Random();
     private final Map<GhostAbility, Integer> cooldowns = new EnumMap<>(GhostAbility.class);
     private final Map<GhostAbility, Integer> abilityUseCounts = new EnumMap<>(GhostAbility.class);
     private final List<BukkitRunnable> tasks = new ArrayList<>();
     private final List<ItemStack> stolenItems = new ArrayList<>();
-    private final List<NPC> echoIllusions = new ArrayList<>();
+    private final List<BlockfolkNpc> echoIllusions = new ArrayList<>();
     private final Map<String, BlockRevert> paranormalReverts = new HashMap<>();
     private final Deque<Location> trackedPath = new ArrayDeque<>();
 
@@ -100,7 +94,7 @@ public final class GhostNPC {
     private GhostAbility pendingAbility;
     private GhostState  stateBeforeCasting;
     private int castingTicks;
-    private NPC controlledHost;
+    private BlockfolkNpc controlledHost;
     private Location lastKnownLocation;
     private double lastPlayerDistSquared = Double.MAX_VALUE;
     private int stateTicks;
@@ -119,7 +113,7 @@ public final class GhostNPC {
 
     private record BlockRevert(Location loc, Material original) {}
 
-    public GhostNPC(BloodMoonPlugin plugin, NPC npc, Location spawnLocation, Player initialTarget) {
+    public GhostNPC(BloodMoonPlugin plugin, BlockfolkNpc npc, Location spawnLocation, Player initialTarget) {
         this.plugin = plugin;
         this.npc = npc;
         this.spawnLocation = spawnLocation.clone();
@@ -129,7 +123,7 @@ public final class GhostNPC {
         startController();
     }
 
-    public NPC getNpc() {
+    public BlockfolkNpc getNpc() {
         return npc;
     }
 
@@ -170,9 +164,8 @@ public final class GhostNPC {
         }
     }
 
-    public void handleSentinelAttack(SentinelAttackEvent event) {
-        event.setCancelled(true);
-        if (!(event.getTarget() instanceof Player player) || state == GhostState.DEAD) {
+    public void onCombatTarget(Player player) {
+        if (player == null || state == GhostState.DEAD) {
             return;
         }
         target = player;
@@ -252,14 +245,9 @@ public final class GhostNPC {
     }
 
     private void configureNpc() {
-        npc.data().set("bloodmoon-ghost", true);
-        npc.data().set("nameplate-visible", false);
-        npc.data().setPersistent(NPC.Metadata.NAMEPLATE_VISIBLE, false);
         npc.setProtected(false);
-        GhostTrait trait = npc.getOrAddTrait(GhostTrait.class);
-        trait.bind(this);
         configureSkin();
-        configureSentinel();
+        configureCombat();
         if (!npc.isSpawned()) {
             npc.spawn(spawnLocation.clone());
         }
@@ -271,28 +259,8 @@ public final class GhostNPC {
     }
 
     private void configureSkin() {
-        String skinName = plugin.getConfigManager().getGhostSkinName();
-        String texture = plugin.getConfigManager().getGhostSkinTexture();
-        String signature = plugin.getConfigManager().getGhostSkinSignature();
-        if ((skinName == null || skinName.isBlank()) && (texture == null || texture.isBlank())) {
-            return;
-        }
-        try {
-            Class<? extends Trait> skinTraitClass = Class.forName("net.citizensnpcs.trait.SkinTrait").asSubclass(Trait.class);
-            Trait skinTrait = npc.getOrAddTrait(skinTraitClass);
-            skinTraitClass.getMethod("setShouldUpdateSkins", boolean.class).invoke(skinTrait, false);
-            skinTraitClass.getMethod("setFetchDefaultSkin", boolean.class).invoke(skinTrait, false);
-            if (texture != null && !texture.isBlank() && signature != null && !signature.isBlank()) {
-                skinTraitClass.getMethod("setSkinPersistent", String.class, String.class, String.class)
-                    .invoke(skinTrait, skinName, signature, texture);
-                return;
-            }
-            if (skinName != null && !skinName.isBlank()) {
-                skinTraitClass.getMethod("setSkinName", String.class, boolean.class).invoke(skinTrait, skinName, true);
-            }
-        } catch (ReflectiveOperationException ex) {
-            plugin.getLogger().warning("Could not apply ghost skin: " + ex.getMessage());
-        }
+        npc.setSkin(plugin.getConfigManager().getGhostSkinName(),
+                plugin.getConfigManager().getGhostSkinTexture(), plugin.getConfigManager().getGhostSkinSignature());
     }
 
     private void dropLoot(World world, Location location) {
@@ -356,20 +324,8 @@ public final class GhostNPC {
         orb.setExperience(25 + random.nextInt(21));
     }
 
-    private void configureSentinel() {
-        SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
-        sentinel.setInvincible(false);
-        sentinel.setHealth(plugin.getConfigManager().getGhostHealth());
-        sentinel.health = plugin.getConfigManager().getGhostHealth();
-        sentinel.damage = 0.0D;
-        sentinel.respawnTime = -1;
-        sentinel.chaseRange = 0.0D;
-        sentinel.armor = 0.0D;
-        sentinel.protectFromIgnores = false;
-        sentinel.allTargets = new SentinelTargetList();
-        sentinel.addTarget("players");
-        sentinel.allIgnores = new SentinelTargetList();
-        sentinel.addIgnore("npcs");
+    private void configureCombat() {
+        npc.configureCombat(plugin.getConfigManager().getGhostHealth(), 0.0, 0.0);
     }
 
     private void hideNameplate(LivingEntity entity) {
@@ -383,8 +339,8 @@ public final class GhostNPC {
                 team = board.registerNewTeam("bm_hidden_npc");
                 team.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER);
             }
-            if (entity instanceof Player player) {
-                team.addEntry(player.getName());
+            if (entity instanceof LivingEntity player) {
+                team.addEntry(entity.getUniqueId().toString());
             }
         } catch (Exception ignored) {
         }
@@ -753,30 +709,21 @@ public final class GhostNPC {
     }
 
     private void castEcho(Player player) {
-        if (trackedPath.size() < 12 || !CitizensAPI.hasImplementation()) {
+        if (trackedPath.size() < 12 || !plugin.getNPCManager().isBlockfolkReady()) {
             return;
         }
-        NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        BlockfolkBridge registry = plugin.getNPCManager().getBlockfolk();
         if (registry == null) {
             return;
         }
 
         List<Location> path = new ArrayList<>(trackedPath);
-        NPC echo = registry.createNPC(org.bukkit.entity.EntityType.PLAYER, "");
-        echo.data().set("nameplate-visible", false);
-        echo.data().setPersistent(NPC.Metadata.NAMEPLATE_VISIBLE, false);
+        BlockfolkNpc echo = registry.createNpc("");
         echo.setProtected(false);
         echo.spawn(path.get(0).clone());
         echoIllusions.add(echo);
 
-        try {
-            Class<? extends Trait> skinTraitClass = Class.forName("net.citizensnpcs.trait.SkinTrait").asSubclass(Trait.class);
-            Trait skinTrait = echo.getOrAddTrait(skinTraitClass);
-            skinTraitClass.getMethod("setShouldUpdateSkins", boolean.class).invoke(skinTrait, false);
-            skinTraitClass.getMethod("setFetchDefaultSkin", boolean.class).invoke(skinTrait, false);
-            skinTraitClass.getMethod("setSkinName", String.class, boolean.class).invoke(skinTrait, player.getName(), true);
-        } catch (ReflectiveOperationException ignored) {
-        }
+        echo.setSkin(player.getName(), null, null);
 
         if (echo.getEntity() instanceof LivingEntity living) {
             living.setCollidable(false);
@@ -1347,14 +1294,7 @@ public final class GhostNPC {
     private void endHostControl() {
         if (controlledHost != null && controlledHost.isSpawned() && controlledHost.getEntity() != null) {
             try {
-                if (controlledHost.hasTrait(SentinelTrait.class)) {
-                    SentinelTrait sentinel = controlledHost.getOrAddTrait(SentinelTrait.class);
-                    if (target != null) {
-                        sentinel.removeTarget("player:" + target.getName());
-                    }
-                } else {
-                    controlledHost.getNavigator().cancelNavigation();
-                }
+                controlledHost.getNavigator().cancelNavigation();
             } catch (Exception ignored) {
             }
             Location end = controlledHost.getEntity().getLocation();
@@ -1365,7 +1305,7 @@ public final class GhostNPC {
         setUntargetable(false);
     }
 
-    private void destroyEcho(NPC echo) {
+    private void destroyEcho(BlockfolkNpc echo) {
         if (echo == null) {
             return;
         }
@@ -1377,7 +1317,7 @@ public final class GhostNPC {
     }
 
     private void destroyEchoes() {
-        for (NPC echo : new ArrayList<>(echoIllusions)) {
+        for (BlockfolkNpc echo : new ArrayList<>(echoIllusions)) {
             destroyEcho(echo);
         }
     }
@@ -1681,12 +1621,12 @@ public final class GhostNPC {
     }
 
     // =========================================================================
-    // Casting animation system  (Citizens PlayerAnimation via reflection)
+    // Casting animation system  (Blockfolk mannequin animations)
     // =========================================================================
 
     private void updateCastingAnimation() {
         LivingEntity entity = getLivingEntity();
-        if (!(entity instanceof Player npcPlayer)) {
+        if (!(entity instanceof LivingEntity npcPlayer)) {
             return;
         }
         if (target != null && target.isOnline() && !target.isDead()) {
@@ -1705,75 +1645,66 @@ public final class GhostNPC {
     }
 
     /** Spectral Surge: rapid bilateral arm-swings building to the teleport. */
-    private void animateSpectralSurge(Player p) {
+    private void animateSpectralSurge(LivingEntity p) {
         if (stateTicks % 5 == 0) {
-            playCitizensPlayerAnimation(p, "ARM_SWING");
-            playCitizensPlayerAnimation(p, "ARM_SWING_OFFHAND");
+            playBlockfolkAnimation(p, "ARM_SWING");
+            playBlockfolkAnimation(p, "ARM_SWING_OFFHAND");
         }
     }
 
     /** Wailing Scream: open-armed sweep with a two-handed hold before the release. */
-    private void animateWailingScream(Player p) {
+    private void animateWailingScream(LivingEntity p) {
         if (stateTicks % 4 == 0) {
-            playCitizensPlayerAnimation(p, "ARM_SWING");
+            playBlockfolkAnimation(p, "ARM_SWING");
         }
         if (stateTicks % 7 == 0) {
-            playCitizensPlayerAnimation(p, "ARM_SWING_OFFHAND");
+            playBlockfolkAnimation(p, "ARM_SWING_OFFHAND");
         }
         if (stateTicks == castingTicks - 2) {
-            playCitizensPlayerAnimation(p, "START_USE_MAINHAND_ITEM");
-            playCitizensPlayerAnimation(p, "START_USE_OFFHAND_ITEM");
+            playBlockfolkAnimation(p, "START_USE_MAINHAND_ITEM");
+            playBlockfolkAnimation(p, "START_USE_OFFHAND_ITEM");
         }
     }
 
     /** Paranormal Activity: slow deliberate main-hand hold, channelling energy. */
-    private void animateParanormal(Player p) {
+    private void animateParanormal(LivingEntity p) {
         if (stateTicks % 5 == 0) {
-            playCitizensPlayerAnimation(p, "START_USE_MAINHAND_ITEM");
+            playBlockfolkAnimation(p, "START_USE_MAINHAND_ITEM");
         }
         if (stateTicks % 9 == 0) {
             p.swingMainHand();
-            playCitizensPlayerAnimation(p, "ARM_SWING");
+            playBlockfolkAnimation(p, "ARM_SWING");
         }
     }
 
     /** Echo: single-handed raised-arm summon. */
-    private void animateEcho(Player p) {
+    private void animateEcho(LivingEntity p) {
         if (stateTicks % 6 == 0) {
-            playCitizensPlayerAnimation(p, "START_USE_MAINHAND_ITEM");
+            playBlockfolkAnimation(p, "START_USE_MAINHAND_ITEM");
         }
     }
 
     /** Poltergeist Throw: punching arm-swings as items are hurled. */
-    private void animatePoltergeist(Player p) {
+    private void animatePoltergeist(LivingEntity p) {
         if (stateTicks % 4 == 0) {
             p.swingMainHand();
-            playCitizensPlayerAnimation(p, "ARM_SWING");
+            playBlockfolkAnimation(p, "ARM_SWING");
         }
         if (stateTicks == castingTicks - 1) {
             p.swingOffHand();
-            playCitizensPlayerAnimation(p, "ARM_SWING_OFFHAND");
+            playBlockfolkAnimation(p, "ARM_SWING_OFFHAND");
         }
     }
 
     private void resetCastingAnimation() {
         LivingEntity entity = getLivingEntity();
-        if (entity instanceof Player p) {
-            playCitizensPlayerAnimation(p, "STOP_USE_ITEM");
+        if (entity instanceof LivingEntity p) {
+            playBlockfolkAnimation(p, "STOP_USE_ITEM");
         }
     }
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
-    private void playCitizensPlayerAnimation(Player player, String animationName) {
-        try {
-            Class<? extends Enum> animationClass =
-                Class.forName("net.citizensnpcs.util.PlayerAnimation").asSubclass(Enum.class);
-            Enum animation = Enum.valueOf(animationClass, animationName);
-            Method playMethod = animationClass.getMethod("play", Player.class);
-            playMethod.invoke(animation, player);
-        } catch (ReflectiveOperationException ignored) {
-            // Citizens implementation classes are not on the compile classpath; hand animation falls back to Bukkit swings.
-        }
+    private void playBlockfolkAnimation(LivingEntity player, String animationName) {
+        npc.animate(animationName);
     }
 
     // =========================================================================
@@ -1902,9 +1833,4 @@ public final class GhostNPC {
         vulnerableTicks = Math.max(vulnerableTicks, COUNTERPLAY_WINDOW_TICKS + 20);
     }
 }
-
-
-
-
-
 

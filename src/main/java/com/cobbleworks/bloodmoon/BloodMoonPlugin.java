@@ -72,7 +72,7 @@ public final class BloodMoonPlugin extends JavaPlugin {
 
         bloodMoonManager.start();
         overheadHealthBarManager.start();
-        getServer().getScheduler().runTask(this, () -> npcManager.initializeCitizens());
+        getServer().getScheduler().runTask(this, () -> npcManager.initializeBlockfolk());
         getLogger().info("BloodMoon Event enabled.");
     }
 
@@ -124,7 +124,7 @@ public final class BloodMoonPlugin extends JavaPlugin {
     }
 
     /**
-     * Gets the Citizens NPC manager.
+     * Gets the Blockfolk NPC manager.
      *
      * @return NPC manager
      */
@@ -184,12 +184,14 @@ public final class BloodMoonPlugin extends JavaPlugin {
 
     private boolean hasRequiredDependencies() {
         PluginManager pluginManager = getServer().getPluginManager();
-        if (!pluginManager.isPluginEnabled("Citizens")) {
-            getLogger().severe("Citizens is required for BloodMoon Event.");
+        var blockfolk = pluginManager.getPlugin("Blockfolk");
+        if (blockfolk == null || !blockfolk.isEnabled()) {
+            getLogger().severe("Blockfolk 1.3.0 or newer is required for BloodMoon Event.");
             return false;
         }
-        if (!pluginManager.isPluginEnabled("Sentinel")) {
-            getLogger().severe("Sentinel is required for BloodMoon Event.");
+        try { blockfolk.getClass().getMethod("getTransientNpcService"); }
+        catch (NoSuchMethodException exception) {
+            getLogger().severe("Install Blockfolk 1.3.0 or newer to use this BloodMoon version.");
             return false;
         }
         return true;
@@ -208,5 +210,4 @@ public final class BloodMoonPlugin extends JavaPlugin {
         command.setTabCompleter(new BloodMoonTabCompleter());
     }
 }
-
 
