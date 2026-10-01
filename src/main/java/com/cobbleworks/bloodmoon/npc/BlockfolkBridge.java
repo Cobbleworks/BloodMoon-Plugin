@@ -21,12 +21,24 @@ public final class BlockfolkBridge {
         this.owner = owner;
         Plugin blockfolk = owner.getServer().getPluginManager().getPlugin("Blockfolk");
         if (blockfolk == null || !blockfolk.isEnabled()) throw new IllegalStateException("Blockfolk is required.");
+        if (!supportsMovementFix(blockfolk.getDescription().getVersion()))
+            throw new IllegalStateException("Install Blockfolk 1.4.0 or newer to fix encounter movement and gravity.");
         service = call(blockfolk, "getTransientNpcService", new Class<?>[0]);
         if (service == null) throw new IllegalStateException("Blockfolk's transient NPC service is unavailable.");
         try { create = service.getClass().getMethod("create", Plugin.class, String.class); }
-        catch (ReflectiveOperationException ex) { throw new IllegalStateException("Install Blockfolk 1.3.0 or newer.", ex); }
+        catch (ReflectiveOperationException ex) { throw new IllegalStateException("Install Blockfolk 1.4.0 or newer.", ex); }
         owner.getServer().getScheduler().runTaskTimer(owner,
                 () -> java.util.List.copyOf(npcs.values()).forEach(BlockfolkNpc::tick), 1L, 1L);
+    }
+
+    static boolean supportsMovementFix(String version) {
+        if (version == null) return false;
+        String[] parts = version.split("[.-]", 4);
+        try {
+            int major = Integer.parseInt(parts[0]);
+            int minor = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+            return major > 1 || (major == 1 && minor >= 4);
+        } catch (NumberFormatException ignored) { return false; }
     }
 
     public BlockfolkNpc createNpc(String name) {
@@ -45,7 +57,7 @@ public final class BlockfolkBridge {
 
     static Object call(Object target, String name, Class<?>[] parameters, Object... args) {
         try { return invoke(target.getClass().getMethod(name, parameters), target, args); }
-        catch (NoSuchMethodException ex) { throw new IllegalStateException("Install Blockfolk 1.3.0 or newer: missing " + name, ex); }
+        catch (NoSuchMethodException ex) { throw new IllegalStateException("Install Blockfolk 1.4.0 or newer: missing " + name, ex); }
     }
 
     private static Object invoke(Method method, Object target, Object... args) {

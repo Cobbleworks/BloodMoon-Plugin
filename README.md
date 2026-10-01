@@ -27,7 +27,7 @@ BloodMoon Event turns selected Minecraft nights into server-wide encounters. Dur
 - Minecraft 26.2
 - Paper or a compatible Paper fork
 - Java 25 or newer
-- Blockfolk 1.3.0 or newer
+- Blockfolk 1.4.0 or newer
 
 ## Table of Contents
 
@@ -51,7 +51,7 @@ BloodMoon Event turns selected Minecraft nights into server-wide encounters. Dur
 
 ## Installation
 
-1. Install [Blockfolk 1.3.0 or newer](https://github.com/Cobbleworks/Blockfolk-NPC-Plugin/releases) on Paper 26.2 with Java 25.
+1. Install [Blockfolk 1.4.0 or newer](https://github.com/Cobbleworks/Blockfolk-NPC-Plugin/releases) on Paper 26.2 with Java 25.
 2. Download the latest BloodMoon jar from [Releases](https://github.com/Cobbleworks/BloodMoon-Plugin/releases).
 3. Stop the server and place the Blockfolk and BloodMoon plugin jars in `plugins/`.
 4. Start the server once to generate `plugins/BloodMoon-Event/config.yml`.
@@ -64,7 +64,7 @@ BloodMoon 2.0 requires Blockfolk's temporary NPC API. Upgrade Blockfolk before B
 
 | Plugin | Required | Purpose |
 |--------|----------|---------|
-| [Blockfolk](https://github.com/Cobbleworks/Blockfolk-NPC-Plugin) 1.3.0+ | Yes | Supplies temporary mannequins, skins, native pathfinding, looking, and casting animations. |
+| [Blockfolk](https://github.com/Cobbleworks/Blockfolk-NPC-Plugin) 1.4.0+ | Yes | Supplies temporary mannequins, skins, native pathfinding, looking, and casting animations. |
 
 BloodMoon owns each encounter's abilities, damage effects, phases, and rewards; Blockfolk supplies their visible NPCs and navigation. Bosses, witch mirror clones, and ghost echoes are owned by BloodMoon and never saved as administrator NPC presets. They are removed on death, event end, clear, or shutdown.
 

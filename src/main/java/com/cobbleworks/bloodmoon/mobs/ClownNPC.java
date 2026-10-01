@@ -128,6 +128,8 @@ public final class ClownNPC {
     private int baitTrapCooldown;
     private int prankRotationIndex;
     private boolean cleanedUp;
+    private boolean gliding;
+    private long nextChaseUpdate;
     private boolean deathSequenceStarted;
     private boolean combatInitialized;
 
@@ -318,6 +320,7 @@ public final class ClownNPC {
         tickBurningGround();
         if (damageTeleportCooldown > 0) damageTeleportCooldown--;
         if (baitTrapCooldown > 0) baitTrapCooldown--;
+        if (gliding) return;
         switch (state) {
             case WANDERING -> tickWandering();
             case COMBAT    -> tickCombat();
@@ -389,6 +392,9 @@ public final class ClownNPC {
 
     private void chaseCombatTarget(Player player) {
         if (!npc.isSpawned()) return;
+        npc.faceLocation(player.getEyeLocation());
+        if (lifeTicks < nextChaseUpdate) return;
+        nextChaseUpdate = lifeTicks + 10;
         Location self = getCurrentLocation();
         double distSq = self.distanceSquared(player.getLocation());
         double preferred = 5.5D;
@@ -1103,6 +1109,7 @@ public final class ClownNPC {
         parrot.setInvulnerable(true);
         parrot.setCollidable(false);
         parrot.setAI(false);
+        parrot.setGravity(false);
         parrot.setCustomName(null);
         parrot.setCustomNameVisible(false);
         world.playSound(spawn, Sound.ENTITY_PARROT_AMBIENT, 0.8F, 1.3F);
@@ -1306,6 +1313,9 @@ public final class ClownNPC {
         balloon.setAI(false);
         balloon.setGravity(false);
 
+        gliding = true;
+        npc.getNavigator().cancelNavigation();
+        final int duration = BalloonFlight.duration(start, destination);
         final ItemStack restoreMainHand = previousMainHand;
         BukkitRunnable glide = new BukkitRunnable() {
             int tick = 0;
@@ -1314,20 +1324,12 @@ public final class ClownNPC {
             public void run() {
                 tick++;
                 LivingEntity current = getLivingEntity();
-                if (current == null || isDead() || tick > 22) {
+                if (current == null || isDead() || tick > duration) {
                     finish(current);
                     return;
                 }
 
-                Location now = current.getLocation();
-                Vector toDest = destination.clone().add(0, 0.15D, 0).toVector().subtract(now.toVector());
-                if (toDest.lengthSquared() <= 0.36D) {
-                    finish(current);
-                    return;
-                }
-
-                Vector step = toDest.normalize().multiply(Math.min(0.75D, 0.36D + toDest.length() * 0.08D)).setY(Math.max(0.06D, toDest.getY() * 0.25D));
-                Location next = now.clone().add(step);
+                Location next = BalloonFlight.position(start, destination, tick, duration);
                 next.setYaw(getYawTowards(next, destination));
                 next.setPitch(-6.0F);
                 npc.teleport(next, PlayerTeleportEvent.TeleportCause.PLUGIN);
@@ -1348,6 +1350,8 @@ public final class ClownNPC {
             }
 
             private void finish(LivingEntity current) {
+                gliding = false;
+                if (current != null && !isDead()) npc.teleport(destination, PlayerTeleportEvent.TeleportCause.PLUGIN);
                 if (balloon.isValid()) {
                     balloon.remove();
                 }

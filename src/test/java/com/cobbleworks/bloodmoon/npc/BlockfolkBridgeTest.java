@@ -5,10 +5,19 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class BlockfolkBridgeTest {
     @Test
+    void movementFixRequiresBlockfolkOneFourOrLater() {
+        assertFalse(BlockfolkBridge.supportsMovementFix("1.3.0"));
+        assertFalse(BlockfolkBridge.supportsMovementFix("invalid"));
+        assertFalse(BlockfolkBridge.supportsMovementFix(null));
+        assertTrue(BlockfolkBridge.supportsMovementFix("1.4.0"));
+        assertTrue(BlockfolkBridge.supportsMovementFix("1.10.0"));
+        assertTrue(BlockfolkBridge.supportsMovementFix("2.0.0"));
+    }
+    @Test
     void missingApiGivesActionableVersionRequirement() {
         IllegalStateException error = assertThrows(IllegalStateException.class,
                 () -> BlockfolkBridge.call(new TestHandle(), "missing", new Class<?>[0]));
-        assertTrue(error.getMessage().contains("Blockfolk 1.3.0"));
+        assertTrue(error.getMessage().contains("Blockfolk 1.4.0"));
     }
 
     @Test
